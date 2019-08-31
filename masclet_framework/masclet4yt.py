@@ -17,8 +17,10 @@ v0.1.0, 30/06/2019
 import numpy as np
 
 #masclet_framework
-from src.masclet_framework import parameters, read_masclet, tools
-        
+from masclet_framework import tools
+from masclet_framework import parameters, read_masclet
+
+
 def yt4masclet_load_grids(it,path='',digits=5,verbose=False):
     '''
     This function creates a list of dictionaries containing the information requiered for yt's load_amr_grids
@@ -37,7 +39,7 @@ def yt4masclet_load_grids(it,path='',digits=5,verbose=False):
     
     '''
     NMAX, NMAY, NMAZ, NLEVELS, NAMRX, NAMRY, NAMRZ, SIZE = parameters.read_parameters(loadNPALEV = False)
-    IRR, T, NL, MAP, ZETA, NPATCH, NPART, PATCHNX, PATCHNY, PATCHNZ, PATCHX, PATCHY, PATCHZ, PARE = read_masclet.read_grids(it,path=path,readpatchposition=False)
+    IRR, T, NL, MAP, ZETA, NPATCH, NPART, PATCHNX, PATCHNY, PATCHNZ, PATCHX, PATCHY, PATCHZ, PARE = read_masclet.read_grids(it, path=path, readpatchposition=False)
     
     grid_data = []
     #l=0 (whole box)
@@ -47,7 +49,7 @@ def yt4masclet_load_grids(it,path='',digits=5,verbose=False):
                      dimensions=[NMAX,NMAY,NMAZ]))
     
     LEVELS = tools.create_vector_levels(NPATCH)
-    left = np.array([tools.find_absolute_real_position(i, SIZE, NMAX, NPATCH,PATCHX,PATCHY,PATCHZ,PARE) for i in range(1,LEVELS.size)])
+    left = np.array([tools.find_absolute_real_position(i, SIZE, NMAX, NPATCH, PATCHX, PATCHY, PATCHZ, PARE) for i in range(1, LEVELS.size)])
     left = np.vstack([[-SIZE/2,-SIZE/2,-SIZE/2],left])
     right = left + np.array([PATCHNX/2**LEVELS, PATCHNY/2**LEVELS, PATCHNZ/2**LEVELS]).transpose()[:,:]*SIZE/NMAX
     

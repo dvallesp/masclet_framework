@@ -9,8 +9,4 @@ David Vallés, 2019
 
 """
 
-import src.masclet_framework.parameters
-import src.masclet_framework.read_masclet
-import src.masclet_framework.tools
-import src.masclet_framework.graphics
-import src.masclet_framework.masclet4yt
+import masclet_framework.graphics

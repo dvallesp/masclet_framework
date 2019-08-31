@@ -23,7 +23,8 @@ import numpy as np
 from scipy.io import FortranFile
 
 #masclet_framework
-from src.masclet_framework import parameters
+from masclet_framework import parameters
+
 
 def filename(it, tipo, digits=5):
     '''
