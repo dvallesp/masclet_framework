@@ -14,16 +14,17 @@ David Vallés, 2019
 """
 
 import json
+import os
 
 def read_parameters_file(filename='masclet_parameters.json',path=''):
     '''
-    Returns dictionary containing the MASCLET parameters of the simulation, 
-    that have been previously written with the write_parameters() function in 
+    Returns dictionary containing the MASCLET parameters of the simulation,
+    that have been previously written with the write_parameters() function in
     this same module.
-    
+
     PARAMETERS:
     Filename and path of the json file
-    
+
     RETURNS a dictionary containing:
     NMAX (NMAY, NMAZ): number of cells along each direction
     NPALEV: maximum number of refinement cells per level
@@ -31,11 +32,12 @@ def read_parameters_file(filename='masclet_parameters.json',path=''):
     NAMRX (NAMRY, NAMRZ): maximum size of refinement level (in l-1 cell units)
     SIZE: size (in the preferred length unit) of the side of the box
     '''
-    with open(filename+path) as json_file:  
+    filepath = os.path.join(path, filename)
+    with open(filepath) as json_file:
         data = json.load(json_file)
     return data
 
-def read_parameters(filename='masclet_parameters.json',path='',loadNMA = True, 
+def read_parameters(filename='masclet_parameters.json',path='',loadNMA = True,
                     loadNPALEV = True, loadNLEVELS = True, loadNAMR = True, 
                     loadSIZE = True):
     '''
@@ -79,4 +81,3 @@ def write_parameters(NMAX,NMAY,NMAZ,NPALEV,NLEVELS,NAMRX,NAMRY,NAMRZ,
     
     with open(path+filename, 'w') as json_file:  
         json.dump(parameters, json_file)
-
