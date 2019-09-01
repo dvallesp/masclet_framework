@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
 MASCLET framework
 
@@ -10,34 +8,37 @@ masclet4yt module
 Aims to serve as a user-friendly link between masclet software and the yt
 package
 
-David Vallés, 2019
-v0.1.0, 30/06/2019
+Created by David Vallés
 """
-#numpy
+#  Last update on 1/9/19 0:53
+
+# GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
+
+# numpy
 import numpy as np
 
-#masclet_framework
+# masclet_framework
 from masclet_framework import tools
 from masclet_framework import parameters, read_masclet
 
+# FUNCTIONS DEFINED IN THIS MODULE
 
-def yt4masclet_load_grids(it,path='',digits=5,verbose=False):
-    '''
+def yt4masclet_load_grids(it,path='',digits=5):
+    """
     This function creates a list of dictionaries containing the information requiered for yt's load_amr_grids
     to build the grid structure of a simulations performed by MASCLET.
-    
-    PARAMETERS:
-    it: iteration number
-    path: path of the folder containing the grids file. Don't assign it if it is in the same folder as the script
-    digits: no. of digits of iteration number (defaults to 5)
-    
-    
-    verbose: print detailed information (mainly used for debugging)
-    
-    RETURNS:
-    - grid_data: dictionary containing left_edge, right_edge, level and dimensions (num of cells) of each patch
-    
-    '''
+
+    Args:
+        it: iteration number (int)
+        path: path of the grids file in the system (str)
+        digits: number of digits the filename is written with (int)
+
+    Returns:
+        grid_data: list of dictionaries, each containing the information about one refinement patch (left_edge,
+        right_edge, level and dimensions [number of cells])
+        bbox: bounds of the simulation box in physical coordinates (typically Mpc or kpc)
+
+    """
     NMAX, NMAY, NMAZ, NLEVELS, NAMRX, NAMRY, NAMRZ, SIZE = parameters.read_parameters(loadNPALEV = False)
     IRR, T, NL, MAP, ZETA, NPATCH, NPART, PATCHNX, PATCHNY, PATCHNZ, PATCHX, PATCHY, PATCHZ, PARE = read_masclet.read_grids(it, path=path, readpatchposition=False)
     
@@ -65,18 +66,21 @@ def yt4masclet_load_grids(it,path='',digits=5,verbose=False):
 
 
 def yt4masclet_load_newfield(grid_data,fieldname,fieldl0,field_refined):
-    '''
+    """
     This function adds a new field to the yt dataset, once created with yt4masclet_load_grids().
     fieldname specifies the name of the field. Then, fieldl0 (base level) and field_refined have
     to be given, as outputted by readclus, readcldm functions.
-    
-    PARAMETERS:
-    - grid_data: dataset [list of dictionaries] where the new field wants to be added
-    - fieldname: name of the new field, preferrably as specified in yt's docs
-    - fieldl0: NMAXxNMAYxNMAZ matriz with the values of the field at l=0
-    - field_refined: values of the field in each refinement level, as conventionally outputted 
-    (list of arrays, being the first one 0)
-    '''
+
+    Args:
+        grid_data: as outputted by yt4masclet_load_grids()
+        fieldname: name of the field to be added
+        fieldl0: field at the base (l=0) level
+        field_refined: field for each refinement patch, as outputted by readclus() or readcldm() functions
+
+    Returns:
+        New grid_data object with the additional field included.
+
+    """
     grid_data[0][fieldname] = fieldl0
     for g in range(1,len(grid_data)):
         try:
