@@ -19,73 +19,72 @@ import numpy as np
 
 # FUNCTIONS DEFINED IN THIS MODULE
 
-def create_vector_levels(NPATCH):
+
+def create_vector_levels(npatch):
     """
     Creates a vector containing the level for each patch. Nothing really important, just for ease
 
     Args:
-        NPATCH: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
 
     Returns:
         numpy array containing the level for each patch
 
     """
-    vector = [0]
-    for l in range(1, NPATCH.size):
-        vector.extend([l for i in range(NPATCH[l])])
+    vector = [[0]] + [[i+1]*x for (i, x) in enumerate(npatch[1:])]
+    vector = [item for sublist in vector for item in sublist]
     return np.array(vector)
 
 
-def find_absolute_grid_position(ipatch, NPATCH, PATCHX, PATCHY, PATCHZ, PARE):
+def find_absolute_grid_position(ipatch, npatch, patchx, patchy, patchz, pare):
     """
     Given a patch in a certain iteration, finds the grid (natural) coordinates of its left corner.
     Written as a recursive function this time.
 
     Args:
         ipatch: number of the patch (in the given iteration)
-        NPATCH: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
-        PATCHX: vector containing the X-position of the leftmost corner of all the patches (numpy vector of integers)
-        PATCHY: vector containing the Y-position of the leftmost corner of all the patches (numpy vector of integers)
-        PATCHZ: vector containing the Z-position of the leftmost corner of all the patches (numpy vector of integers)
-        PARE: vector containing the ipatch of each patch progenitor (numpy vector of integers)
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        patchx: vector containing the X-position of the leftmost corner of all the patches (numpy vector of integers)
+        patchy: vector containing the Y-position of the leftmost corner of all the patches (numpy vector of integers)
+        patchz: vector containing the Z-position of the leftmost corner of all the patches (numpy vector of integers)
+        pare: vector containing the ipatch of each patch progenitor (numpy vector of integers)
 
     Returns:
         tuple with the patches left-corner NX, NY, NZ values
 
     """
-    level = create_vector_levels(NPATCH)[ipatch]
-    if ipatch < PATCHX.size:
+    level = create_vector_levels(npatch)[ipatch]
+    if ipatch < patchx.size:
         if level == 1:
-            return PATCHX[ipatch], PATCHY[ipatch], PATCHZ[ipatch]
+            return patchx[ipatch], patchy[ipatch], patchz[ipatch]
         else:
-            parevalues = find_absolute_grid_position(PARE[ipatch], NPATCH, PATCHX, PATCHY, PATCHZ, PARE)
-            return ((PATCHX[ipatch] - 1) / 2 ** (level - 1) + parevalues[0],
-                    (PATCHY[ipatch] - 1) / 2 ** (level - 1) + parevalues[1],
-                    (PATCHZ[ipatch] - 1) / 2 ** (level - 1) + parevalues[2])
+            parevalues = find_absolute_grid_position(pare[ipatch], npatch, patchx, patchy, patchz, pare)
+            return ((patchx[ipatch] - 1) / 2 ** (level - 1) + parevalues[0],
+                    (patchy[ipatch] - 1) / 2 ** (level - 1) + parevalues[1],
+                    (patchz[ipatch] - 1) / 2 ** (level - 1) + parevalues[2])
     else:
         raise ValueError('Provide a valid patchnumber (ipatch)')
 
 
-def find_absolute_real_position(ipatch, SIDE, NMAX, NPATCH, PATCHX, PATCHY, PATCHZ, PARE):
+def find_absolute_real_position(ipatch, side, nmax, npatch, patchx, patchy, patchz, pare):
     """
     Given a patch in a certain iteration, finds the real coordinates of its left corner with no numerical error.
     This function depends on find_absolute_grid_position, which must be also loaded.
 
     Args:
         ipatch: number of the patch (in the given iteration) (int)
-        SIDE: side of the simulation box in the chosen units (typically Mpc or kpc) (float)
-        NMAX: number of cells along each directions at level l=0 (can be loaded from masclet_parameters; NMAX = NMAY =
+        side: side of the simulation box in the chosen units (typically Mpc or kpc) (float)
+        nmax: number of cells along each directions at level l=0 (can be loaded from masclet_parameters; NMAX = NMAY =
         = NMAZ is assumed) (int)
-        NPATCH: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
-        PATCHX: vector containing the X-position of the leftmost corner of all the patches (numpy vector of integers)
-        PATCHY: vector containing the Y-position of the leftmost corner of all the patches (numpy vector of integers)
-        PATCHZ: vector containing the Z-position of the leftmost corner of all the patches (numpy vector of integers)
-        PARE: vector containing the ipatch of each patch progenitor (numpy vector of integers)
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        patchx: vector containing the X-position of the leftmost corner of all the patches (numpy vector of integers)
+        patchy: vector containing the Y-position of the leftmost corner of all the patches (numpy vector of integers)
+        patchz: vector containing the Z-position of the leftmost corner of all the patches (numpy vector of integers)
+        pare: vector containing the ipatch of each patch progenitor (numpy vector of integers)
 
     Returns:
     numpy array with the patches left corner X, Y and Z values (assuming box centered in 0; same units than SIDE)
 
     """
     return (np.asarray(
-        find_absolute_grid_position(ipatch, NPATCH, PATCHX, PATCHY, PATCHZ, PARE)) - NMAX / 2 - 1) * SIDE / NMAX
-
+        find_absolute_grid_position(ipatch, npatch, patchx, patchy, patchz, pare)) - nmax / 2 - 1) * side / nmax

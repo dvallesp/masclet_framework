@@ -21,9 +21,11 @@ import numpy as np
 from masclet_framework import tools
 from masclet_framework import parameters, read_masclet
 
+
 # FUNCTIONS DEFINED IN THIS MODULE
 
-def yt4masclet_load_grids(it,path='',digits=5):
+
+def yt4masclet_load_grids(it, path='', digits=5):
     """
     This function creates a list of dictionaries containing the information requiered for yt's load_amr_grids
     to build the grid structure of a simulations performed by MASCLET.
@@ -39,33 +41,35 @@ def yt4masclet_load_grids(it,path='',digits=5):
         bbox: bounds of the simulation box in physical coordinates (typically Mpc or kpc)
 
     """
-    NMAX, NMAY, NMAZ, NLEVELS, NAMRX, NAMRY, NAMRZ, SIZE = parameters.read_parameters(loadNPALEV = False)
-    IRR, T, NL, MAP, ZETA, NPATCH, NPART, PATCHNX, PATCHNY, PATCHNZ, PATCHX, PATCHY, PATCHZ, PARE = read_masclet.read_grids(it, path=path, readpatchposition=False)
-    
-    grid_data = []
-    #l=0 (whole box)
-    grid_data.append(dict(left_edge=[-SIZE/2,-SIZE/2,-SIZE/2],
-                     right_edge=[SIZE/2,SIZE/2,SIZE/2],
-                     level=0,
-                     dimensions=[NMAX,NMAY,NMAZ]))
-    
-    LEVELS = tools.create_vector_levels(NPATCH)
-    left = np.array([tools.find_absolute_real_position(i, SIZE, NMAX, NPATCH, PATCHX, PATCHY, PATCHZ, PARE) for i in range(1, LEVELS.size)])
-    left = np.vstack([[-SIZE/2,-SIZE/2,-SIZE/2],left])
-    right = left + np.array([PATCHNX/2**LEVELS, PATCHNY/2**LEVELS, PATCHNZ/2**LEVELS]).transpose()[:,:]*SIZE/NMAX
-    
-    for i in range(1,LEVELS.size):
-        grid_data.append(dict(left_edge=left[i,:].tolist(),
-                         right_edge=right[i,:].tolist(),
-                         level = LEVELS[i],
-                         dimensions = [PATCHNX[i], PATCHNY[i], PATCHNZ[i]]))
-        
-    bbox = np.array([[-SIZE/2, SIZE/2], [-SIZE/2, SIZE/2], [-SIZE/2, SIZE/2]])
-        
+    nmax, nmay, nmaz, nlevels, namrx, namry, namrz, size = parameters.read_parameters(load_npalev=False)
+    irr, t, nl, mass_dmpart, zeta, npatch, npart, patchnx, patchny, patchnz, patchx, patchy, patchz, pare = \
+        read_masclet.read_grids(it, path=path, read_patchposition=False, digits=digits)
+
+    # l=0 (whole box)
+    grid_data = [dict(left_edge=[-size / 2, -size / 2, -size / 2],
+                      right_edge=[size / 2, size / 2, size / 2],
+                      level=0,
+                      dimensions=[nmax, nmay, nmaz])]
+
+    levels = tools.create_vector_levels(npatch)
+    left = np.array([tools.find_absolute_real_position(i, size, nmax, npatch, patchx, patchy, patchz, pare) for i in
+                     range(1, levels.size)])
+    left = np.vstack([[-size / 2, -size / 2, -size / 2], left])
+    right = left + np.array([patchnx / 2 ** levels, patchny / 2 ** levels, patchnz / 2 ** levels]).transpose()[:, :] \
+        * size / nmax
+
+    for i in range(1, levels.size):
+        grid_data.append(dict(left_edge=left[i, :].tolist(),
+                              right_edge=right[i, :].tolist(),
+                              level=levels[i],
+                              dimensions=[patchnx[i], patchny[i], patchnz[i]]))
+
+    bbox = np.array([[-size / 2, size / 2], [-size / 2, size / 2], [-size / 2, size / 2]])
+
     return grid_data, bbox
 
 
-def yt4masclet_load_newfield(grid_data,fieldname,fieldl0,field_refined):
+def yt4masclet_load_newfield(grid_data, fieldname, fieldl0, field_refined):
     """
     This function adds a new field to the yt dataset, once created with yt4masclet_load_grids().
     fieldname specifies the name of the field. Then, fieldl0 (base level) and field_refined have
@@ -82,9 +86,9 @@ def yt4masclet_load_newfield(grid_data,fieldname,fieldl0,field_refined):
 
     """
     grid_data[0][fieldname] = fieldl0
-    for g in range(1,len(grid_data)):
+    for g in range(1, len(grid_data)):
         try:
             grid_data[g][fieldname] = field_refined[g]
-        except IndexError: #field not provided for this patch
+        except IndexError:  # field not provided for this patch
             grid_data[g][fieldname] = np.zeros(grid_data[g]['dimensions'])
     return grid_data

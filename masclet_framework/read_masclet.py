@@ -48,9 +48,9 @@ def filename(it, filetype, digits=5):
         print('Insert a correct type: g, b o d ')
 
 
-def read_grids(it, path='', digits=5, readgeneral=True, readpatchnum=True, readdmpartnum=True,
-               readpatchcellextension=True, readpatchcellposition=True, readpatchposition=True, readpatchparent=True,
-               nparray=True):
+def read_grids(it, path='', digits=5, read_general=True, read_patchnum=True, read_dmpartnum=True,
+               read_patchcellextension=True, read_patchcellposition=True, read_patchposition=True,
+               read_patchparent=True, nparray=True):
     """
     reads grids files, containing the information needed for building the AMR structure
 
@@ -58,138 +58,137 @@ def read_grids(it, path='', digits=5, readgeneral=True, readpatchnum=True, readd
         it: iteration number (int)
         path: path of the grids file in the system (str)
         digits: number of digits the filename is written with (int)
-        readgeneral: whether IRR, T, NL, MAP and ZETA are returned (bool)
-        readpatchnum: whether NPATCH is returned (bool)
-        readdmpartnum: whether NPART is returned (bool)
-        readpatchcellextension: whether PATCHNX, PATCHNY, PATCHNZ are returned (bool)
-        readpatchcellposition: whether PATCHX, PATCHY, PATCHZ are returned (bool)
-        readpatchposition: whether PATCHRX, PATCHRY, PATCHRZ are returned (bool)
-        readpatchparent: whether PARENT is returned (bool)
+        read_general: whether irr, T, NL, MAP and ZETA are returned (bool)
+        read_patchnum: whether NPATCH is returned (bool)
+        read_dmpartnum: whether NPART is returned (bool)
+        read_patchcellextension: whether PATCHNX, PATCHNY, PATCHNZ are returned (bool)
+        read_patchcellposition: whether PATCHX, PATCHY, PATCHZ are returned (bool)
+        read_patchposition: whether PATCHRX, PATCHRY, PATCHRZ are returned (bool)
+        read_patchparent: whether PARENT is returned (bool)
         nparray: if True (default), all variables are returned as numpy arrays (bool)
 
     Returns: (in order)
 
         -only if readgeneral set to True
-        IRR: iteration number
-        T: time
-        NL: num of refinement levels
-        MAP: mass of DM particles
-        ZETA: redshift
+        irr: iteration number
+        t: time
+        nl: num of refinement levels
+        mass_dmpart: mass of DM particles
+        zeta: redshift
 
         -only if readpatchnum set to True
-        NPATCH: number of patches in each level, starting in l=0
+        npatch: number of patches in each level, starting in l=0
 
         -only if readdmpartnum set to True
-        NPART: number of dm particles in each leve, starting in l=0
+        npart: number of dm particles in each leve, starting in l=0
 
         -only if readpatchcellextension set to True
-        PATCHNX (...): x-extension of each patch (in level l cells) (and Y and Z)
+        patchnx (...): x-extension of each patch (in level l cells) (and Y and Z)
 
         -only if readpatchcellposition set to True
-        PATCHX (...): x-position of each patch (left-bottom-front corner; in level
+        patchx (...): x-position of each patch (left-bottom-front corner; in level
         l-1 cells) (and Y and Z)
 
         -only if readpatchposition set to True
-        PATCHRX (...): physical position of the center of each patch first ¡l-1! cell
+        patchrx (...): physical position of the center of each patch first ¡l-1! cell
         (and Y and Z)
 
         -only if readpatchparent set to True
-        PARE: which (l-1)-cell is left-bottom-front corner of each patch in
+        pare: which (l-1)-cell is left-bottom-front corner of each patch in
 
     """
 
     grids = open(path + filename(it, 'g', digits), 'r')
 
     # first, we load some general parameters
-    IRR, T, NL, MAP, _ = tuple(float(i) for i in grids.readline().split())
-    IRR = int(IRR)
-    assert (it == IRR)
-    NL = int(NL)
-    ZETA = float(grids.readline().split()[0])
+    irr, t, nl, mass_dmpart, _ = tuple(float(i) for i in grids.readline().split())
+    irr = int(irr)
+    assert (it == irr)
+    nl = int(nl)
+    zeta = float(grids.readline().split()[0])
     # l=0
-    IR, NDXYZ, _ = tuple(float(i) for i in grids.readline().split())
-    IR = int(IR)
-    NDXYZ = int(NDXYZ)
+    _, ndxyz, _ = tuple(float(i) for i in grids.readline().split())
+    ndxyz = int(ndxyz)
 
     # vectors where the data will be stored
-    NPATCH = [0]  # number of patches per level, starting with l=0
-    NPART = [NDXYZ]  # number of dm particles per level, starting with l=0
-    PATCHNX = [0]
-    PATCHNY = [0]
-    PATCHNZ = [0]
-    PATCHX = [0]
-    PATCHY = [0]
-    PATCHZ = [0]
-    PATCHRX = [0]
-    PATCHRY = [0]
-    PATCHRZ = [0]
-    PARE = [0]
+    npatch = [0]  # number of patches per level, starting with l=0
+    npart = [ndxyz]  # number of dm particles per level, starting with l=0
+    patchnx = [0]
+    patchny = [0]
+    patchnz = [0]
+    patchx = [0]
+    patchy = [0]
+    patchz = [0]
+    patchrx = [0]
+    patchry = [0]
+    patchrz = [0]
+    pare = [0]
 
-    for IR in range(1, NL + 1):
+    for ir in range(1, nl + 1):
         level, npatchtemp, nparttemp, _ = tuple(int(i) for i in grids.readline().split())
-        NPATCH.append(npatchtemp)
-        NPART.append(nparttemp)
+        npatch.append(npatchtemp)
+        npart.append(nparttemp)
 
         # ignoring a blank line
         grids.readline()
 
         # loading all values
-        for i in range(sum(NPATCH[0:IR]) + 1, sum(NPATCH[0:IR + 1]) + 1):
-            nx, ny, nz = tuple(int(i) for i in grids.readline().split())
-            x, y, z = tuple(int(i) for i in grids.readline().split())
-            rx, ry, rz = tuple(float(i) for i in grids.readline().split())
-            pare = int(grids.readline())
-            PATCHNX.append(nx)
-            PATCHNY.append(ny)
-            PATCHNZ.append(nz)
-            PATCHX.append(x)
-            PATCHY.append(y)
-            PATCHZ.append(z)
-            PATCHRX.append(rx)
-            PATCHRY.append(ry)
-            PATCHRZ.append(rz)
-            PARE.append(pare)
+        for i in range(sum(npatch[0:ir]) + 1, sum(npatch[0:ir + 1]) + 1):
+            this_nx, this_ny, this_nz = tuple(int(i) for i in grids.readline().split())
+            this_x, this_y, this_z = tuple(int(i) for i in grids.readline().split())
+            this_rx, this_ry, this_rz = tuple(float(i) for i in grids.readline().split())
+            this_pare = int(grids.readline())
+            patchnx.append(this_nx)
+            patchny.append(this_ny)
+            patchnz.append(this_nz)
+            patchx.append(this_x)
+            patchy.append(this_y)
+            patchz.append(this_z)
+            patchrx.append(this_rx)
+            patchry.append(this_ry)
+            patchrz.append(this_rz)
+            pare.append(this_pare)
 
     # converts everything into numpy arrays if nparray set to True
     if nparray:
-        NPATCH = np.array(NPATCH)
-        NPART = np.array(NPART)
-        PATCHNX = np.array(PATCHNX)
-        PATCHNY = np.array(PATCHNY)
-        PATCHNZ = np.array(PATCHNZ)
-        PATCHX = np.array(PATCHX)
-        PATCHY = np.array(PATCHY)
-        PATCHZ = np.array(PATCHZ)
-        PATCHRX = np.array(PATCHRX)
-        PATCHRY = np.array(PATCHRY)
-        PATCHRZ = np.array(PATCHRZ)
-        PARE = np.array(PARE)
+        npatch = np.array(npatch)
+        npart = np.array(npart)
+        patchnx = np.array(patchnx)
+        patchny = np.array(patchny)
+        patchnz = np.array(patchnz)
+        patchx = np.array(patchx)
+        patchy = np.array(patchy)
+        patchz = np.array(patchz)
+        patchrx = np.array(patchrx)
+        patchry = np.array(patchry)
+        patchrz = np.array(patchrz)
+        pare = np.array(pare)
 
     grids.close()
 
     returnvariables = []
 
-    if readgeneral:
-        returnvariables.extend([IRR, T, NL, MAP, ZETA])
-    if readpatchnum:
-        returnvariables.append(NPATCH)
-    if readdmpartnum:
-        returnvariables.append(NPART)
-    if readpatchcellextension:
-        returnvariables.extend([PATCHNX, PATCHNY, PATCHNZ])
-    if readpatchcellposition:
-        returnvariables.extend([PATCHX, PATCHY, PATCHZ])
-    if readpatchposition:
-        returnvariables.extend([PATCHRX, PATCHRY, PATCHRZ])
-    if readpatchparent:
-        returnvariables.append(PARE)
+    if read_general:
+        returnvariables.extend([irr, t, nl, mass_dmpart, zeta])
+    if read_patchnum:
+        returnvariables.append(npatch)
+    if read_dmpartnum:
+        returnvariables.append(npart)
+    if read_patchcellextension:
+        returnvariables.extend([patchnx, patchny, patchnz])
+    if read_patchcellposition:
+        returnvariables.extend([patchx, patchy, patchz])
+    if read_patchposition:
+        returnvariables.extend([patchrx, patchry, patchrz])
+    if read_patchparent:
+        returnvariables.append(pare)
 
     return tuple(returnvariables)
 
 
-def read_clus(it, path='', digits=5, maxRefinedLevel=1000, outputDelta=True, outputV=True, outputPres=True,
-              outputPot=True, outputOpot=False, outputTemp=True, outputMetalicity=True, outputCr0amr=True,
-              outputSolapst=True, verbose=False, fullverbose=False):
+def read_clus(it, path='', digits=5, max_refined_level=1000, output_delta=True, output_v=True, output_pres=True,
+              output_pot=True, output_opot=False, output_temp=True, ouput_metalicity=True, output_cr0amr=True,
+              output_solapst=True, verbose=False, fullverbose=False):
     """
     Reads the gas (baryonic, clus) file
 
@@ -197,16 +196,16 @@ def read_clus(it, path='', digits=5, maxRefinedLevel=1000, outputDelta=True, out
         it: iteration number (int)
         path: path of the grids file in the system (str)
         digits: number of digits the filename is written with (int)
-        maxRefinedLevel: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
-        outputDelta: whether delta (density contrast) is returned (bool)
-        outputV: whether velocities (vx, vy, vz) are returned (bool)
-        outputPres: whether pressure is returned (bool)
-        outputPot: whether gravitational potential is returned (bool)
-        outputOpot: whether gravitational potential in the previous iteration is returned (bool)
-        outputTemp: whether temperature is returned (bool)
-        outputMetalicity: whether metalicity is returned (bool)
-        outputCr0amr: whether "refined variable" (1 if not refined, 0 if refined) is returned (bool)
-        outputSolapst: whether "solapst variable" (1 if the cell is kept, 0 otherwise) is returned (bool)
+        max_refined_level: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
+        output_delta: whether delta (density contrast) is returned (bool)
+        output_v: whether velocities (vx, vy, vz) are returned (bool)
+        output_pres: whether pressure is returned (bool)
+        output_pot: whether gravitational potential is returned (bool)
+        output_opot: whether gravitational potential in the previous iteration is returned (bool)
+        output_temp: whether temperature is returned (bool)
+        ouput_metalicity: whether metalicity is returned (bool)
+        output_cr0amr: whether "refined variable" (1 if not refined, 0 if refined) is returned (bool)
+        output_solapst: whether "solapst variable" (1 if the cell is kept, 0 otherwise) is returned (bool)
         verbose: whether a message is printed when each refinement level is started (bool)
         fullverbose: whether a message is printed for each patch (recommended for debugging issues) (bool)
 
@@ -217,47 +216,47 @@ def read_clus(it, path='', digits=5, maxRefinedLevel=1000, outputDelta=True, out
 
     """
 
-    NMAX, NMAY, NMAZ, NLEVELS = parameters.read_parameters(loadNMA=True, loadNPALEV=False, loadNLEVELS=True,
-                                                           loadNAMR=False, loadSIZE=False)
-    NPATCH, PATCHNX, PATCHNY, PATCHNZ = read_grids(it, path=path, readgeneral=False, readpatchnum=True,
-                                                   readdmpartnum=False, readpatchcellextension=True,
-                                                   readpatchcellposition=False, readpatchposition=False,
-                                                   readpatchparent=False)
+    nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
+                                                           load_namr=False, load_size=False)
+    npatch, patchnx, patchny, patchnz = read_grids(it, path=path, read_general=False, read_patchnum=True,
+                                                   read_dmpartnum=False, read_patchcellextension=True,
+                                                   read_patchcellposition=False, read_patchposition=False,
+                                                   read_patchparent=False)
     f = FortranFile(path + filename(it, 'b', digits), 'r')
     # endian not specified (small by default)
-    it_clus, time, z = tuple(f.read_reals(dtype='i4, f4, f4')[0])
+    _ = tuple(f.read_reals(dtype='i4, f4, f4')[0])
 
     # 'F' in reshape means Fortran-order (first index changing fastest)
     if fullverbose:
         print('l=0 delta')
-    delta = np.reshape(f.read_reals(dtype='f4'), (NMAX, NMAY, NMAZ), 'F')
+    delta = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
     if fullverbose:
         print('l=0 vx')
-    vx = np.reshape(f.read_reals(dtype='f4'), (NMAX, NMAY, NMAZ), 'F')
+    vx = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
     if fullverbose:
         print('l=0 vy')
-    vy = np.reshape(f.read_reals(dtype='f4'), (NMAX, NMAY, NMAZ), 'F')
+    vy = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
     if fullverbose:
         print('l=0 vz')
-    vz = np.reshape(f.read_reals(dtype='f4'), (NMAX, NMAY, NMAZ), 'F')
+    vz = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
     if fullverbose:
         print('l=0 pres')
-    pres = np.reshape(f.read_reals(dtype='f4'), (NMAX, NMAY, NMAZ), 'F')
+    pres = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
     if fullverbose:
         print('l=0 pot')
-    pot = np.reshape(f.read_reals(dtype='f4'), (NMAX, NMAY, NMAZ), 'F')
+    pot = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
     if fullverbose:
         print('l=0 opot')
-    opot = np.reshape(f.read_reals(dtype='f4'), (NMAX, NMAY, NMAZ), 'F')
+    opot = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
     if fullverbose:
         print('l=0 temp')
-    temp = np.reshape(f.read_reals(dtype='f4'), (NMAX, NMAY, NMAZ), 'F')
+    temp = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
     if fullverbose:
         print('l=0 metalicity')
-    metalicity = np.reshape(f.read_reals(dtype='f4'), (NMAX, NMAY, NMAZ), 'F')
+    metalicity = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
     if fullverbose:
         print('l=0 cr0amr')
-    cr0amr = np.reshape(f.read_ints(), (NMAX, NMAY, NMAZ), 'F')  # 1 si no refinado, 0 si refinado
+    cr0amr = np.reshape(f.read_ints(), (nmax, nmay, nmaz), 'F')  # 1 si no refinado, 0 si refinado
 
     # faster computation if we keep appending to a python list than if we append to a numpy array
     delta_refined = [0]
@@ -274,75 +273,75 @@ def read_clus(it, path='', digits=5, maxRefinedLevel=1000, outputDelta=True, out
 
     # 11 variables por patch 
     # TO DO: check which variables we want to output (it's only ~ 1000*11 checks, not that bad)
-    for l in range(1, min(NLEVELS + 1, maxRefinedLevel + 1)):
+    for l in range(1, min(nlevels + 1, max_refined_level + 1)):
         if verbose:
             print('Reading level {}.'.format(l))
-            print('{} patches.'.format(NPATCH[l]))
-        for ipatch in range(NPATCH[0:l].sum() + 1, NPATCH[0:l + 1].sum() + 1):
+            print('{} patches.'.format(npatch[l]))
+        for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
             if fullverbose:
                 print('Reading patch {}'.format(ipatch))
             delta_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (PATCHNX[ipatch], PATCHNY[ipatch], PATCHNZ[ipatch]), 'F'))
+                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
             vx_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (PATCHNX[ipatch], PATCHNY[ipatch], PATCHNZ[ipatch]), 'F'))
+                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
             vy_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (PATCHNX[ipatch], PATCHNY[ipatch], PATCHNZ[ipatch]), 'F'))
+                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
             vz_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (PATCHNX[ipatch], PATCHNY[ipatch], PATCHNZ[ipatch]), 'F'))
+                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
             pres_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (PATCHNX[ipatch], PATCHNY[ipatch], PATCHNZ[ipatch]), 'F'))
+                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
             pot_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (PATCHNX[ipatch], PATCHNY[ipatch], PATCHNZ[ipatch]), 'F'))
+                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
             opot_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (PATCHNX[ipatch], PATCHNY[ipatch], PATCHNZ[ipatch]), 'F'))
+                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
             temp_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (PATCHNX[ipatch], PATCHNY[ipatch], PATCHNZ[ipatch]), 'F'))
+                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
             metalicity_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (PATCHNX[ipatch], PATCHNY[ipatch], PATCHNZ[ipatch]), 'F'))
+                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
             cr0amr_refined.append(
-                np.reshape(f.read_ints(dtype='i4'), (PATCHNX[ipatch], PATCHNY[ipatch], PATCHNZ[ipatch]),
+                np.reshape(f.read_ints(dtype='i4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
                            'F'))  # 1 si no refinado, 0 si refinado
             solapst_refined.append(
-                np.reshape(f.read_ints(dtype='i4'), (PATCHNX[ipatch], PATCHNY[ipatch], PATCHNZ[ipatch]),
+                np.reshape(f.read_ints(dtype='i4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
                            'F'))  # 1 si no solapado, 0 si solapado
 
     f.close()
 
     returnvariables = []
-    if outputDelta:
+    if output_delta:
         returnvariables.append(delta)
-    if outputV:
+    if output_v:
         returnvariables.extend([vx, vy, vz])
-    if outputPres:
+    if output_pres:
         returnvariables.append(pres)
-    if outputPot:
+    if output_pot:
         returnvariables.append(pot)
-    if outputOpot:
+    if output_opot:
         returnvariables.append(opot)
-    if outputTemp:
+    if output_temp:
         returnvariables.append(temp)
-    if outputMetalicity:
+    if ouput_metalicity:
         returnvariables.append(metalicity)
-    if outputCr0amr:
+    if output_cr0amr:
         returnvariables.append(cr0amr)
-    if maxRefinedLevel >= 1:
-        if outputDelta:
+    if max_refined_level >= 1:
+        if output_delta:
             returnvariables.append(delta_refined)
-        if outputV:
+        if output_v:
             returnvariables.extend([vx_refined, vy_refined, vz_refined])
-        if outputPres:
+        if output_pres:
             returnvariables.append(pres_refined)
-        if outputPot:
+        if output_pot:
             returnvariables.append(pot_refined)
-        if outputOpot:
+        if output_opot:
             returnvariables.append(opot_refined)
-        if outputTemp:
+        if output_temp:
             returnvariables.append(temp_refined)
-        if outputMetalicity:
+        if ouput_metalicity:
             returnvariables.append(metalicity_refined)
-        if outputCr0amr:
+        if output_cr0amr:
             returnvariables.append(cr0amr_refined)
-        if outputSolapst:
+        if output_solapst:
             returnvariables.append(solapst_refined)
 
     return tuple(returnvariables)
