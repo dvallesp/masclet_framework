@@ -25,7 +25,7 @@ from masclet_framework import parameters, read_masclet
 # FUNCTIONS DEFINED IN THIS MODULE
 
 
-def yt4masclet_load_grids(it, path='', digits=5):
+def load_grids(it, path='', digits=5):
     """
     This function creates a list of dictionaries containing the information requiered for yt's load_amr_grids
     to build the grid structure of a simulations performed by MASCLET.
@@ -69,7 +69,7 @@ def yt4masclet_load_grids(it, path='', digits=5):
     return grid_data, bbox
 
 
-def yt4masclet_load_newfield(grid_data, fieldname, fieldl0, field_refined):
+def load_newfield(grid_data, fieldname, fieldl0, field_refined):
     """
     This function adds a new field to the yt dataset, once created with yt4masclet_load_grids().
     fieldname specifies the name of the field. Then, fieldl0 (base level) and field_refined have

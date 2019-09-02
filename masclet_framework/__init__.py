@@ -13,4 +13,4 @@ import masclet_framework.parameters
 import masclet_framework.read_masclet
 import masclet_framework.tools
 import masclet_framework.graphics
-import masclet_framework.masclet4yt
+import masclet_framework.masclet2yt
