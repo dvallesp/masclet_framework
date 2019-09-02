@@ -217,7 +217,7 @@ def read_clus(it, path='', digits=5, max_refined_level=1000, output_delta=True, 
     """
 
     nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
-                                                           load_namr=False, load_size=False)
+                                                           load_namr=False, load_size=False, path=path)
     npatch, patchnx, patchny, patchnz = read_grids(it, path=path, read_general=False, read_patchnum=True,
                                                    read_dmpartnum=False, read_patchcellextension=True,
                                                    read_patchcellposition=False, read_patchposition=False,
@@ -343,5 +343,87 @@ def read_clus(it, path='', digits=5, max_refined_level=1000, output_delta=True, 
             returnvariables.append(cr0amr_refined)
         if output_solapst:
             returnvariables.append(solapst_refined)
+
+    return tuple(returnvariables)
+
+
+def read_cldm(it, path='', digits=5, max_refined_level=1000, output_deltadm=True, output_position=True,
+              output_velocity=True, output_mass=True, output_id=False, verbose=False):
+    """
+    Reads the dark matter (cldm) file.
+
+    Args:
+        it: iteration number (int)
+        path: path of the grids file in the system (str)
+        digits: number of digits the filename is written with (int)
+        max_refined_level: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
+        output_deltadm: whether deltadm (dark matter density contrast) is returned (bool)
+        output_position: whether particles' positions are returned (bool)
+        output_velocity: whether particles' velocities are returned (bool)
+        output_mass: whether particles' masses are returned (bool)
+        output_id: whether particles' ids are returned (bool)
+        verbose: whether a message is printed when each refinement level is started (bool)
+
+    Returns:
+        Chosen quantities, in the order specified by the order of the parameters in this definition.
+        delta_dm is returned as a list of numpy matrices. The 0-th element corresponds to l=0. The i-th element
+        corresponds to the i-th patch.
+        The rest of quantities are outputted as numpy vectors, the i-th element corresponding to the i-th DM particle.
+
+
+    """
+    nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
+                                                           load_namr=False, load_size=False, path=path)
+    npatch, npart, patchnx, patchny, patchnz = read_grids(it, path=path, read_general=False, read_patchnum=True,
+                                                          read_dmpartnum=True, read_patchcellextension=True,
+                                                          read_patchcellposition=False, read_patchposition=False,
+                                                          read_patchparent=False)
+
+    f = FortranFile(path + filename(it, 'd', digits), 'r')
+
+    it_cldm, time, mdmpart, z = tuple(f.read_reals(dtype='i4, f4, f4, f4')[0])
+
+    # l=0
+    delta_dm = [np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')]
+    dmpart_x = f.read_reals(dtype='f4')
+    dmpart_y = f.read_reals(dtype='f4')
+    dmpart_z = f.read_reals(dtype='f4')
+    dmpart_vx = f.read_reals(dtype='f4')
+    dmpart_vy = f.read_reals(dtype='f4')
+    dmpart_vz = f.read_reals(dtype='f4')
+    dmpart_id = f.read_ints(dtype='i4')
+    dmpart_mass = mdmpart * np.ones(npart[0])
+
+    # refinement levels
+    for l in range(1, min(nlevels + 1, max_refined_level + 1)):
+        if verbose:
+            print('Reading level {}.'.format(l))
+            print('{} patches. {} particles.'.format(npatch[l], npart[l]))
+        for ipatch in range(npatch[0:l].sum()+1, npatch[0:l+1].sum()+1):
+            delta_dm.append(np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                       'F'))
+        dmpart_x = np.append(dmpart_x, f.read_reals(dtype='f4'))
+        dmpart_y = np.append(dmpart_y, f.read_reals(dtype='f4'))
+        dmpart_z = np.append(dmpart_z, f.read_reals(dtype='f4'))
+        dmpart_vx = np.append(dmpart_vx, f.read_reals(dtype='f4'))
+        dmpart_vy = np.append(dmpart_vy, f.read_reals(dtype='f4'))
+        dmpart_vz = np.append(dmpart_vz, f.read_reals(dtype='f4'))
+        dmpart_mass = np.append(dmpart_mass, f.read_reals(dtype='f4'))
+        dmpart_id = np.append(dmpart_id, f.read_ints(dtype='i4'))
+
+    f.close()
+
+    returnvariables = []
+
+    if output_deltadm:
+        returnvariables.append(delta_dm)
+    if output_position:
+        returnvariables.extend([dmpart_x, dmpart_y, dmpart_z])
+    if output_velocity:
+        returnvariables.extend([dmpart_vx, dmpart_vy, dmpart_vz])
+    if output_mass:
+        returnvariables.append(dmpart_mass)
+    if output_id:
+        returnvariables.append(dmpart_id)
 
     return tuple(returnvariables)
