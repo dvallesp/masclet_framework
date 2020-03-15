@@ -188,15 +188,16 @@ def read_grids(it, path='', digits=5, read_general=True, read_patchnum=True, rea
     return tuple(returnvariables)
 
 
-def read_clus(it, path='', digits=5, max_refined_level=1000, output_delta=True, output_v=True, output_pres=True,
-              output_pot=True, output_opot=False, output_temp=True, output_metalicity=True, output_cr0amr=True,
-              output_solapst=True, verbose=False, fullverbose=False):
+def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_delta=True, output_v=True,
+              output_pres=True, output_pot=True, output_opot=False, output_temp=True, output_metalicity=True,
+              output_cr0amr=True,output_solapst=True, verbose=False):
     """
     Reads the gas (baryonic, clus) file
 
     Args:
         it: iteration number (int)
         path: path of the grids file in the system (str)
+        parameters_path: path of the json parameters file of the simulation
         digits: number of digits the filename is written with (int)
         max_refined_level: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
         output_delta: whether delta (density contrast) is returned (bool)
@@ -212,10 +213,8 @@ def read_clus(it, path='', digits=5, max_refined_level=1000, output_delta=True, 
         fullverbose: whether a message is printed for each patch (recommended for debugging issues) (bool)
 
     Returns:
-        Chosen quantities, as arrays; in the order specified by the order of the parameters in this definition.
-        First, quantities at l=0 are returned. Then, a vector containing all the refinement matrices for each variables,
-        in the same order.
-
+        Chosen quantities, as a list of arrays (one for each patch, starting with l=0 and subsequently);
+        in the order specified by the order of the parameters in this definition.
     """
 
     nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
@@ -357,14 +356,15 @@ def read_clus(it, path='', digits=5, max_refined_level=1000, output_delta=True, 
     return tuple(returnvariables)
 
 
-def read_cldm(it, path='', digits=5, max_refined_level=1000, output_deltadm=True, output_position=True,
-              output_velocity=True, output_mass=True, output_id=False, verbose=False):
+def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltadm=True,
+              output_position=True, output_velocity=True, output_mass=True, output_id=False, verbose=False):
     """
     Reads the dark matter (cldm) file.
 
     Args:
         it: iteration number (int)
-        path: path of the grids file in the system (str)
+        path: path of the output files in the system (str)
+        parameters_path: path of the json parameters file of the simulation
         digits: number of digits the filename is written with (int)
         max_refined_level: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
         output_deltadm: whether deltadm (dark matter density contrast) is returned (bool)
@@ -398,6 +398,9 @@ def read_cldm(it, path='', digits=5, max_refined_level=1000, output_deltadm=True
         time, mdmpart, z = tuple(f.read_vector('f')[1:4])
 
         # l=0
+        if verbose:
+            print('Reading base grid...')
+            
         delta_dm = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
         dmpart_x = f.read_vector('f')
         dmpart_y = f.read_vector('f')
