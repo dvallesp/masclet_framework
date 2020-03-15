@@ -17,8 +17,10 @@ Created by David Vallés
 
 # numpy
 import numpy as np
-# scipy
+# scipy (will be removed)
 from scipy.io import FortranFile
+# cython_fortran_file
+from cython_fortran_file import FortranFile as FF
 
 # masclet_framework
 from masclet_framework import parameters
@@ -187,7 +189,7 @@ def read_grids(it, path='', digits=5, read_general=True, read_patchnum=True, rea
 
 
 def read_clus(it, path='', digits=5, max_refined_level=1000, output_delta=True, output_v=True, output_pres=True,
-              output_pot=True, output_opot=False, output_temp=True, ouput_metalicity=True, output_cr0amr=True,
+              output_pot=True, output_opot=False, output_temp=True, output_metalicity=True, output_cr0amr=True,
               output_solapst=True, verbose=False, fullverbose=False):
     """
     Reads the gas (baryonic, clus) file
@@ -203,7 +205,7 @@ def read_clus(it, path='', digits=5, max_refined_level=1000, output_delta=True, 
         output_pot: whether gravitational potential is returned (bool)
         output_opot: whether gravitational potential in the previous iteration is returned (bool)
         output_temp: whether temperature is returned (bool)
-        ouput_metalicity: whether metalicity is returned (bool)
+        output_metalicity: whether metalicity is returned (bool)
         output_cr0amr: whether "refined variable" (1 if not refined, 0 if refined) is returned (bool)
         output_solapst: whether "solapst variable" (1 if the cell is kept, 0 otherwise) is returned (bool)
         verbose: whether a message is printed when each refinement level is started (bool)
@@ -222,90 +224,116 @@ def read_clus(it, path='', digits=5, max_refined_level=1000, output_delta=True, 
                                                    read_dmpartnum=False, read_patchcellextension=True,
                                                    read_patchcellposition=False, read_patchposition=False,
                                                    read_patchparent=False)
-    f = FortranFile(path + filename(it, 'b', digits), 'r')
-    # endian not specified (small by default)
-    _ = tuple(f.read_reals(dtype='i4, f4, f4')[0])
+    with FF(path + filename(it, 'b', digits)) as f:
+        # read header
+        it = f.read_vector('i')[0]
+        f.seek(0)  # this is a little bit ugly but whatever
+        time, z = tuple(f.read_vector('f')[1:3])
 
-    # 'F' in reshape means Fortran-order (first index changing fastest)
-    if fullverbose:
-        print('l=0 delta')
-    delta = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
-    if fullverbose:
-        print('l=0 vx')
-    vx = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
-    if fullverbose:
-        print('l=0 vy')
-    vy = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
-    if fullverbose:
-        print('l=0 vz')
-    vz = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
-    if fullverbose:
-        print('l=0 pres')
-    pres = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
-    if fullverbose:
-        print('l=0 pot')
-    pot = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
-    if fullverbose:
-        print('l=0 opot')
-    opot = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
-    if fullverbose:
-        print('l=0 temp')
-    temp = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
-    if fullverbose:
-        print('l=0 metalicity')
-    metalicity = np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')
-    if fullverbose:
-        print('l=0 cr0amr')
-    cr0amr = np.reshape(f.read_ints(), (nmax, nmay, nmaz), 'F')  # 1 si no refinado, 0 si refinado
-
-    # faster computation if we keep appending to a python list than if we append to a numpy array
-    delta_refined = [0]
-    vx_refined = [0]
-    vy_refined = [0]
-    vz_refined = [0]
-    pres_refined = [0]
-    pot_refined = [0]
-    opot_refined = [0]
-    temp_refined = [0]
-    metalicity_refined = [0]
-    cr0amr_refined = [0]
-    solapst_refined = [0]
-
-    # 11 variables por patch 
-    # TO DO: check which variables we want to output (it's only ~ 1000*11 checks, not that bad)
-    for l in range(1, min(nlevels + 1, max_refined_level + 1)):
+        # l=0
         if verbose:
-            print('Reading level {}.'.format(l))
-            print('{} patches.'.format(npatch[l]))
-        for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
-            if fullverbose:
-                print('Reading patch {}'.format(ipatch))
-            delta_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-            vx_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-            vy_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-            vz_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-            pres_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-            pot_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-            opot_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-            temp_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-            metalicity_refined.append(
-                np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-            cr0amr_refined.append(
-                np.reshape(f.read_ints(dtype='i4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
-                           'F'))  # 1 si no refinado, 0 si refinado
-            solapst_refined.append(
-                np.reshape(f.read_ints(dtype='i4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
-                           'F'))  # 1 si no solapado, 0 si solapado
+            print('Reading base grid...')
+        if output_delta:
+            delta = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+        else:
+            f.skip()
 
-    f.close()
+        if output_v:
+            vx = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+            vy = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+            vz = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+        else:
+            f.skip(3)
+
+        if output_pres:
+            pres = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+        else:
+            f.skip()
+
+        if output_pot:
+            pot = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+        else:
+            f.skip()
+
+        if output_opot:
+            opot = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+        else:
+            f.skip()
+
+        if output_temp:
+            temp = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+        else:
+            f.skip()
+
+        if output_metalicity:
+            metalicity = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+        else:
+            f.skip()
+
+        if output_cr0amr:
+            cr0amr = [np.reshape(f.read_vector('i'), (nmax, nmay, nmaz), 'F')]
+        else:
+            f.skip()
+
+        if output_solapst:
+            solapst = [0]
+
+        # refinement levels
+        for l in range(1, min(nlevels + 1, max_refined_level + 1)):
+            if verbose:
+                print('Reading level {}.'.format(l))
+                print('{} patches.'.format(npatch[l]))
+            for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                if verbose:
+                    print('Reading patch {}'.format(ipatch))
+
+                if output_delta:
+                    delta.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                else:
+                    f.skip()
+
+                if output_v:
+                    vx.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    vy.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    vz.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                else:
+                    f.skip(3)
+
+                if output_pres:
+                    pres.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                else:
+                    f.skip()
+
+                if output_pot:
+                    pot.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                else:
+                    f.skip()
+
+                if output_opot:
+                    opot.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                else:
+                    f.skip()
+
+                if output_temp:
+                    temp.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                else:
+                    f.skip()
+
+                if output_metalicity:
+                    metalicity.append(
+                        np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                else:
+                    f.skip()
+
+                if output_cr0amr:
+                    cr0amr.append(np.reshape(f.read_vector('i'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                else:
+                    f.skip()
+
+                if output_solapst:
+                    solapst.append(np.reshape(f.read_vector('i'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                else:
+                    f.skip()
 
     returnvariables = []
     if output_delta:
@@ -320,29 +348,10 @@ def read_clus(it, path='', digits=5, max_refined_level=1000, output_delta=True, 
         returnvariables.append(opot)
     if output_temp:
         returnvariables.append(temp)
-    if ouput_metalicity:
+    if output_metalicity:
         returnvariables.append(metalicity)
     if output_cr0amr:
         returnvariables.append(cr0amr)
-    if max_refined_level >= 1:
-        if output_delta:
-            returnvariables.append(delta_refined)
-        if output_v:
-            returnvariables.extend([vx_refined, vy_refined, vz_refined])
-        if output_pres:
-            returnvariables.append(pres_refined)
-        if output_pot:
-            returnvariables.append(pot_refined)
-        if output_opot:
-            returnvariables.append(opot_refined)
-        if output_temp:
-            returnvariables.append(temp_refined)
-        if ouput_metalicity:
-            returnvariables.append(metalicity_refined)
-        if output_cr0amr:
-            returnvariables.append(cr0amr_refined)
-        if output_solapst:
-            returnvariables.append(solapst_refined)
 
     return tuple(returnvariables)
 
