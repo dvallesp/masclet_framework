@@ -2,3 +2,6 @@ __pycache__
 *.pyc
 .idea
 .DS_Store
+../venv
+venv
+old_read_masclet.py

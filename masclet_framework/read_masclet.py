@@ -226,7 +226,8 @@ def read_clus(it, path='', digits=5, max_refined_level=1000, output_delta=True, 
                                                    read_patchparent=False)
     with FF(path + filename(it, 'b', digits)) as f:
         # read header
-        it = f.read_vector('i')[0]
+        it_clus = f.read_vector('i')[0]
+        assert(it == it_clus)
         f.seek(0)  # this is a little bit ugly but whatever
         time, z = tuple(f.read_vector('f')[1:3])
 
@@ -388,39 +389,41 @@ def read_cldm(it, path='', digits=5, max_refined_level=1000, output_deltadm=True
                                                           read_patchcellposition=False, read_patchposition=False,
                                                           read_patchparent=False)
 
-    f = FortranFile(path + filename(it, 'd', digits), 'r')
+    with FF(path + filename(it, 'd', digits)) as f:
 
-    it_cldm, time, mdmpart, z = tuple(f.read_reals(dtype='i4, f4, f4, f4')[0])
+        # read header
+        it_cldm = f.read_vector('i')[0]
+        assert (it == it_cldm)
+        f.seek(0)  # this is a little bit ugly but whatever
+        time, mdmpart, z = tuple(f.read_vector('f')[1:4])
 
-    # l=0
-    delta_dm = [np.reshape(f.read_reals(dtype='f4'), (nmax, nmay, nmaz), 'F')]
-    dmpart_x = f.read_reals(dtype='f4')
-    dmpart_y = f.read_reals(dtype='f4')
-    dmpart_z = f.read_reals(dtype='f4')
-    dmpart_vx = f.read_reals(dtype='f4')
-    dmpart_vy = f.read_reals(dtype='f4')
-    dmpart_vz = f.read_reals(dtype='f4')
-    dmpart_id = f.read_ints(dtype='i4')
-    dmpart_mass = mdmpart * np.ones(npart[0])
+        # l=0
+        delta_dm = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+        dmpart_x = f.read_vector('f')
+        dmpart_y = f.read_vector('f')
+        dmpart_z = f.read_vector('f')
+        dmpart_vx = f.read_vector('f')
+        dmpart_vy = f.read_vector('f')
+        dmpart_vz = f.read_vector('f')
+        dmpart_id = f.read_vector('i')
+        dmpart_mass = mdmpart * np.ones(npart[0])
 
-    # refinement levels
-    for l in range(1, min(nlevels + 1, max_refined_level + 1)):
-        if verbose:
-            print('Reading level {}.'.format(l))
-            print('{} patches. {} particles.'.format(npatch[l], npart[l]))
-        for ipatch in range(npatch[0:l].sum()+1, npatch[0:l+1].sum()+1):
-            delta_dm.append(np.reshape(f.read_reals(dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
-                                       'F'))
-        dmpart_x = np.append(dmpart_x, f.read_reals(dtype='f4'))
-        dmpart_y = np.append(dmpart_y, f.read_reals(dtype='f4'))
-        dmpart_z = np.append(dmpart_z, f.read_reals(dtype='f4'))
-        dmpart_vx = np.append(dmpart_vx, f.read_reals(dtype='f4'))
-        dmpart_vy = np.append(dmpart_vy, f.read_reals(dtype='f4'))
-        dmpart_vz = np.append(dmpart_vz, f.read_reals(dtype='f4'))
-        dmpart_mass = np.append(dmpart_mass, f.read_reals(dtype='f4'))
-        dmpart_id = np.append(dmpart_id, f.read_ints(dtype='i4'))
-
-    f.close()
+        # refinement levels
+        for l in range(1, min(nlevels + 1, max_refined_level + 1)):
+            if verbose:
+                print('Reading level {}.'.format(l))
+                print('{} patches. {} particles.'.format(npatch[l], npart[l]))
+            for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                delta_dm.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                           'F'))
+            dmpart_x = np.append(dmpart_x, f.read_vector('f'))
+            dmpart_y = np.append(dmpart_y, f.read_vector('f'))
+            dmpart_z = np.append(dmpart_z, f.read_vector('f'))
+            dmpart_vx = np.append(dmpart_vx, f.read_vector('f'))
+            dmpart_vy = np.append(dmpart_vy, f.read_vector('f'))
+            dmpart_vz = np.append(dmpart_vz, f.read_vector('f'))
+            dmpart_mass = np.append(dmpart_mass, f.read_vector('f'))
+            dmpart_id = np.append(dmpart_id, f.read_vector('i'))
 
     returnvariables = []
 
