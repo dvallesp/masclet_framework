@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 2/9/19 18:01
+#  Last update on 16/3/20 0:59
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -218,7 +218,7 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
     """
 
     nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
-                                                           load_namr=False, load_size=False, path=path)
+                                                           load_namr=False, load_size=False, path=parameters_path)
     npatch, patchnx, patchny, patchnz = read_grids(it, path=path, read_general=False, read_patchnum=True,
                                                    read_dmpartnum=False, read_patchcellextension=True,
                                                    read_patchcellposition=False, read_patchposition=False,
@@ -383,7 +383,7 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
 
     """
     nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
-                                                           load_namr=False, load_size=False, path=path)
+                                                           load_namr=False, load_size=False, path=parameters_path)
     npatch, npart, patchnx, patchny, patchnz = read_grids(it, path=path, read_general=False, read_patchnum=True,
                                                           read_dmpartnum=True, read_patchcellextension=True,
                                                           read_patchcellposition=False, read_patchposition=False,
@@ -400,7 +400,7 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         # l=0
         if verbose:
             print('Reading base grid...')
-            
+
         delta_dm = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
         dmpart_x = f.read_vector('f')
         dmpart_y = f.read_vector('f')

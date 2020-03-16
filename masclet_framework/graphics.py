@@ -11,7 +11,7 @@ or generate colormap plots. Makes use of matplotlib.
 Created by David Vallés
 """
 
-#  Last update on 2/9/19 18:01
+#  Last update on 16/3/20 0:36
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
