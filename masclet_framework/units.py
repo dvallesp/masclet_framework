@@ -10,7 +10,7 @@ Contains the basic units of the MASCLET code
 Created by David Vallés
 """
 
-#  Last update on 16/3/20 18:08
+#  Last update on 16/3/20 19:14
 
 ### FUNDAMENTAL UNITS; MASCLET TO PHYSICAL UNITS
 
@@ -18,9 +18,9 @@ mass_to_g = 1.816e52
 mass_to_kg = 1.816e49
 mass_to_sun = 9.1717e18
 
-length_to_cm = 3.38807679684064e+34
-length_to_km = 3.38807679684064e+29
-length_to_ly = 3.581e+9
+length_to_cm = 3.38807679684064e+25
+length_to_m = 3.3881e+23
+length_to_ly = 3.581e+7
 length_to_mpc = 10.98
 
 time_to_s = 1.129e15
@@ -32,7 +32,7 @@ kg_to_mass = 1/mass_to_kg
 sun_to_mass = 1/mass_to_sun
 
 cm_to_length = 1/length_to_cm
-km_to_length = 1/length_to_km
+m_to_length = 1/length_to_m
 ly_to_length = 1/length_to_ly
 mpc_to_length = 1/length_to_mpc
 
