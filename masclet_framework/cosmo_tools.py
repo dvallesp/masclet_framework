@@ -10,7 +10,7 @@ Provides useful tools to compute time from redshift, evolution of the critical d
 Created by David Vallés
 """
 
-#  Last update on 16/3/20 19:27
+#  Last update on 16/3/20 19:41
 
 import json
 import os
@@ -80,9 +80,11 @@ def E(z,omega_m, omega_lambda, omega_r=0):
     E = np.sqrt(omega_lambda + omega_k/a**2 + omega_m/a**3 + omega_r/a**4)
     return E
 
-def LCDM_time(z1,z2,omega_m,omega_lambda,h,npoints=10000):
+
+
+def LCDM_time(z1,z2,omega_m,omega_lambda,h):
     """
-    Computes the time between z1 and z2, in years.
+    Computes the time between z1 and z2, in years, using a quadrature method
 
     Args:
         z1: initial redshift
@@ -99,14 +101,13 @@ def LCDM_time(z1,z2,omega_m,omega_lambda,h,npoints=10000):
 
     tH = 9784597488
 
-    # Simpson rule requires even number of intervals (odd number of samples)
-    if npoints % 2 == 0:
-        npoints = npoints + 1
+    # nested function for the integrand
+    def integrand(z, omega_m, omega_lambda):
+        return 1/(E(z, omega_m, omega_lambda)*(1+z))
 
-    z = np.linspace(z2,z1,npoints)
-    dz = (z1-z2)/npoints
-    integrand = 1/((1+z)*E(z,omega_m,omega_lambda))
+    t = integrate.quad(integrand, z2, z1, (omega_m, omega_lambda))
 
-    t = tH * integrate.simps(integrand, dx=dz) / h
+    if t[1] > 0.001*t[0]:
+        raise ValueError("Error greater than 1 per mil")
 
-    return t
+    return tH * t[0] / h
