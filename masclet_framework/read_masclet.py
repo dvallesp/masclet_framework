@@ -11,10 +11,11 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 16/3/20 18:08
+#  Last update on 17/3/20 19:35
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
+import os
 # numpy
 import numpy as np
 # scipy (will be removed)
@@ -100,7 +101,7 @@ def read_grids(it, path='', digits=5, read_general=True, read_patchnum=True, rea
 
     """
 
-    grids = open(path + filename(it, 'g', digits), 'r')
+    grids = open(os.path.join(path, filename(it, 'g', digits)), 'r')
 
     # first, we load some general parameters
     irr, t, nl, mass_dmpart, _ = tuple(float(i) for i in grids.readline().split())
@@ -223,7 +224,7 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                                                    read_dmpartnum=False, read_patchcellextension=True,
                                                    read_patchcellposition=False, read_patchposition=False,
                                                    read_patchparent=False)
-    with FF(path + filename(it, 'b', digits)) as f:
+    with FF(os.path.join(path,filename(it, 'b', digits))) as f:
         # read header
         it_clus = f.read_vector('i')[0]
         assert(it == it_clus)
@@ -389,7 +390,7 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                                                           read_patchcellposition=False, read_patchposition=False,
                                                           read_patchparent=False)
 
-    with FF(path + filename(it, 'd', digits)) as f:
+    with FF(os.path.join(path, filename(it, 'd', digits))) as f:
 
         # read header
         it_cldm = f.read_vector('i')[0]
