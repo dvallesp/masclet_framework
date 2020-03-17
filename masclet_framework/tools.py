@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 17/3/20 20:22
+#  Last update on 17/3/20 22:29
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -108,9 +108,9 @@ def patch_vertices(level, nx, ny, nz, rx, ry, rz, size, nmax):
 
     cellsize = size/nmax/2**level
 
-    leftmost_x = rx - cellsize / 2
-    leftmost_y = ry - cellsize / 2
-    leftmost_z = rz - cellsize / 2
+    leftmost_x = rx - cellsize
+    leftmost_y = ry - cellsize
+    leftmost_z = rz - cellsize
 
     vertices = []
 
@@ -124,3 +124,65 @@ def patch_vertices(level, nx, ny, nz, rx, ry, rz, size, nmax):
                 vertices.append((x,y,z))
 
     return vertices
+
+
+def patch_is_inside(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry, rz, size, nmax):
+    """
+
+    Args:
+        R: radius of the considered sphere
+        clusrx, clusry, clusrz: comoving coordinates of the center of the sphere
+        level: refinement level of the given patch
+        nx, ny, nz: extension of the patch (in cells at level n)
+        rx, ry, rz: comoving coordinates of the center of the leftmost cell of the patch
+        size: comoving box side (preferred length units)
+        nmax: cells at base level
+
+    Returns:
+        Returns True if the patch should contain cells within a sphere of radius r of the (clusrx, clusry, clusrz)
+        point; False otherwise.
+
+    """
+    vertices = patch_vertices(level, nx, ny, nz, rx, ry, rz, size, nmax)
+
+    isinside = False
+    cell_l0_size = size/nmax
+
+    max_side = max([nx, ny, nz]) * cell_l0_size / 2**level
+    upper_bound_squared = R**2 + max_side**2/4
+    for vertex in vertices:
+        distance_squared = (vertex[0]-clusrx)**2 + (vertex[1]-clusry)**2 + (vertex[2]-clusrz)**2
+        if distance_squared <= upper_bound_squared:
+            isinside = True
+            break
+
+    return isinside
+
+
+def which_patches(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size, nmax):
+    """
+    Finds which of the patches will contain cells within a radius r of a certain point (clusrx, clusry, clusrz) being
+    its comoving coordinates.
+
+    Args:
+        R: radius of the considered sphere
+        clusrx, clusry, clusrz: comoving coordinates of the center of the sphere
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+        (and Y and Z)
+        npatch: number of patches in each level, starting in l=0
+        size: comoving size of the simulation box
+        nmax: cells at base level
+
+    Returns:
+        List containing the ipatch of the patches which should contain cells inside the considered radius.
+
+    """
+    levels = create_vector_levels(npatch)
+    which_ipatch = []
+    for ipatch in range(1,len(patchnx)):
+        if patch_is_inside(R,clusrx, clusry, clusrz, levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnx[ipatch],
+                           patchrx[ipatch], patchry[ipatch], patchrz[ipatch], size, nmax):
+            which_ipatch.append(ipatch)
+    return which_ipatch
+
