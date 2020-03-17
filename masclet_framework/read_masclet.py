@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 17/3/20 19:35
+#  Last update on 17/3/20 19:50
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -353,6 +353,8 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         returnvariables.append(metalicity)
     if output_cr0amr:
         returnvariables.append(cr0amr)
+    if output_solapst:
+        returnvariables.append(solapst)
 
     return tuple(returnvariables)
 
