@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 17/3/20 23:07
+#  Last update on 17/3/20 23:36
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -159,7 +159,8 @@ def patch_is_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry,
     return isinside
 
 
-def which_patches_inside_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size, nmax):
+def which_patches_inside_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
+                                size, nmax):
     """
     Finds which of the patches will contain cells within a radius r of a certain point (clusrx, clusry, clusrz) being
     its comoving coordinates.
@@ -219,3 +220,36 @@ def which_cells_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, 
                 isinside[i,j,k] = ((x-clusrx)**2 + (y-clusry)**2 + (z-clusrz)**2 <= Rsquared)
 
     return isinside
+
+
+def clean_field(field, cr0amr, solapst, npatch, up_to_level = 1000):
+    """
+    Receives a field (with its refinement patches) and, using the cr0amr and solapst variables, returns the field
+    having "cleaned" for refinements and overlaps. The user can specify the level of refinement required. This last
+    level will be cleaned of overlaps, but not of refinements!
+
+    Args:
+        field: field to be cleaned
+        cr0amr: field containing the refinements of the grid (1: not refined; 0: refined)
+        solapst: field containing the overlaps (1: keep; 0: not keep)
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        up_to_level: specify if only cleaning until certain level is desired
+
+    Returns:
+        "Clean" version of the field, with the same structure.
+
+    """
+    levels = create_vector_levels(npatch)
+    up_to_level = min(up_to_level, levels.max())
+
+    field[0] = field[0]*cr0amr # not overlap in l=0
+
+    for level in range(1, up_to_level):
+        for ipatch in range(sum(npatch[0:level]) + 1, sum(npatch[0:level + 1]) + 1):
+            field[ipatch] = field[ipatch] * cr0amr * solapst
+
+    # last level: no refinements
+    for ipatch in range(sum(npatch[0:up_to_level]) + 1, sum(npatch[0:up_to_level + 1]) + 1):
+        field[ipatch] = field[ipatch] * solapst
+
+    return field
