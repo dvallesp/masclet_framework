@@ -10,7 +10,7 @@ Functions for reading and creating parameters JSON files
 Created by David Vallés
 """
 
-#  Last update on 16/3/20 18:08
+#  Last update on 17/3/20 19:42
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -85,7 +85,7 @@ def read_parameters(filename='masclet_parameters.json', path='', load_nma=True, 
     return tuple(returnvariables)
 
 
-def write_parameters(nmax, nmay, nmaz, npalev, nlevels, narmx, narmy, narmz,
+def write_parameters(nmax, nmay, nmaz, npalev, nlevels, namrx, namry, namrz,
                      size, filename='masclet_parameters.json', path=''):
     """
     Creates a JSON file containing the parameters of a certain simulation
@@ -96,9 +96,9 @@ def write_parameters(nmax, nmay, nmaz, npalev, nlevels, narmx, narmy, narmz,
         nmaz: number of l=0 cells along the Z-direction (int)
         npalev: maximum number of refinement cells per level (int)
         nlevels: maximum number of refinement level (int)
-        narmx: maximum X-size of refinement patches (in l-1 cell units) (int)
-        narmy: maximum Y-size of refinement patches (in l-1 cell units) (int)
-        narmz: maximum Z-size of refinement patches (in l-1 cell units) (int)
+        namrx: maximum X-size of refinement patches (in l-1 cell units) (int)
+        namry: maximum Y-size of refinement patches (in l-1 cell units) (int)
+        namrz: maximum Z-size of refinement patches (in l-1 cell units) (int)
         size: side of the simulation box in the chosen units (typically Mpc or kpc) (float)
         filename: name of the MASCLET parameters file to be saved (str)
         path: path of the file (typically, the codename of the simulation) (str)
@@ -107,7 +107,7 @@ def write_parameters(nmax, nmay, nmaz, npalev, nlevels, narmx, narmy, narmz,
     """
     parameters = {'NMAX': nmax, 'NMAY': nmay, 'NMAZ': nmaz,
                   'NPALEV': npalev, 'NLEVELS': nlevels,
-                  'NAMRX': narmx, 'NAMRY': narmy, 'NAMRZ': narmz,
+                  'NAMRX': namrx, 'NAMRY': namry, 'NAMRZ': namrz,
                   'SIZE': size}
 
     with open(path + filename, 'w') as json_file:
