@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 17/3/20 22:29
+#  Last update on 17/3/20 23:07
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -126,7 +126,7 @@ def patch_vertices(level, nx, ny, nz, rx, ry, rz, size, nmax):
     return vertices
 
 
-def patch_is_inside(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry, rz, size, nmax):
+def patch_is_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry, rz, size, nmax):
     """
 
     Args:
@@ -159,7 +159,7 @@ def patch_is_inside(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry, rz, si
     return isinside
 
 
-def which_patches(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size, nmax):
+def which_patches_inside_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size, nmax):
     """
     Finds which of the patches will contain cells within a radius r of a certain point (clusrx, clusry, clusrz) being
     its comoving coordinates.
@@ -181,8 +181,41 @@ def which_patches(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx,
     levels = create_vector_levels(npatch)
     which_ipatch = []
     for ipatch in range(1,len(patchnx)):
-        if patch_is_inside(R,clusrx, clusry, clusrz, levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnx[ipatch],
-                           patchrx[ipatch], patchry[ipatch], patchrz[ipatch], size, nmax):
+        if patch_is_inside_sphere(R, clusrx, clusry, clusrz, levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnz[ipatch],
+                                  patchrx[ipatch], patchry[ipatch], patchrz[ipatch], size, nmax):
             which_ipatch.append(ipatch)
     return which_ipatch
 
+
+def which_cells_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry, rz, size, nmax):
+    """
+    Finds, for a given patch, which cells are inside a sphere of radius R centered on (clusrx, clusry, clusrz)
+
+    Args:
+        R: radius of the considered sphere
+        clusrx, clusry, clusrz: comoving coordinates of the center of the sphere
+        level: refinement level of the given patch
+        nx, ny, nz: extension of the patch (in cells at level n)
+        rx, ry, rz: comoving coordinates of the center of the leftmost cell of the patch
+        size: comoving box side (preferred length units)
+        nmax: cells at base level:
+
+    Returns:
+        isinside: numpy bool array, the size of the patch, containing for each cell 1 if inside and 0 otherwise
+    """
+
+    isinside = np.zeros((nx,ny,nz),dtype=bool)
+
+    cell_l0_size = size / nmax
+    cell_size = cell_l0_size / 2**level
+    Rsquared = R**2
+
+    for i in range(nx):
+        for j in range(ny):
+            for k in range(nz):
+                x = rx + i*cell_size
+                y = ry + j*cell_size
+                z = rz + k*cell_size
+                isinside[i,j,k] = ((x-clusrx)**2 + (y-clusry)**2 + (z-clusrz)**2 <= Rsquared)
+
+    return isinside
