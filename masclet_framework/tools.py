@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 16/3/20 18:08
+#  Last update on 17/3/20 20:22
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -88,3 +88,39 @@ def find_absolute_real_position(ipatch, side, nmax, npatch, patchx, patchy, patc
     """
     return (np.asarray(
         find_absolute_grid_position(ipatch, npatch, patchx, patchy, patchz, pare)) - nmax / 2 - 1) * side / nmax
+
+
+def patch_vertices(level, nx, ny, nz, rx, ry, rz, size, nmax):
+    """
+    Returns, for a given patch, the comoving coordinates of its 8 vertices.
+
+    Args:
+        level: refinement level of the given patch
+        nx, ny, nz: extension of the patch (in cells at level n)
+        rx, ry, rz: comoving coordinates of the center of the leftmost cell of the patch
+        size: comoving box side (preferred length units)
+        nmax: cells at base level
+
+    Returns:
+        List containing 8 tuples, each one containing the x, y, z coordinates of the vertex.
+
+    """
+
+    cellsize = size/nmax/2**level
+
+    leftmost_x = rx - cellsize / 2
+    leftmost_y = ry - cellsize / 2
+    leftmost_z = rz - cellsize / 2
+
+    vertices = []
+
+    for i in range(2):
+        for j in range(2):
+            for k in range(2):
+                x = leftmost_x + i * nx * cellsize
+                y = leftmost_y + j * ny * cellsize
+                z = leftmost_z + k * nz * cellsize
+
+                vertices.append((x,y,z))
+
+    return vertices
