@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 17/3/20 23:36
+#  Last update on 17/3/20 23:41
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -242,14 +242,14 @@ def clean_field(field, cr0amr, solapst, npatch, up_to_level = 1000):
     levels = create_vector_levels(npatch)
     up_to_level = min(up_to_level, levels.max())
 
-    field[0] = field[0]*cr0amr # not overlap in l=0
+    field[0] = field[0]*cr0amr[0] # not overlap in l=0
 
     for level in range(1, up_to_level):
         for ipatch in range(sum(npatch[0:level]) + 1, sum(npatch[0:level + 1]) + 1):
-            field[ipatch] = field[ipatch] * cr0amr * solapst
+            field[ipatch] = field[ipatch] * cr0amr[ipatch] * solapst[ipatch]
 
     # last level: no refinements
     for ipatch in range(sum(npatch[0:up_to_level]) + 1, sum(npatch[0:up_to_level + 1]) + 1):
-        field[ipatch] = field[ipatch] * solapst
+        field[ipatch] = field[ipatch] * solapst[ipatch]
 
     return field
