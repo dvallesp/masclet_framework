@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 18/3/20 12:16
+#  Last update on 18/3/20 12:21
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -155,7 +155,7 @@ def patch_is_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry,
     ymax = vertices[-1][1]
     zmax = vertices[-1][2]
 
-    if rx > xmin and ry > ymin and rz > zmin and rx < xmax and ry < ymax and rz < zmax_
+    if rx > xmin and ry > ymin and rz > zmin and rx < xmax and ry < ymax and rz < zmax:
         return True
 
     cell_l0_size = size/nmax
