@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 18/3/20 12:09
+#  Last update on 18/3/20 12:16
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -145,11 +145,20 @@ def patch_is_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry,
         point; False otherwise.
 
     """
-    vertices = patch_vertices(level, nx, ny, nz, rx, ry, rz, size, nmax)
-
     isinside = False
-    cell_l0_size = size/nmax
 
+    vertices = patch_vertices(level, nx, ny, nz, rx, ry, rz, size, nmax)
+    xmin = vertices[0][0]
+    ymin = vertices[0][1]
+    zmin = vertices[0][2]
+    xmax = vertices[-1][0]
+    ymax = vertices[-1][1]
+    zmax = vertices[-1][2]
+
+    if rx > xmin and ry > ymin and rz > zmin and rx < xmax and ry < ymax and rz < zmax_
+        return True
+
+    cell_l0_size = size/nmax
     max_side = max([nx, ny, nz]) * cell_l0_size / 2**level
     upper_bound_squared = R**2 + max_side**2/4
     for vertex in vertices:
