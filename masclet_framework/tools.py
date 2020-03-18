@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 18/3/20 11:48
+#  Last update on 18/3/20 12:09
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -254,7 +254,7 @@ def mask_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, p
             print("Masking patch {}".format(ipatch))
         if ipatch not in which_patches:
             mask.append(False)
-        else:r
+        else:
             mask.append(which_cells_inside_sphere(R, clusrx, clusry, clusrz, levels[ipatch], patchnx[ipatch],
                                                   patchny[ipatch], patchnz[ipatch], patchrx[ipatch], patchry[ipatch],
                                                   patchrz[ipatch], size, nmax))
