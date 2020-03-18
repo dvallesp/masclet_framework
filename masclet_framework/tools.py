@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 17/3/20 23:41
+#  Last update on 18/3/20 9:52
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -180,7 +180,7 @@ def which_patches_inside_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, pat
 
     """
     levels = create_vector_levels(npatch)
-    which_ipatch = []
+    which_ipatch = [0]
     for ipatch in range(1,len(patchnx)):
         if patch_is_inside_sphere(R, clusrx, clusry, clusrz, levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnz[ipatch],
                                   patchrx[ipatch], patchry[ipatch], patchrz[ipatch], size, nmax):
@@ -220,6 +220,44 @@ def which_cells_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, 
                 isinside[i,j,k] = ((x-clusrx)**2 + (y-clusry)**2 + (z-clusrz)**2 <= Rsquared)
 
     return isinside
+
+
+def mask_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size, nmax,
+                which_patches, verbose=False):
+    """
+    Returns a "field", which contains all patches as usual. True means the cell must be considered, False otherwise.
+    If a patch has all "False", an array is not ouputted, but a False is, instead.
+
+    Args:
+        R: radius of the considered sphere
+        clusrx, clusry, clusrz: comoving coordinates of the center of the sphere
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+        (and Y and Z)
+        npatch: number of patches in each level, starting in l=0
+        size: comoving size of the simulation box
+        nmax: cells at base level
+        which_patches: patches to be open (as found by which_patches_inside_sphere)
+        verbose: if True, prints the patch being opened at a time
+
+    Returns:
+        Field containing the mask as described.
+    """
+    levels = create_vector_levels(npatch)
+
+    mask = []
+
+    for ipatch in range(len(patchnx)):
+        if verbose:
+            print("Masking patch {}".format(ipatch))
+        if ipatch not in which_patches:
+            mask.append(False)
+        else:
+            mask.append(which_cells_inside_sphere(R, clusrx, clusry, clusrz, levels[ipatch], patchnx[ipatch],
+                                                  patchny[ipatch], patchnz[ipatch], patchrx[ipatch], patchry[ipatch],
+                                                  patchrz[ipatch], size, nmax))
+
+    return mask
 
 
 def clean_field(field, cr0amr, solapst, npatch, up_to_level = 1000):
