@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 17/3/20 19:50
+#  Last update on 18/3/20 13:06
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -51,7 +51,7 @@ def filename(it, filetype, digits=5):
         print('Insert a correct type: g, b o d ')
 
 
-def read_grids(it, path='', digits=5, read_general=True, read_patchnum=True, read_dmpartnum=True,
+def read_grids(it, path='', parameters_path='', digits=5, read_general=True, read_patchnum=True, read_dmpartnum=True,
                read_patchcellextension=True, read_patchcellposition=True, read_patchposition=True,
                read_patchparent=True, nparray=True):
     """
@@ -60,6 +60,7 @@ def read_grids(it, path='', digits=5, read_general=True, read_patchnum=True, rea
     Args:
         it: iteration number (int)
         path: path of the grids file in the system (str)
+        parameters_path: path of the json parameters file of the simulation (str)
         digits: number of digits the filename is written with (int)
         read_general: whether irr, T, NL, MAP and ZETA are returned (bool)
         read_patchnum: whether NPATCH is returned (bool)
@@ -100,6 +101,9 @@ def read_grids(it, path='', digits=5, read_general=True, read_patchnum=True, rea
         pare: which (l-1)-cell is left-bottom-front corner of each patch in
 
     """
+    nmax, nmay, nmaz, size = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=False,
+                                                           load_namr=False, load_size=True, path=parameters_path)
+    rx = - size/2 + size/nmax
 
     grids = open(os.path.join(path, filename(it, 'g', digits)), 'r')
 
@@ -116,15 +120,15 @@ def read_grids(it, path='', digits=5, read_general=True, read_patchnum=True, rea
     # vectors where the data will be stored
     npatch = [0]  # number of patches per level, starting with l=0
     npart = [ndxyz]  # number of dm particles per level, starting with l=0
-    patchnx = [0]
-    patchny = [0]
-    patchnz = [0]
+    patchnx = [nmax]
+    patchny = [nmay]
+    patchnz = [nmaz]
     patchx = [0]
     patchy = [0]
     patchz = [0]
-    patchrx = [0]
-    patchry = [0]
-    patchrz = [0]
+    patchrx = [rx]
+    patchry = [rx]
+    patchrz = [rx]
     pare = [0]
 
     for ir in range(1, nl + 1):

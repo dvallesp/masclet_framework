@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 18/3/20 12:32
+#  Last update on 18/3/20 13:06
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -208,15 +208,15 @@ def which_cells_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, 
         clusrx, clusry, clusrz: comoving coordinates of the center of the sphere
         level: refinement level of the given patch
         nx, ny, nz: extension of the patch (in cells at level n)
-        rx, ry, rz: comoving coordinates of the center of the leftmost cell of the patch
+        rx, ry, rz: comoving coordinates of the center of the leftmost cell of the patch, at level l-1
         size: comoving box side (preferred length units)
-        nmax: cells at base level:
+        nmax: cells at base level
 
     Returns:
         isinside: numpy bool array, the size of the patch, containing for each cell 1 if inside and 0 otherwise
     """
 
-    isinside = np.zeros((nx,ny,nz),dtype=bool)
+    isinside = np.zeros((nx,ny,nz), dtype=bool)
 
     cell_l0_size = size / nmax
     cell_size = cell_l0_size / 2**level
@@ -225,9 +225,10 @@ def which_cells_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, 
     for i in range(nx):
         for j in range(ny):
             for k in range(nz):
-                x = rx + i*cell_size
-                y = ry + j*cell_size
-                z = rz + k*cell_size
+                # index-1 ==> recall that rx, ry, rz are the center of the leftmost PARENT cell!
+                x = rx + (i-0.5)*cell_size
+                y = ry + (j-0.5)*cell_size
+                z = rz + (k-0.5)*cell_size
                 isinside[i,j,k] = ((x-clusrx)**2 + (y-clusry)**2 + (z-clusrz)**2 <= Rsquared)
 
     return isinside
@@ -238,6 +239,8 @@ def mask_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, p
     """
     Returns a "field", which contains all patches as usual. True means the cell must be considered, False otherwise.
     If a patch has all "False", an array is not ouputted, but a False is, instead.
+
+    Non-parallel version!
 
     Args:
         R: radius of the considered sphere
