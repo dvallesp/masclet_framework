@@ -10,12 +10,14 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 18/3/20 9:52
+#  Last update on 18/3/20 11:48
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
 # numpy
 import numpy as np
+
+from multiprocessing import Pool
 
 # FUNCTIONS DEFINED IN THIS MODULE
 
@@ -252,10 +254,75 @@ def mask_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, p
             print("Masking patch {}".format(ipatch))
         if ipatch not in which_patches:
             mask.append(False)
-        else:
+        else:r
             mask.append(which_cells_inside_sphere(R, clusrx, clusry, clusrz, levels[ipatch], patchnx[ipatch],
                                                   patchny[ipatch], patchnz[ipatch], patchrx[ipatch], patchry[ipatch],
                                                   patchrz[ipatch], size, nmax))
+
+    return mask
+
+
+def mask_patch(args):
+    """
+    Given a patch and a sphere, returns a matrix containing True (means the cell must be considered), False otherwise.
+
+    Args: tuple containing, in this order:
+        R: radius of the considered sphere
+        clusrx, clusry, clusrz: comoving coordinates of the center of the sphere
+        level: refinement level of the given patch
+        nx, ny, nz: extension of the patch (in cells at level n)
+        rx, ry, rz: comoving coordinates of the center of the leftmost cell of the patch
+        size: comoving size of the simulation box
+        nmax: cells at base level
+        ipatch: number of the patch
+        which_patches: patches to be open (as found by which_patches_inside_sphere)
+        verbose: if True, prints the patch being opened at a time
+
+        (R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry, rz, size, nmax, ipatch, which_patches,
+               verbose=False)
+    Returns:
+        Masked patch, as described above
+    """
+    R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry, rz, size, nmax, ipatch, which_patches, verbose = args
+
+    if verbose:
+        print('Masking patch {}'.format(ipatch))
+    if ipatch not in which_patches:
+        return False
+    else:
+        return which_cells_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry, rz, size, nmax)
+
+
+def mask_sphere_parallel(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size, nmax,
+                which_patches, verbose=False, ncores=1):
+    """
+    Returns a "field", which contains all patches as usual. True means the cell must be considered, False otherwise.
+    If a patch has all "False", an array is not ouputted, but a False is, instead.
+
+    Parallel version.
+
+    Args:
+        R: radius of the considered sphere
+        clusrx, clusry, clusrz: comoving coordinates of the center of the sphere
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+        (and Y and Z)
+        npatch: number of patches in each level, starting in l=0
+        size: comoving size of the simulation box
+        nmax: cells at base level
+        which_patches: patches to be open (as found by which_patches_inside_sphere)
+        verbose: if True, prints the patch being opened at a time
+        ncores: number of cores to perform the paralellization.
+
+    Returns:
+        Field containing the mask as described.
+    """
+    levels = create_vector_levels(npatch)
+
+    with Pool(ncores) as p:
+        mask = p.map(mask_patch, [(R, clusrx, clusry, clusrz, levels[ipatch], patchnx[ipatch], patchny[ipatch],
+                                   patchnz[ipatch], patchrx[ipatch], patchry[ipatch], patchrz[ipatch], size, nmax,
+                                   ipatch, which_patches, verbose) for ipatch in range(len(patchnx))])
 
     return mask
 
