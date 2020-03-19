@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 20/3/20 0:31
+#  Last update on 20/3/20 0:48
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -385,10 +385,10 @@ def patch_left_edge_comoving(rx, ry, rz, level, size, nmax):
     Returns:
         tuple containing the x, y, z physical coordinates of the patch left corner.
     """
-    cellparentsize = size/nmax/2**(level-1)
-    x = rx - cellparentsize
-    y = ry - cellparentsize
-    z = rz - cellparentsize
+    cellsize = size/nmax/2**(level)
+    x = rx - cellsize
+    y = ry - cellsize
+    z = rz - cellsize
     return x, y, z
 
 
@@ -413,10 +413,43 @@ def patch_left_edge_natural(rx, ry, rz, level, size, nmax):
     zg = z*nmax/size + nmax/2
 
     # avoid numerical error
-    xg = round(xg*2**(level-1))/2**(level-1)
+    xg = round(xg * 2 ** (level - 1)) / 2 ** (level - 1)
     yg = round(yg * 2 ** (level - 1)) / 2 ** (level - 1)
     zg = round(zg * 2 ** (level - 1)) / 2 ** (level - 1)
 
     return xg, yg, zg
 
 
+def uniform_grid(field, up_to_level, npatch, patchnx, patchny, patchnz, patchx, patchy, patchz, pare, nmax):
+    """
+    Builds a uniform grid at level up_to_level, containing the most refined data at each region.
+
+    Args:
+        field: field to be computed at the uniform grid. Must be already cleaned from refinements and overlaps (check
+        clean_field() function).
+        up_to_level: level up to which the fine grid wants to be obtained
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchx, patchy, patchz: grid position of the first cell of each patch (at level l-1)
+        pare: vector containing the ipatch of each patch progenitor (numpy vector of integers)
+        nmax: cells at base level
+
+    Returns:
+        Uniform grid as described
+
+    """
+    uniform_size = nmax * 2 ** up_to_level
+    uniform = np.zeros((uniform_size, uniform_size, uniform_size))
+
+    levels = create_vector_levels(npatch)
+
+    relevantpatches = npatch[0:up_to_level+1].sum()
+    for ipatch in range(relevantpatches+1):
+        reduction = 2 ** (up_to_level - levels[ipatch])
+        for i in range(uniform_size):
+            for j in range(uniform_size):
+                for k in range(uniform_size):
+                    I = int(i/reduction)
+                    J = int(j/reduction)
+                    K = int(k/reduction)
+                    uniform[i,j,k] = field[ipatch][I,J,K]
