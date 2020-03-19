@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 18/3/20 13:06
+#  Last update on 20/3/20 0:31
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -123,7 +123,7 @@ def patch_vertices(level, nx, ny, nz, rx, ry, rz, size, nmax):
                 y = leftmost_y + j * ny * cellsize
                 z = leftmost_z + k * nz * cellsize
 
-                vertices.append((x,y,z))
+                vertices.append((x, y, z))
 
     return vertices
 
@@ -155,7 +155,7 @@ def patch_is_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry,
     ymax = vertices[-1][1]
     zmax = vertices[-1][2]
 
-    if clusrx > xmin and clusry > ymin and clusrz > zmin and clusrx < xmax and clusry < ymax and clusrz < zmax:
+    if xmin < clusrx < xmax and ymin < clusry < ymax and zmin < clusrz < zmax:
         return True
 
     cell_l0_size = size/nmax
@@ -370,3 +370,53 @@ def clean_field(field, cr0amr, solapst, npatch, up_to_level = 1000):
         field[ipatch] = field[ipatch] * solapst[ipatch]
 
     return field
+
+
+def patch_left_edge_comoving(rx, ry, rz, level, size, nmax):
+    """
+    Computes comoving coordinates of the left edge of a patch, given its rx, ry, rz.
+
+    Args:
+        rx, ry, rz: physical coordinate of the center of the leftmost parent cell (as read from patchrx, patchry, ...)
+        level: level of the considered patch
+        size: comoving side of the simulation box
+        nmax: number of cells per dimension on the base level
+
+    Returns:
+        tuple containing the x, y, z physical coordinates of the patch left corner.
+    """
+    cellparentsize = size/nmax/2**(level-1)
+    x = rx - cellparentsize
+    y = ry - cellparentsize
+    z = rz - cellparentsize
+    return x, y, z
+
+
+def patch_left_edge_natural(rx, ry, rz, level, size, nmax):
+    """
+        Computes natural coordinates (0 being the left corner of the box, nmax being the right corner) of the left edge
+        of a patch, given its rx, ry, rz.
+
+        Args:
+            rx, ry, rz: physical coordinate of the center of the leftmost parent cell (as read from patchrx, patchry, ...)
+            level: level of the considered patch
+            size: comoving side of the simulation box
+            nmax: number of cells per dimension on the base level
+
+        Returns:
+            tuple containing the x, y, z physical coordinates of the patch left corner.
+        """
+    x, y, z = patch_left_edge_comoving(rx, ry, rz, level, size, nmax)
+
+    xg = x*nmax/size + nmax/2
+    yg = y*nmax/size + nmax/2
+    zg = z*nmax/size + nmax/2
+
+    # avoid numerical error
+    xg = round(xg*2**(level-1))/2**(level-1)
+    yg = round(yg * 2 ** (level - 1)) / 2 ** (level - 1)
+    zg = round(zg * 2 ** (level - 1)) / 2 ** (level - 1)
+
+    return xg, yg, zg
+
+
