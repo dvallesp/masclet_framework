@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 20/3/20 1:21
+#  Last update on 20/3/20 1:50
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -420,7 +420,7 @@ def patch_left_edge_natural(rx, ry, rz, level, size, nmax):
     return xg, yg, zg
 
 
-def uniform_grid(field, up_to_level, npatch, patchnx, patchny, patchnz, patchx, patchy, patchz, pare, nmax):
+def uniform_grid(field, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry, patchrz, size, nmax):
     """
     Builds a uniform grid at level up_to_level, containing the most refined data at each region.
 
@@ -430,8 +430,9 @@ def uniform_grid(field, up_to_level, npatch, patchnx, patchny, patchnz, patchx, 
         up_to_level: level up to which the fine grid wants to be obtained
         npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
         patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
-        patchx, patchy, patchz: grid position of the first cell of each patch (at level l-1)
-        pare: vector containing the ipatch of each patch progenitor (numpy vector of integers)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+        (and Y and Z)
+        size: comoving side of the simulation box
         nmax: cells at base level
 
     Returns:
@@ -448,18 +449,22 @@ def uniform_grid(field, up_to_level, npatch, patchnx, patchny, patchnz, patchx, 
                 I = int(i / reduction)
                 J = int(j / reduction)
                 K = int(k / reduction)
-                uniform[i, j, k] = field[ipatch][I, J, K]
+                uniform[i, j, k] = field[0][I, J, K]
 
     levels = create_vector_levels(npatch)
     relevantpatches = npatch[0:up_to_level+1].sum()
 
-    for ipatch in range(relevantpatches+1):
+    for ipatch in range(1, relevantpatches+1):
+        print('Covering patch {}'.format(ipatch))
         reduction = 2 ** (up_to_level - levels[ipatch])
-        shift = find_absolute_grid_position(ipatch, npatch, patchnx, patchny, patchnz, pare)
-        for i in range(uniform_size):
-            for j in range(uniform_size):
-                for k in range(uniform_size):
-                    I = shift[0] + int(i/reduction)
-                    J = shift[1] + int(j/reduction)
-                    K = shift[2] + int(k/reduction)
-                    uniform[i,j,k] = field[ipatch][I,J,K]
+        shift = np.array(patch_left_edge_natural(patchrx[ipatch], patchry[ipatch], patchrz[ipatch],
+                                        levels[ipatch], size, nmax))* 2 ** up_to_level
+        for i in range(patchnx[ipatch]*reduction):
+            for j in range(patchny[ipatch]*reduction):
+                for k in range(patchnz[ipatch]*reduction):
+                    I = int(i/reduction)
+                    J = int(j/reduction)
+                    K = int(k/reduction)
+                    uniform[int(shift[0])+i, int(shift[1])+j, int(shift[2]) +k] = field[ipatch][I, J, K]
+
+    return uniform
