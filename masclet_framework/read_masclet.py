@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 18/3/20 13:06
+#  Last update on 20/3/20 1:05
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -92,6 +92,8 @@ def read_grids(it, path='', parameters_path='', digits=5, read_general=True, rea
         -only if readpatchcellposition set to True
         patchx (...): x-position of each patch (left-bottom-front corner; in level
         l-1 cells) (and Y and Z)
+        CAUTION!!! IN THE OUTPUT, FIRST CELL IS 1. HERE, WE SET IT TO BE 0. THUS, PATCHNX's READ HERE WILL BE LOWER IN
+        A UNIT FROM THE ONE WRITTEN IN THE FILE.
 
         -only if readpatchposition set to True
         patchrx (...): physical position of the center of each patch first ¡l-1! cell
@@ -148,9 +150,9 @@ def read_grids(it, path='', parameters_path='', digits=5, read_general=True, rea
             patchnx.append(this_nx)
             patchny.append(this_ny)
             patchnz.append(this_nz)
-            patchx.append(this_x)
-            patchy.append(this_y)
-            patchz.append(this_z)
+            patchx.append(this_x-1)
+            patchy.append(this_y-1)
+            patchz.append(this_z-1)
             patchrx.append(this_rx)
             patchry.append(this_ry)
             patchrz.append(this_rz)

@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 20/3/20 0:48
+#  Last update on 20/3/20 1:05
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -61,9 +61,9 @@ def find_absolute_grid_position(ipatch, npatch, patchx, patchy, patchz, pare):
             return patchx[ipatch], patchy[ipatch], patchz[ipatch]
         else:
             parevalues = find_absolute_grid_position(pare[ipatch], npatch, patchx, patchy, patchz, pare)
-            return ((patchx[ipatch] - 1) / 2 ** (level - 1) + parevalues[0],
-                    (patchy[ipatch] - 1) / 2 ** (level - 1) + parevalues[1],
-                    (patchz[ipatch] - 1) / 2 ** (level - 1) + parevalues[2])
+            return (patchx[ipatch] / 2 ** (level - 1) + parevalues[0],
+                    patchy[ipatch] / 2 ** (level - 1) + parevalues[1],
+                    patchz[ipatch] / 2 ** (level - 1) + parevalues[2])
     else:
         raise ValueError('Provide a valid patchnumber (ipatch)')
 
@@ -89,7 +89,7 @@ def find_absolute_real_position(ipatch, side, nmax, npatch, patchx, patchy, patc
 
     """
     return (np.asarray(
-        find_absolute_grid_position(ipatch, npatch, patchx, patchy, patchz, pare)) - nmax / 2 - 1) * side / nmax
+        find_absolute_grid_position(ipatch, npatch, patchx, patchy, patchz, pare)) - nmax / 2) * side / nmax
 
 
 def patch_vertices(level, nx, ny, nz, rx, ry, rz, size, nmax):
