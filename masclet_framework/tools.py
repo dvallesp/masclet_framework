@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 20/3/20 1:05
+#  Last update on 20/3/20 1:21
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -441,15 +441,25 @@ def uniform_grid(field, up_to_level, npatch, patchnx, patchny, patchnz, patchx, 
     uniform_size = nmax * 2 ** up_to_level
     uniform = np.zeros((uniform_size, uniform_size, uniform_size))
 
-    levels = create_vector_levels(npatch)
+    reduction = 2 ** up_to_level
+    for i in range(uniform_size):
+        for j in range(uniform_size):
+            for k in range(uniform_size):
+                I = int(i / reduction)
+                J = int(j / reduction)
+                K = int(k / reduction)
+                uniform[i, j, k] = field[ipatch][I, J, K]
 
+    levels = create_vector_levels(npatch)
     relevantpatches = npatch[0:up_to_level+1].sum()
+
     for ipatch in range(relevantpatches+1):
         reduction = 2 ** (up_to_level - levels[ipatch])
+        shift = find_absolute_grid_position(ipatch, npatch, patchnx, patchny, patchnz, pare)
         for i in range(uniform_size):
             for j in range(uniform_size):
                 for k in range(uniform_size):
-                    I = int(i/reduction)
-                    J = int(j/reduction)
-                    K = int(k/reduction)
+                    I = shift[0] + int(i/reduction)
+                    J = shift[1] + int(j/reduction)
+                    K = shift[2] + int(k/reduction)
                     uniform[i,j,k] = field[ipatch][I,J,K]
