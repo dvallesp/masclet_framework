@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 21/3/20 14:18
+#  Last update on 21/3/20 19:30
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -519,3 +519,79 @@ def mass_inside(R, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, p
         mass += (density[ipatch] * mask[ipatch]).sum() * cell_volume[ipatch]
 
     return mass
+
+
+def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins, patchnx, patchny, patchnz, patchrx,
+                      patchry, patchrz, npatch, size, nmax, verbose=False, ncores=1):
+    """
+    Computes a (volume-weighted) radial profile of the quantity given in the "field" argument, taking center in
+    (clusrx, clusry, clusrz).
+
+    Args:
+        field: variables (already cleaned) whose profile wants to be got
+        clusrx, clusry, clusrz: comoving coordinates of the center for the profile
+        rmin: starting radius of the profile
+        rmax: final radius of the profile
+        nbins: number of points for the profile
+        logbins: if False, radial shells are spaced linearly. If True, they're spaced logarithmically. Not that, if
+                 logbins = True, rmin cannot be 0.
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+                                   (and Y and Z)
+        npatch: number of patches in each level, starting in l=0
+        size: comoving size of the simulation box
+        nmax: cells at base level
+        verbose: if True, prints the patch being opened at a time
+        ncores: number of cores to perform the paralellization.
+
+    Returns:
+        Two lists. One of them contains the center of each radial cell. The other contains the value of the field
+        averaged across all the cells of the shell.
+
+    """
+    # getting the bins
+    try:
+        assert(rmax > rmin)
+    except AssertionError:
+        print('You would like to input rmax > rmin...')
+        return
+
+    if logbins:
+        try:
+            assert(rmin > 0)
+        except AssertionError:
+            print('Cannot use rmin=0 with logarithmic binning...')
+            return
+        bin_bounds = np.logspace(np.log10(rmin), np.log10(rmax), nbins+1)
+
+    else:
+        bin_bounds = np.linspace(rmin, rmax, nbins+1)
+
+    bin_centers = (bin_bounds[1:] + bin_bounds[-1:]) / 2
+    #profile = np.zeros(bin_centers.shape)
+    profile = []
+
+    # finding the volume-weighted mean
+    levels = create_vector_levels(npatch)
+    cell_volume = (size / nmax / 2 ** levels) ** 3
+    which_patches = which_patches_inside_sphere(rmax, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx,
+                                                patchry, patchrz, npatch, size, nmax)
+    field_vw = [field[ipatch]*cell_volume[ipatch] for ipatch in range(len(field))]
+
+    if rmin>0:
+        cells_outer = mask_sphere_parallel(rmin, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry,
+                                           patchrz, npatch, size, nmax, which_patches, verbose, ncores)
+    else:
+        cells_outer = [np.zeros(patch.shape, dtype='bool') for patch in field]
+
+    for r_out in bin_bounds[1:]:
+        cells_inner = cells_outer
+        cells_outer = mask_sphere_parallel(r_out, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry,
+                                           patchrz, npatch, size, nmax, which_patches, verbose, ncores)
+        shell_mask = [cells_inner[ipatch] ^ cells_outer[ipatch] for ipatch in range(len(field))]
+        sum_field_vw = sum([(field_vw[ipatch] * shell_mask[ipatch]).sum() for ipatch in range(len(field))])
+        sum_vw = sum([(shell_mask[ipatch]*cell_volume[ipatch]).sum() for ipatch in range(len(field))])
+        profile.append(sum_field_vw / sum_vw)
+
+    return bin_centers, np.asarray(profile)
+
