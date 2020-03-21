@@ -10,7 +10,7 @@ Provides useful tools to compute time from redshift, evolution of the critical d
 Created by David Vallés
 """
 
-#  Last update on 21/3/20 17:45
+#  Last update on 21/3/20 17:51
 
 import json
 import os
@@ -128,7 +128,7 @@ def critical_density(h, z=0, omega_m=0, omega_lambda=0):
     Returns:
         Critical density, in M_\odot / Mpc^3
     """
-    isu_0 = 3 * (100000 * h) ** 2 / (8*np.pi*units.G_isu)
+    isu_0 = 3 * (100000 * h / units.mpc_to_m) ** 2 / (8*np.pi*units.G_isu)
     if z == 0:
         isu = isu_0
     else:

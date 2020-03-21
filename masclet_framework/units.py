@@ -10,7 +10,7 @@ Contains the basic units of the MASCLET code
 Created by David Vallés
 """
 
-#  Last update on 21/3/20 17:45
+#  Last update on 21/3/20 18:04
 
 ### FUNDAMENTAL UNITS; MASCLET TO PHYSICAL UNITS
 
@@ -42,21 +42,21 @@ yr_to_time = 1/time_to_yr
 
 ### OTHER USEFUL RELATIONS
 
-sun_to_kg = sun_to_mass * mass_to_kg
-sun_to_g = sun_to_mass * mass_to_g
-kg_to_sun = 1/sun_to_kg
-g_to_sun = 1/sun_to_g
 kg_to_g = 1000
 g_to_kg = 1/kg_to_g
+sun_to_kg = 1.98848e30
+kg_to_sun = 1/sun_to_kg
+sun_to_g = sun_to_kg * kg_to_g
+g_to_sun = 1/sun_to_g
 
-m_to_mpc = m_to_length * length_to_mpc
-mpc_to_m = 1/m_to_mpc
-cm_to_mpc = cm_to_length * length_to_mpc
-mpc_to_cm = 1/cm_to_mpc
 m_to_cm = 100
 cm_to_m = 1/m_to_cm
+mpc_to_m = 3.085678e22
+m_to_mpc = 1/mpc_to_m
+mpc_to_cm = mpc_to_m * m_to_cm
+cm_to_mpc = 1/mpc_to_cm
 
-yr_to_s = 3.154e7
+yr_to_s = 31556736
 s_to_yr = 1/yr_to_s
 
 
