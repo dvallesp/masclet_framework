@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 20/3/20 12:45
+#  Last update on 21/3/20 14:18
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -471,3 +471,51 @@ def uniform_grid(field, up_to_level, npatch, patchnx, patchny, patchnz, patchrx,
                     uniform[int(shift[0])+i, int(shift[1])+j, int(shift[2]) +k] += field[ipatch][I, J, K]
 
     return uniform
+
+
+def mass_inside(R, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size,
+                nmax, verbose=False, ncores=1):
+    """
+        Computes the mass inside a radius R sphere centered on (clusrx, clusry, clusrz), from the density field.
+        Note that user can either supply:
+            - Comoving density and comoving size (most common)
+            - Physical density and physical size
+
+        Parallel version.
+
+        Args:
+            R: radius of the considered sphere
+            clusrx, clusry, clusrz: comoving coordinates of the center of the sphere
+            density: density field, already cleaned from refinements and overlaps (but not masked!)
+            patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+            patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+            (and Y and Z)
+            npatch: number of patches in each level, starting in l=0
+            size: comoving size of the simulation box
+            nmax: cells at base level
+            verbose: if True, prints the patch being opened at a time
+            ncores: number of cores to perform the paralellization.
+
+        Returns:
+            Field containing the mask as described.
+    """
+    mass = 0
+    levels = create_vector_levels(npatch)
+    cell_volume = (size/nmax/2**levels)**3
+
+    if verbose:
+        print("Finding relevant patches...")
+    which_patches = which_patches_inside_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry,
+                                                patchrz, npatch, size, nmax)
+
+    if verbose:
+        print("Masking patches... (May take a while)")
+    mask = mask_sphere_parallel(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
+                                size, nmax, which_patches, verbose, ncores)
+
+    if verbose:
+        print("Summing the masses")
+    for ipatch in range(len(patchnx)):
+        mass += (density[ipatch] * mask[ipatch]).sum() * cell_volume[ipatch]
+
+    return mass
