@@ -10,7 +10,7 @@ Provides useful tools to compute time from redshift, evolution of the critical d
 Created by David Vallés
 """
 
-#  Last update on 16/3/20 19:41
+#  Last update on 21/3/20 16:11
 
 import json
 import os
@@ -40,7 +40,7 @@ def write_cosmo_parameters(h, omega_m, omega_lambda, omega_b, filename='cosmo_pa
         json.dump(parameters, json_file)
 
 
-def read_cosmo_parameters(filename='masclet_parameters.json', path=''):
+def read_cosmo_parameters(filename='cosmo_parameters.json', path=''):
     """
     Returns dictionary containing the cosmological parameters of the simulation, that have been previously written
     with the write_cosmo_parameters() function in this same module.
