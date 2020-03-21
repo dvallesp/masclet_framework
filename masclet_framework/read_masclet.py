@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 21/3/20 16:24
+#  Last update on 21/3/20 16:51
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -278,7 +278,7 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
             f.skip()
 
         if output_cr0amr:
-            cr0amr = [np.reshape(f.read_vector('i'), (nmax, nmay, nmaz), 'F')]
+            cr0amr = [np.reshape(f.read_vector('i'), (nmax, nmay, nmaz), 'F').astype('bool')]
         else:
             f.skip()
 
@@ -295,7 +295,8 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                     print('Reading patch {}'.format(ipatch))
 
                 if output_delta:
-                    delta.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    delta.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                            'F'))
                 else:
                     f.skip()
 
@@ -307,7 +308,8 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                     f.skip(3)
 
                 if output_pres:
-                    pres.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    pres.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                           'F'))
                 else:
                     f.skip()
 
@@ -333,12 +335,14 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                     f.skip()
 
                 if output_cr0amr:
-                    cr0amr.append(np.reshape(f.read_vector('i'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    cr0amr.append(np.reshape(f.read_vector('i'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                             'F').astype('bool'))
                 else:
                     f.skip()
 
                 if output_solapst:
-                    solapst.append(np.reshape(f.read_vector('i'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    solapst.append(np.reshape(f.read_vector('i'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                              'F').astype('bool'))
                 else:
                     f.skip()
 
