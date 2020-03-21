@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 20/3/20 1:05
+#  Last update on 21/3/20 16:24
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -226,10 +226,10 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
 
     nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
                                                            load_namr=False, load_size=False, path=parameters_path)
-    npatch, patchnx, patchny, patchnz = read_grids(it, path=path, read_general=False, read_patchnum=True,
-                                                   read_dmpartnum=False, read_patchcellextension=True,
-                                                   read_patchcellposition=False, read_patchposition=False,
-                                                   read_patchparent=False)
+    npatch, patchnx, patchny, patchnz = read_grids(it, path=path, parameters_path=parameters_path, read_general=False,
+                                                   read_patchnum=True, read_dmpartnum=False,
+                                                   read_patchcellextension=True, read_patchcellposition=False,
+                                                   read_patchposition=False, read_patchparent=False)
     with FF(os.path.join(path,filename(it, 'b', digits))) as f:
         # read header
         it_clus = f.read_vector('i')[0]
