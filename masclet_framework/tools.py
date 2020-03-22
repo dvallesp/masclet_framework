@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 22/3/20 0:19
+#  Last update on 22/3/20 1:36
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -697,9 +697,9 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
     bzmax = box_limits[5]
 
     # BASE GRID
-    uniform_size_x = nmax * (bxmax - bxmin)/size * 2 ** up_to_level
-    uniform_size_y = nmax * (bymax - bymin) / size * 2 ** up_to_level
-    uniform_size_z = nmax * (bzmax - bzmin) / size * 2 ** up_to_level
+    uniform_size_x = int(round(nmax * (bxmax - bxmin)/ size * 2 ** up_to_level))
+    uniform_size_y = int(round(nmax * (bymax - bymin) / size * 2 ** up_to_level))
+    uniform_size_z = int(round(nmax * (bzmax - bzmin) / size * 2 ** up_to_level))
     uniform = np.zeros((uniform_size_x, uniform_size_y, uniform_size_z))
 
     reduction = 2 ** up_to_level
@@ -724,9 +724,9 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
     levels = create_vector_levels(npatch)
     up_to_level_patches = npatch[0:up_to_level + 1].sum()
     relevantpatches = which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
-                                               size, nmax)
-    relevantpatches = relevantpatches[1:up_to_level_patches+1]   # we ignore the 0-th relevant patch (patch 0, base
+                                               size, nmax)[1:] # we ignore the 0-th relevant patch (patch 0, base
     # level). By construction, the 0th element is always the l=0 patch.
+    relevantpatches = [i for i in relevantpatches if i <= npatch[0:up_to_level+1].sum()]
 
     for ipatch in relevantpatches:
         if verbose:
@@ -745,49 +745,55 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
         pzmax = vertices[-1][2]
 
         # fix left corners
-        if pxmin <= starting_x:
+        if pxmin <= bxmin:
             imin = 0
-            Imin = (starting_x-pxmin)/ipatch_cellsize
+            Imin = (bxmin-pxmin)/ipatch_cellsize
         else:
-            imin = round((pxmin - starting_x)/uniform_cellsize)
+            imin = int(round((pxmin - bxmin)/uniform_cellsize))
             Imin = 0
 
-        if pymin <= starting_y:
+        if pymin <= bymin:
             jmin = 0
-            Jmin = (starting_y-pymin)/ipatch_cellsize
+            Jmin = (bymin-pymin)/ipatch_cellsize
         else:
-            jmin = round((pymin - starting_y)/uniform_cellsize)
+            jmin = int(round((pymin - bymin)/uniform_cellsize))
             Jmin = 0
 
-        if pzmin <= starting_z:
+        if pzmin <= bzmin:
             kmin = 0
-            Kmin = (starting_z-pzmin)/ipatch_cellsize
+            Kmin = (bzmin-pzmin)/ipatch_cellsize
         else:
-            kmin = round((pzmin - starting_z)/uniform_cellsize)
+            kmin = int(round((pzmin - bzmin)/uniform_cellsize))
             Kmin = 0
 
         # fix right corners
-        if ending_x <= pxmax:
+        if bxmax <= pxmax:
             imax = uniform_size_x
         else:
-            imax = patchnx[ipatch]*reduction
+            #imax = int(round(patchnx[ipatch]*reduction))
+            Imax = patchnx[ipatch]-1
+            imax = int(round(imin + (Imax-Imin)*reduction))
 
-        if ending_y <= pymax:
+        if bymax <= pymax:
             jmax = uniform_size_y
         else:
-            jmax = patchny[ipatch]*reduction
+            #jmax = int(round(patchny[ipatch]*reduction))
+            Jmax = patchny[ipatch] - 1
+            jmax = int(round(jmin + (Jmax - Jmin) * reduction))
 
-        if ending_z <= pzmax:
+        if bzmax <= pzmax:
             kmax = uniform_size_z
         else:
-            kmax = patchnz[ipatch]*reduction
+            #kmax = int(round(patchnz[ipatch]*reduction))
+            Kmax = patchnz[ipatch] - 1
+            kmax = int(round(kmin + (Kmax - Kmin) * reduction))
 
         for i in range(imin, imax):
             for j in range(jmin, jmax):
                 for k in range(kmin, kmax):
-                    I = int(Imin + i/reduction)
-                    J = int(Jmin + j/reduction)
-                    K = int(Kmin + k/reduction)
+                    I = int(Imin + (i-imin)/reduction)
+                    J = int(Jmin + (j-jmin)/reduction)
+                    K = int(Kmin + (k-kmin)/reduction)
                     uniform[i, j, k] += field[ipatch][I, J, K]
 
     return uniform
