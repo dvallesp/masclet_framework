@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 21/3/20 16:51
+#  Last update on 24/3/20 10:07
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -112,7 +112,7 @@ def read_grids(it, path='', parameters_path='', digits=5, read_general=True, rea
     # first, we load some general parameters
     irr, t, nl, mass_dmpart, _ = tuple(float(i) for i in grids.readline().split())
     irr = int(irr)
-    assert (it == irr)
+    #assert (it == irr)
     nl = int(nl)
     zeta = float(grids.readline().split()[0])
     # l=0
@@ -233,7 +233,7 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
     with FF(os.path.join(path,filename(it, 'b', digits))) as f:
         # read header
         it_clus = f.read_vector('i')[0]
-        assert(it == it_clus)
+        #assert(it == it_clus)
         f.seek(0)  # this is a little bit ugly but whatever
         time, z = tuple(f.read_vector('f')[1:3])
 
@@ -406,7 +406,7 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
 
         # read header
         it_cldm = f.read_vector('i')[0]
-        assert (it == it_cldm)
+        #assert (it == it_cldm)
         f.seek(0)  # this is a little bit ugly but whatever
         time, mdmpart, z = tuple(f.read_vector('f')[1:4])
 
