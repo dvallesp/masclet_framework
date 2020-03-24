@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 24/3/20 10:16
+#  Last update on 24/3/20 17:20
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -400,7 +400,7 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
     npatch, npart, patchnx, patchny, patchnz = read_grids(it, path=path, read_general=False, read_patchnum=True,
                                                           read_dmpartnum=True, read_patchcellextension=True,
                                                           read_patchcellposition=False, read_patchposition=False,
-                                                          read_patchparent=False)
+                                                          read_patchparent=False, parameters_path=parameters_path)
 
     with FF(os.path.join(path, filename(it, 'd', digits))) as f:
 
