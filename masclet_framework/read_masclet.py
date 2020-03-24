@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 24/3/20 10:07
+#  Last update on 24/3/20 10:16
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -455,3 +455,27 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         returnvariables.append(dmpart_id)
 
     return tuple(returnvariables)
+
+
+def read_npz_field(filename, path=''):
+    """
+    Reads a field written using the numpy savez function.
+    E.g., read solapst variable compute with my ./Projects/TFM/Compute_solapst code
+
+    Args:
+        filename: name of the npz file
+        path: path to the npz file
+
+    Returns:
+        A list of numpy arrays, containing the field
+
+    """
+
+    filename = os.path.join(path, filename)
+
+    field = []
+    with np.load(filename) as f:
+        for arrayname in f:
+            field.append(f[arrayname])
+
+    return field
