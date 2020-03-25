@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 25/3/20 9:19
+#  Last update on 25/3/20 9:48
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -814,7 +814,7 @@ def find_rDelta_eqn(r, Delta, background_density, clusrx, clusry, clusrz, densit
 
 
 def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
-                size, nmax, h, omega_m, rmin=0.05, rmax=10, verbose=False, ncores=1):
+                size, nmax, h, omega_m, rmin=0.05, rmax=10, rtol=1e-3, verbose=False, ncores=1):
     """
     Finds the value (in Mpc) of r_\Delta, the radius enclosing a mean overdensity (of the DM field, by default) equal
     to Delta times de critical density of the universe. By default, it uses the Brent method.
@@ -842,6 +842,6 @@ def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, patchnx, patchny, 
     background_density = cosmo_tools.background_density(h, omega_m, zeta)
     args = (Delta, background_density, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx, patchry,
             patchrz, npatch, size, nmax, verbose, ncores)
-    rDelta = optimize.brentq(find_rDelta_eqn, rmin, rmax, args=args, xtol=1e-6)
+    rDelta = optimize.brentq(find_rDelta_eqn, rmin, rmax, args=args, xtol=rtol)
     return rDelta
 
