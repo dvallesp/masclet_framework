@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 25/3/20 18:56
+#  Last update on 25/3/20 23:59
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -842,7 +842,11 @@ def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, patchnx, patchny, 
     background_density = cosmo_tools.background_density(h, omega_m, zeta)
     args = (Delta, background_density, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx, patchry,
             patchrz, npatch, size, nmax, verbose, ncores)
-    rDelta = optimize.brentq(find_rDelta_eqn, rmin, rmax, args=args, xtol=rtol)
+    try:
+        rDelta = optimize.brentq(find_rDelta_eqn, rmin, rmax, args=args, xtol=rtol)
+    except ValueError:
+        print('Something might be wrong with this one... Might need further checking.')
+        return float('nan')
     if verbose:
         print('Converged!')
     return rDelta
