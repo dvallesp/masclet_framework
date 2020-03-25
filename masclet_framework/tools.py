@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 22/3/20 2:31
+#  Last update on 25/3/20 9:19
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -18,6 +18,10 @@ Created by David Vallés
 import numpy as np
 
 from multiprocessing import Pool
+
+from masclet_framework import cosmo_tools, units
+
+from scipy import optimize
 
 # FUNCTIONS DEFINED IN THIS MODULE
 
@@ -631,9 +635,9 @@ def patch_is_inside_box(box_limits, level, nx, ny, nz, rx, ry, rz, size, nmax):
     bzmin = box_limits[4]
     bzmax = box_limits[5]
 
-    overlap_x = (pxmin < bxmax) and (bxmin < pxmax)
-    overlap_y = (pymin < bymax) and (bymin < pymax)
-    overlap_z = (pzmin < bzmax) and (bzmin < pzmax)
+    overlap_x = (pxmin <= bxmax) and (bxmin <= pxmax)
+    overlap_y = (pymin <= bymax) and (bymin <= pymax)
+    overlap_z = (pzmin <= bzmax) and (bzmin <= pzmax)
 
     return overlap_x and overlap_y and overlap_z
 
@@ -706,11 +710,11 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
     reduction = 2 ** up_to_level
 
     starting_x = (bxmin + size/2) * nmax / size
-    ending_x = (bxmax + size/2) * nmax / size
+    #ending_x = (bxmax + size/2) * nmax / size
     starting_y = (bymin + size / 2) * nmax / size
-    ending_y = (bymax + size / 2) * nmax / size
+    #ending_y = (bymax + size / 2) * nmax / size
     starting_z = (bzmin + size / 2) * nmax / size
-    ending_z = (bzmax + size / 2) * nmax / size
+    #ending_z = (bzmax + size / 2) * nmax / size
 
     for i in range(uniform_size_x):
         for j in range(uniform_size_y):
@@ -723,7 +727,7 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
     # REFINEMENT LEVELS
 
     levels = create_vector_levels(npatch)
-    up_to_level_patches = npatch[0:up_to_level + 1].sum()
+    #up_to_level_patches = npatch[0:up_to_level + 1].sum()
     relevantpatches = which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
                                                size, nmax)[1:] # we ignore the 0-th relevant patch (patch 0, base
     # level). By construction, the 0th element is always the l=0 patch.
@@ -773,21 +777,21 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
         else:
             #imax = int(round(patchnx[ipatch]*reduction))
             Imax = patchnx[ipatch]-1
-            imax = int(round(imin + (Imax-Imin)*reduction))
+            imax = int(round(imin + (Imax - Imin + 1)*reduction))
 
         if bymax <= pymax:
             jmax = uniform_size_y
         else:
             #jmax = int(round(patchny[ipatch]*reduction))
             Jmax = patchny[ipatch] - 1
-            jmax = int(round(jmin + (Jmax - Jmin) * reduction))
+            jmax = int(round(jmin + (Jmax - Jmin + 1) * reduction))
 
         if bzmax <= pzmax:
             kmax = uniform_size_z
         else:
             #kmax = int(round(patchnz[ipatch]*reduction))
             Kmax = patchnz[ipatch] - 1
-            kmax = int(round(kmin + (Kmax - Kmin) * reduction))
+            kmax = int(round(kmin + (Kmax - Kmin + 1) * reduction))
 
         for i in range(imin, imax):
             for j in range(jmin, jmax):
@@ -798,4 +802,46 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
                     uniform[i, j, k] += field[ipatch][I, J, K]
 
     return uniform
+
+
+def find_rDelta_eqn(r, Delta, background_density, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx, patchry,
+                    patchrz, npatch, size, nmax, verbose, ncores):
+    if verbose:
+        print('Evaluating at r={:.3f}'.format(r))
+    m = mass_inside(r, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
+                    size, nmax, verbose=False, ncores=ncores)
+    return m - (4*np.pi/3) * r**3 * background_density * Delta
+
+
+def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
+                size, nmax, h, omega_m, rmin=0.05, rmax=10, verbose=False, ncores=1):
+    """
+    Finds the value (in Mpc) of r_\Delta, the radius enclosing a mean overdensity (of the DM field, by default) equal
+    to Delta times de critical density of the universe. By default, it uses the Brent method.
+
+    Args:
+        Delta: value of the desired overdensity
+        zeta: current redshift
+        clusrx, clusry, clusrz: comoving coordinates of the center of the sphere
+        density: DM density field, already cleaned from refinements and overlaps (but not masked!)
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+        (and Y and Z)
+        npatch: number of patches in each level, starting in l=0
+        size: comoving size of the simulation box
+        nmax: cells at base level
+        h: dimensionless Hubble constant
+        omega_m: matter density parameter
+        rmin, rmax: starting two points (M(r) - Delta rho_B 4pi/3 r^3) must change sign
+        verbose: if True, prints the patch being opened at a time
+        ncores: number of cores to perform the paralellization.
+
+    Returns:
+        The value of r_\Delta
+    """
+    background_density = cosmo_tools.background_density(h, omega_m, zeta)
+    args = (Delta, background_density, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx, patchry,
+            patchrz, npatch, size, nmax, verbose, ncores)
+    rDelta = optimize.brentq(find_rDelta_eqn, rmin, rmax, args=args, xtol=1e-6)
+    return rDelta
 
