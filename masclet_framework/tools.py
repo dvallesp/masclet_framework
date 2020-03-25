@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 25/3/20 9:48
+#  Last update on 25/3/20 16:28
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -817,7 +817,7 @@ def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, patchnx, patchny, 
                 size, nmax, h, omega_m, rmin=0.05, rmax=10, rtol=1e-3, verbose=False, ncores=1):
     """
     Finds the value (in Mpc) of r_\Delta, the radius enclosing a mean overdensity (of the DM field, by default) equal
-    to Delta times de critical density of the universe. By default, it uses the Brent method.
+    to Delta times the background density of the universe. By default, it uses the Brent method.
 
     Args:
         Delta: value of the desired overdensity
