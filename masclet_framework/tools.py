@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 25/3/20 16:28
+#  Last update on 25/3/20 18:56
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -814,7 +814,7 @@ def find_rDelta_eqn(r, Delta, background_density, clusrx, clusry, clusrz, densit
 
 
 def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
-                size, nmax, h, omega_m, rmin=0.05, rmax=10, rtol=1e-3, verbose=False, ncores=1):
+                size, nmax, h, omega_m, rmin=0.1, rmax=6, rtol=1e-3, verbose=False, ncores=1):
     """
     Finds the value (in Mpc) of r_\Delta, the radius enclosing a mean overdensity (of the DM field, by default) equal
     to Delta times the background density of the universe. By default, it uses the Brent method.
@@ -843,5 +843,7 @@ def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, patchnx, patchny, 
     args = (Delta, background_density, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx, patchry,
             patchrz, npatch, size, nmax, verbose, ncores)
     rDelta = optimize.brentq(find_rDelta_eqn, rmin, rmax, args=args, xtol=rtol)
+    if verbose:
+        print('Converged!')
     return rDelta
 
