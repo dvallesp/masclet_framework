@@ -10,7 +10,7 @@ Provides the necessary functions to read ASOHF outputs
 Created by David Vallés
 """
 
-#  Last update on 26/3/20 16:09
+#  Last update on 26/3/20 16:21
 
 import masclet_framework as masclet
 import numpy as np
@@ -221,6 +221,6 @@ def read_merger_tree_reduced(it, path='', digits=5, direction='b'):
         else:
             parent = None
             ratio = None
-        reduced[clusterid] = {'parent': parent, 'ratio': ratio, 'givenmass': givenmass}
+        reduced[clusterid] = {'parent': parent, 'ratio': ratio, 'givenmass': givenmass[whichparent_pos]}
 
     return reduced
