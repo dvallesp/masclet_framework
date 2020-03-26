@@ -10,7 +10,7 @@ Provides the necessary functions to read ASOHF outputs
 Created by David Vallés
 """
 
-#  Last update on 26/3/20 11:06
+#  Last update on 26/3/20 12:58
 
 import masclet_framework as masclet
 import numpy as np
@@ -186,7 +186,7 @@ def read_merger_tree_essentials(it, path='', digits=5):
     return essentials
 
 
-def read_merger_tree_reduced(it, path='', digits=5):
+def read_merger_tree_reduced(it, path='', digits=5, direction='b'):
     """
         Reads the ASOHF merger_tXXXXX files, containing the information about the merger tree of the DM haloes, and
         returns the reduced merger tree: for each cluster, the progenitor which has given the most mass is given
@@ -195,6 +195,9 @@ def read_merger_tree_reduced(it, path='', digits=5):
             it: iteration number (int)
             path: path of the families file in the system (str)
             digits: number of digits the filename is written with (int)
+            direction: 'f' (forwards) or 'b' (backwards). If forwards, the chosen parent is the one which has given a
+                        larger fraction of *its* mass to de child. If backwards, the chosen parent is the one which has
+                        contributed the most to the children mass.
 
         Returns:
             A dictionary, each entry of which being a cluster in the iteration it+EVERY. For each of these
@@ -208,7 +211,11 @@ def read_merger_tree_reduced(it, path='', digits=5):
         cluster = essentials[clusterid]
         if len(cluster["parents"]) > 0:
             givenmass = [cluster["ratios"][i]*cluster["masses"][i] for i in range(len(cluster["parents"]))]
-            whichparent_pos = givenmass.index(max(givenmass))
+            ratios = [cluster["ratios"][i] for i in range(len(cluster["parents"]))]
+            if direction=='b':
+                whichparent_pos = givenmass.index(max(givenmass))
+            elif direction=='f':
+                whichparent_pos = ratios.index(max(ratios))
             parent = cluster["parents"][whichparent_pos]
             ratio = cluster["ratios"][whichparent_pos]
         else:
