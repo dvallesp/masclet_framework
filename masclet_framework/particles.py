@@ -9,7 +9,7 @@ Contains several useful functions in order to deal with particles
 
 Created by David Vallés
 """
-#  Last update on 27/3/20 23:30
+#  Last update on 28/3/20 0:01
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -121,7 +121,7 @@ def find_rDelta_eqn_particles(r, Delta, background_density, clusrx, clusry, clus
         print('Evaluating at r={:.3f}'.format(r))
 
     inside_1 = (x - clusrx) ** 2 + (y - clusry) ** 2 + (z - clusrz) ** 2 < r ** 2
-    m = m[inside_1].sum()
+    m = m[inside_1].sum() * units.mass_to_sun
 
     return m - (4*np.pi/3) * r**3 * background_density * Delta
 
