@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 24/3/20 17:20
+#  Last update on 28/3/20 11:55
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -414,15 +414,32 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         if verbose:
             print('Reading base grid...')
 
-        delta_dm = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
-        dmpart_x = f.read_vector('f')
-        dmpart_y = f.read_vector('f')
-        dmpart_z = f.read_vector('f')
-        dmpart_vx = f.read_vector('f')
-        dmpart_vy = f.read_vector('f')
-        dmpart_vz = f.read_vector('f')
-        dmpart_id = f.read_vector('i')
-        dmpart_mass = mdmpart * np.ones(npart[0])
+        if output_deltadm:
+            delta_dm = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+        else:
+            f.skip()
+
+        if output_position:
+            dmpart_x = f.read_vector('f')
+            dmpart_y = f.read_vector('f')
+            dmpart_z = f.read_vector('f')
+        else:
+            f.skip(3)
+
+        if output_velocity:
+            dmpart_vx = f.read_vector('f')
+            dmpart_vy = f.read_vector('f')
+            dmpart_vz = f.read_vector('f')
+        else:
+            f.skip(3)
+
+        if output_id:
+            dmpart_id = f.read_vector('i')
+        else:
+            f.skip()
+
+        if output_mass:
+            dmpart_mass = mdmpart * np.ones(npart[0])
 
         # refinement levels
         for l in range(1, min(nlevels + 1, max_refined_level + 1)):
@@ -430,16 +447,34 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                 print('Reading level {}.'.format(l))
                 print('{} patches. {} particles.'.format(npatch[l], npart[l]))
             for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
-                delta_dm.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                if output_deltadm:
+                    delta_dm.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
                                            'F'))
-            dmpart_x = np.append(dmpart_x, f.read_vector('f'))
-            dmpart_y = np.append(dmpart_y, f.read_vector('f'))
-            dmpart_z = np.append(dmpart_z, f.read_vector('f'))
-            dmpart_vx = np.append(dmpart_vx, f.read_vector('f'))
-            dmpart_vy = np.append(dmpart_vy, f.read_vector('f'))
-            dmpart_vz = np.append(dmpart_vz, f.read_vector('f'))
-            dmpart_mass = np.append(dmpart_mass, f.read_vector('f'))
-            dmpart_id = np.append(dmpart_id, f.read_vector('i'))
+                else:
+                    f.skip()
+            if output_position:
+                dmpart_x = np.append(dmpart_x, f.read_vector('f'))
+                dmpart_y = np.append(dmpart_y, f.read_vector('f'))
+                dmpart_z = np.append(dmpart_z, f.read_vector('f'))
+            else:
+                f.skip(3)
+
+            if output_velocity:
+                dmpart_vx = np.append(dmpart_vx, f.read_vector('f'))
+                dmpart_vy = np.append(dmpart_vy, f.read_vector('f'))
+                dmpart_vz = np.append(dmpart_vz, f.read_vector('f'))
+            else:
+                f.skip(3)
+
+            if output_mass:
+                dmpart_mass = np.append(dmpart_mass, f.read_vector('f'))
+            else:
+                f.skip()
+
+            if output_id:
+                dmpart_id = np.append(dmpart_id, f.read_vector('i'))
+            else:
+                f.skip()
 
     returnvariables = []
 
