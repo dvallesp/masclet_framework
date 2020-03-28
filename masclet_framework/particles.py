@@ -9,7 +9,7 @@ Contains several useful functions in order to deal with particles
 
 Created by David Vallés
 """
-#  Last update on 28/3/20 0:01
+#  Last update on 28/3/20 1:04
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -104,6 +104,12 @@ def shared_mass(x1, y1, z1, m1, oripa1, rx1, ry1, rz1, r1, x2, y2, z2, m2, oripa
     Returns:
         The mass in the older halo (smaller iti) also present in the newer one.
     """
+    # checks (just in case)
+    if np.isnan(r1):
+        r1 = 0
+    if np.isnan(r2):
+        r2 = 0
+
     inside_1 = (x1 - rx1) ** 2 + (y1 - ry1) ** 2 + (z1 - rz1) ** 2 < r1 ** 2
     inside_1 = oripa1[inside_1]
     m1 = m1[inside_1]
@@ -152,7 +158,8 @@ def find_rDelta_particles(Delta, zeta, clusrx, clusry, clusrz, x, y, z, m, h, om
     try:
         rDelta = optimize.brentq(find_rDelta_eqn_particles, rmin, rmax, args=args, xtol=rtol)
     except ValueError:
-        print('Something might be wrong with this one... Might need further checking.')
+        if verbose:
+            print('Something might be wrong with this one... Might need further checking.')
         return float('nan')
     if verbose:
         print('Converged!')

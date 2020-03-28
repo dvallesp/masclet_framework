@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 25/3/20 23:59
+#  Last update on 28/3/20 0:57
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -845,7 +845,8 @@ def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, patchnx, patchny, 
     try:
         rDelta = optimize.brentq(find_rDelta_eqn, rmin, rmax, args=args, xtol=rtol)
     except ValueError:
-        print('Something might be wrong with this one... Might need further checking.')
+        if verbose:
+            print('Something might be wrong with this one... Might need further checking.')
         return float('nan')
     if verbose:
         print('Converged!')
