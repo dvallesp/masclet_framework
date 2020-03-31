@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 28/3/20 11:55
+#  Last update on 31/3/20 19:16
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -41,14 +41,14 @@ def filename(it, filetype, digits=5):
     Returns: filename (str)
 
     """
-    names = {'g': "grids", 'b': 'clus', 'd': 'cldm'}
+    names = {'g': "grids", 'b': 'clus', 'd': 'cldm', 's': 'clst'}
     try:
         if np.floor(np.log10(it)) < digits:
             return names[filetype] + str(it).zfill(digits)
         else:
             raise ValueError("Digits should be greater to handle that iteration number")
     except KeyError:
-        print('Insert a correct type: g, b o d ')
+        print('Insert a correct type: g, b, d or s')
 
 
 def read_grids(it, path='', parameters_path='', digits=5, read_general=True, read_patchnum=True, read_dmpartnum=True,
@@ -488,6 +488,77 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         returnvariables.append(dmpart_mass)
     if output_id:
         returnvariables.append(dmpart_id)
+
+    return tuple(returnvariables)
+
+
+def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltastar=True, verbose=False):
+    """
+    Reads the stellar (clst) file.
+    For now, it only reads the delta.
+
+    Args:
+        it: iteration number (int)
+        path: path of the output files in the system (str)
+        parameters_path: path of the json parameters file of the simulation
+        digits: number of digits the filename is written with (int)
+        max_refined_level: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
+        output_deltastar: whether deltadm (dark matter density contrast) is returned (bool)
+        verbose: whether a message is printed when each refinement level is started (bool)
+
+    Returns:
+        Chosen quantities, in the order specified by the order of the parameters in this definition.
+        delta_dm is returned as a list of numpy matrices. The 0-th element corresponds to l=0. The i-th element
+        corresponds to the i-th patch.
+        //The rest of quantities are outputted as numpy vectors, the i-th element corresponding to the i-th DM particle.
+
+
+    """
+    nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
+                                                           load_namr=False, load_size=False, path=parameters_path)
+    npatch, npart, patchnx, patchny, patchnz = read_grids(it, path=path, read_general=False, read_patchnum=True,
+                                                          read_dmpartnum=True, read_patchcellextension=True,
+                                                          read_patchcellposition=False, read_patchposition=False,
+                                                          read_patchparent=False, parameters_path=parameters_path)
+
+    with FF(os.path.join(path, filename(it, 's', digits))) as f:
+
+        # read header
+        it_clst = f.read_vector('i')[0]
+        #assert (it == it_cldm)
+        f.seek(0)  # this is a little bit ugly but whatever
+        time, z = tuple(f.read_vector('f')[1:3])
+
+        # l=0
+        if verbose:
+            print('Reading base grid...')
+
+        if output_deltastar:
+            delta_star = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+        else:
+            f.skip()
+
+        # positions, ids, masses, etc.
+        f.skip(9)
+
+        # refinement levels
+        for l in range(1, min(nlevels + 1, max_refined_level + 1)):
+            if verbose:
+                print('Reading level {}.'.format(l))
+                print('{} patches'.format(npatch[l]))
+            for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                if output_deltastar:
+                    delta_star.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                           'F'))
+                else:
+                    f.skip()
+
+            f.skip(10)
+
+    returnvariables = []
+
+    if output_deltastar:
+        returnvariables.append(delta_star)
 
     return tuple(returnvariables)
 
