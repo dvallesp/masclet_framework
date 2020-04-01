@@ -9,7 +9,7 @@ Contains several useful functions in order to deal with particles
 
 Created by David Vallés
 """
-#  Last update on 28/3/20 1:04
+#  Last update on 1/4/20 10:07
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -122,14 +122,14 @@ def shared_mass(x1, y1, z1, m1, oripa1, rx1, ry1, rz1, r1, x2, y2, z2, m2, oripa
     return m1[indices1].sum() * units.mass_to_sun
 
 
-def find_rDelta_eqn_particles(r, Delta, background_density, clusrx, clusry, clusrz, x, y, z, m, verbose):
+def find_rDelta_eqn_particles(r, Delta, background_density, zeta, clusrx, clusry, clusrz, x, y, z, m, verbose):
     if verbose:
         print('Evaluating at r={:.3f}'.format(r))
 
     inside_1 = (x - clusrx) ** 2 + (y - clusry) ** 2 + (z - clusrz) ** 2 < r ** 2
     m = m[inside_1].sum() * units.mass_to_sun
 
-    return m - (4*np.pi/3) * r**3 * background_density * Delta
+    return m - (4*np.pi/3) * (r/(1+zeta))**3 * background_density * Delta
 
 
 def find_rDelta_particles(Delta, zeta, clusrx, clusry, clusrz, x, y, z, m, h, omega_m, rmin=0.1, rmax=6, rtol=1e-3,
@@ -154,7 +154,7 @@ def find_rDelta_particles(Delta, zeta, clusrx, clusry, clusrz, x, y, z, m, h, om
         The value of r_\Delta
     """
     background_density = cosmo_tools.background_density(h, omega_m, zeta)
-    args = (Delta, background_density, clusrx, clusry, clusrz, x, y, z, m, verbose)
+    args = (Delta, background_density, zeta, clusrx, clusry, clusrz, x, y, z, m, verbose)
     try:
         rDelta = optimize.brentq(find_rDelta_eqn_particles, rmin, rmax, args=args, xtol=rtol)
     except ValueError:

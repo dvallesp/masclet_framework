@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 31/3/20 23:40
+#  Last update on 1/4/20 0:08
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -663,7 +663,7 @@ def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins
 
     if rmin>0:
         cells_outer = mask_sphere_parallel(rmin, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry,
-                                           patchrz, npatch, size, nmax, which_patches, verbose, ncores)
+                                           patchrz, npatch, size, nmax, which_patches, False, ncores)
     else:
         cells_outer = [np.zeros(patch.shape, dtype='bool') for patch in fields[0]]
 
