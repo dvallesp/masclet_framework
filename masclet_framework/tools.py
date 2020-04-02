@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 1/4/20 0:08
+#  Last update on 2/4/20 23:24
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -22,6 +22,7 @@ from multiprocessing import Pool
 from masclet_framework import cosmo_tools, units
 
 from scipy import optimize
+
 
 # FUNCTIONS DEFINED IN THIS MODULE
 
@@ -37,7 +38,7 @@ def create_vector_levels(npatch):
         numpy array containing the level for each patch
 
     """
-    vector = [[0]] + [[i+1]*x for (i, x) in enumerate(npatch[1:])]
+    vector = [[0]] + [[i + 1] * x for (i, x) in enumerate(npatch[1:])]
     vector = [item for sublist in vector for item in sublist]
     return np.array(vector)
 
@@ -112,7 +113,7 @@ def patch_vertices(level, nx, ny, nz, rx, ry, rz, size, nmax):
 
     """
 
-    cellsize = size/nmax/2**level
+    cellsize = size / nmax / 2 ** level
 
     leftmost_x = rx - cellsize
     leftmost_y = ry - cellsize
@@ -162,11 +163,11 @@ def patch_is_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry,
     if xmin < clusrx < xmax and ymin < clusry < ymax and zmin < clusrz < zmax:
         return True
 
-    cell_l0_size = size/nmax
-    max_side = max([nx, ny, nz]) * cell_l0_size / 2**level
-    upper_bound_squared = R**2 + max_side**2/4
+    cell_l0_size = size / nmax
+    max_side = max([nx, ny, nz]) * cell_l0_size / 2 ** level
+    upper_bound_squared = R ** 2 + max_side ** 2 / 4
     for vertex in vertices:
-        distance_squared = (vertex[0]-clusrx)**2 + (vertex[1]-clusry)**2 + (vertex[2]-clusrz)**2
+        distance_squared = (vertex[0] - clusrx) ** 2 + (vertex[1] - clusry) ** 2 + (vertex[2] - clusrz) ** 2
         if distance_squared <= upper_bound_squared:
             isinside = True
             break
@@ -196,8 +197,9 @@ def which_patches_inside_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, pat
     """
     levels = create_vector_levels(npatch)
     which_ipatch = [0]
-    for ipatch in range(1,len(patchnx)):
-        if patch_is_inside_sphere(R, clusrx, clusry, clusrz, levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnz[ipatch],
+    for ipatch in range(1, len(patchnx)):
+        if patch_is_inside_sphere(R, clusrx, clusry, clusrz, levels[ipatch], patchnx[ipatch], patchny[ipatch],
+                                  patchnz[ipatch],
                                   patchrx[ipatch], patchry[ipatch], patchrz[ipatch], size, nmax):
             which_ipatch.append(ipatch)
     return which_ipatch
@@ -220,20 +222,20 @@ def which_cells_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, 
         isinside: numpy bool array, the size of the patch, containing for each cell 1 if inside and 0 otherwise
     """
 
-    isinside = np.zeros((nx,ny,nz), dtype=bool)
+    isinside = np.zeros((nx, ny, nz), dtype=bool)
 
     cell_l0_size = size / nmax
-    cell_size = cell_l0_size / 2**level
-    Rsquared = R**2
+    cell_size = cell_l0_size / 2 ** level
+    Rsquared = R ** 2
 
     for i in range(nx):
         for j in range(ny):
             for k in range(nz):
                 # index-1 ==> recall that rx, ry, rz are the center of the leftmost PARENT cell!
-                x = rx + (i-0.5)*cell_size
-                y = ry + (j-0.5)*cell_size
-                z = rz + (k-0.5)*cell_size
-                isinside[i,j,k] = ((x-clusrx)**2 + (y-clusry)**2 + (z-clusrz)**2 <= Rsquared)
+                x = rx + (i - 0.5) * cell_size
+                y = ry + (j - 0.5) * cell_size
+                z = rz + (k - 0.5) * cell_size
+                isinside[i, j, k] = ((x - clusrx) ** 2 + (y - clusry) ** 2 + (z - clusrz) ** 2 <= Rsquared)
 
     return isinside
 
@@ -309,8 +311,9 @@ def mask_patch(args):
         return which_cells_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry, rz, size, nmax)
 
 
-def mask_sphere_parallel(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size, nmax,
-                which_patches, verbose=False, ncores=1):
+def mask_sphere_parallel(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size,
+                         nmax,
+                         which_patches, verbose=False, ncores=1):
     """
     Returns a "field", which contains all patches as usual. True means the cell must be considered, False otherwise.
     If a patch has all "False", an array is not ouputted, but a False is, instead.
@@ -343,7 +346,7 @@ def mask_sphere_parallel(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, p
     return mask
 
 
-def clean_field(field, cr0amr, solapst, npatch, up_to_level = 1000):
+def clean_field(field, cr0amr, solapst, npatch, up_to_level=1000):
     """
     Receives a field (with its refinement patches) and, using the cr0amr and solapst variables, returns the field
     having "cleaned" for refinements and overlaps. The user can specify the level of refinement required. This last
@@ -364,7 +367,7 @@ def clean_field(field, cr0amr, solapst, npatch, up_to_level = 1000):
     up_to_level = min(up_to_level, levels.max())
 
     cleanfield = []
-    cleanfield.append(field[0]*cr0amr[0]) # not overlap in l=0
+    cleanfield.append(field[0] * cr0amr[0])  # not overlap in l=0
 
     for level in range(1, up_to_level):
         for ipatch in range(sum(npatch[0:level]) + 1, sum(npatch[0:level + 1]) + 1):
@@ -390,7 +393,7 @@ def patch_left_edge_comoving(rx, ry, rz, level, size, nmax):
     Returns:
         tuple containing the x, y, z physical coordinates of the patch left corner.
     """
-    cellsize = size/nmax/2**(level)
+    cellsize = size / nmax / 2 ** (level)
     x = rx - cellsize
     y = ry - cellsize
     z = rz - cellsize
@@ -413,9 +416,9 @@ def patch_left_edge_natural(rx, ry, rz, level, size, nmax):
         """
     x, y, z = patch_left_edge_comoving(rx, ry, rz, level, size, nmax)
 
-    xg = x*nmax/size + nmax/2
-    yg = y*nmax/size + nmax/2
-    zg = z*nmax/size + nmax/2
+    xg = x * nmax / size + nmax / 2
+    yg = y * nmax / size + nmax / 2
+    zg = z * nmax / size + nmax / 2
 
     # avoid numerical error
     xg = round(xg * 2 ** (level - 1)) / 2 ** (level - 1)
@@ -459,21 +462,21 @@ def uniform_grid(field, up_to_level, npatch, patchnx, patchny, patchnz, patchrx,
                 uniform[i, j, k] += field[0][I, J, K]
 
     levels = create_vector_levels(npatch)
-    relevantpatches = npatch[0:up_to_level+1].sum()
+    relevantpatches = npatch[0:up_to_level + 1].sum()
 
-    for ipatch in range(1, relevantpatches+1):
+    for ipatch in range(1, relevantpatches + 1):
         if verbose:
             print('Covering patch {}'.format(ipatch))
         reduction = 2 ** (up_to_level - levels[ipatch])
         shift = np.array(patch_left_edge_natural(patchrx[ipatch], patchry[ipatch], patchrz[ipatch],
-                                        levels[ipatch], size, nmax))* 2 ** up_to_level
-        for i in range(patchnx[ipatch]*reduction):
-            for j in range(patchny[ipatch]*reduction):
-                for k in range(patchnz[ipatch]*reduction):
-                    I = int(i/reduction)
-                    J = int(j/reduction)
-                    K = int(k/reduction)
-                    uniform[int(shift[0])+i, int(shift[1])+j, int(shift[2]) +k] += field[ipatch][I, J, K]
+                                                 levels[ipatch], size, nmax)) * 2 ** up_to_level
+        for i in range(patchnx[ipatch] * reduction):
+            for j in range(patchny[ipatch] * reduction):
+                for k in range(patchnz[ipatch] * reduction):
+                    I = int(i / reduction)
+                    J = int(j / reduction)
+                    K = int(k / reduction)
+                    uniform[int(shift[0]) + i, int(shift[1]) + j, int(shift[2]) + k] += field[ipatch][I, J, K]
 
     return uniform
 
@@ -506,7 +509,7 @@ def mass_inside(R, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, p
     """
     mass = 0
     levels = create_vector_levels(npatch)
-    cell_volume = (size/nmax/2**levels)**3
+    cell_volume = (size / nmax / 2 ** levels) ** 3
 
     if verbose:
         print("Finding relevant patches...")
@@ -556,24 +559,24 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
     """
     # getting the bins
     try:
-        assert(rmax > rmin)
+        assert (rmax > rmin)
     except AssertionError:
         print('You would like to input rmax > rmin...')
         return
 
     if logbins:
         try:
-            assert(rmin > 0)
+            assert (rmin > 0)
         except AssertionError:
             print('Cannot use rmin=0 with logarithmic binning...')
             return
-        bin_bounds = np.logspace(np.log10(rmin), np.log10(rmax), nbins+1)
+        bin_bounds = np.logspace(np.log10(rmin), np.log10(rmax), nbins + 1)
 
     else:
-        bin_bounds = np.linspace(rmin, rmax, nbins+1)
+        bin_bounds = np.linspace(rmin, rmax, nbins + 1)
 
     bin_centers = (bin_bounds[1:] + bin_bounds[:-1]) / 2
-    #profile = np.zeros(bin_centers.shape)
+    # profile = np.zeros(bin_centers.shape)
     profile = []
 
     # finding the volume-weighted mean
@@ -581,9 +584,9 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
     cell_volume = (size / nmax / 2 ** levels) ** 3
     which_patches = which_patches_inside_sphere(rmax, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx,
                                                 patchry, patchrz, npatch, size, nmax)
-    field_vw = [field[ipatch]*cell_volume[ipatch] for ipatch in range(len(field))]
+    field_vw = [field[ipatch] * cell_volume[ipatch] for ipatch in range(len(field))]
 
-    if rmin>0:
+    if rmin > 0:
         cells_outer = mask_sphere_parallel(rmin, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry,
                                            patchrz, npatch, size, nmax, which_patches, verbose, ncores)
     else:
@@ -597,7 +600,7 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
                                            patchrz, npatch, size, nmax, which_patches, False, ncores)
         shell_mask = [cells_inner[ipatch] ^ cells_outer[ipatch] for ipatch in range(len(field))]
         sum_field_vw = sum([(field_vw[ipatch] * shell_mask[ipatch]).sum() for ipatch in range(len(field))])
-        sum_vw = sum([(shell_mask[ipatch]*cell_volume[ipatch]).sum() for ipatch in range(len(field))])
+        sum_vw = sum([(shell_mask[ipatch] * cell_volume[ipatch]).sum() for ipatch in range(len(field))])
         profile.append(sum_field_vw / sum_vw)
 
     return bin_centers, np.asarray(profile)
@@ -633,24 +636,24 @@ def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins
     """
     # getting the bins
     try:
-        assert(rmax > rmin)
+        assert (rmax > rmin)
     except AssertionError:
         print('You would like to input rmax > rmin...')
         return
 
     if logbins:
         try:
-            assert(rmin > 0)
+            assert (rmin > 0)
         except AssertionError:
             print('Cannot use rmin=0 with logarithmic binning...')
             return
-        bin_bounds = np.logspace(np.log10(rmin), np.log10(rmax), nbins+1)
+        bin_bounds = np.logspace(np.log10(rmin), np.log10(rmax), nbins + 1)
 
     else:
-        bin_bounds = np.linspace(rmin, rmax, nbins+1)
+        bin_bounds = np.linspace(rmin, rmax, nbins + 1)
 
     bin_centers = (bin_bounds[1:] + bin_bounds[:-1]) / 2
-    #profile = np.zeros(bin_centers.shape)
+    # profile = np.zeros(bin_centers.shape)
     profiles = []
 
     # finding the volume-weighted mean
@@ -659,9 +662,9 @@ def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins
     which_patches = which_patches_inside_sphere(rmax, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx,
                                                 patchry, patchrz, npatch, size, nmax)
 
-    fields_vw = [[field[ipatch]*cell_volume[ipatch] for ipatch in range(len(field))] for field in fields]
+    fields_vw = [[field[ipatch] * cell_volume[ipatch] for ipatch in range(len(field))] for field in fields]
 
-    if rmin>0:
+    if rmin > 0:
         cells_outer = mask_sphere_parallel(rmin, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry,
                                            patchrz, npatch, size, nmax, which_patches, False, ncores)
     else:
@@ -745,7 +748,7 @@ def which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, pat
     """
     levels = create_vector_levels(npatch)
     which_ipatch = [0]
-    for ipatch in range(1,len(patchnx)):
+    for ipatch in range(1, len(patchnx)):
         if patch_is_inside_box(box_limits, levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnz[ipatch],
                                patchrx[ipatch], patchry[ipatch], patchrz[ipatch], size, nmax):
             which_ipatch.append(ipatch)
@@ -776,7 +779,7 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
         Uniform grid as described
 
     """
-    uniform_cellsize = size/nmax/2**up_to_level
+    uniform_cellsize = size / nmax / 2 ** up_to_level
 
     bxmin = box_limits[0]
     bxmax = box_limits[1]
@@ -786,19 +789,19 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
     bzmax = box_limits[5]
 
     # BASE GRID
-    uniform_size_x = int(round(nmax * (bxmax - bxmin)/ size * 2 ** up_to_level))
+    uniform_size_x = int(round(nmax * (bxmax - bxmin) / size * 2 ** up_to_level))
     uniform_size_y = int(round(nmax * (bymax - bymin) / size * 2 ** up_to_level))
     uniform_size_z = int(round(nmax * (bzmax - bzmin) / size * 2 ** up_to_level))
     uniform = np.zeros((uniform_size_x, uniform_size_y, uniform_size_z))
 
     reduction = 2 ** up_to_level
 
-    starting_x = (bxmin + size/2) * nmax / size
-    #ending_x = (bxmax + size/2) * nmax / size
+    starting_x = (bxmin + size / 2) * nmax / size
+    # ending_x = (bxmax + size/2) * nmax / size
     starting_y = (bymin + size / 2) * nmax / size
-    #ending_y = (bymax + size / 2) * nmax / size
+    # ending_y = (bymax + size / 2) * nmax / size
     starting_z = (bzmin + size / 2) * nmax / size
-    #ending_z = (bzmax + size / 2) * nmax / size
+    # ending_z = (bzmax + size / 2) * nmax / size
 
     for i in range(uniform_size_x):
         for j in range(uniform_size_y):
@@ -811,18 +814,18 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
     # REFINEMENT LEVELS
 
     levels = create_vector_levels(npatch)
-    #up_to_level_patches = npatch[0:up_to_level + 1].sum()
+    # up_to_level_patches = npatch[0:up_to_level + 1].sum()
     relevantpatches = which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
-                                               size, nmax)[1:] # we ignore the 0-th relevant patch (patch 0, base
+                                               size, nmax)[1:]  # we ignore the 0-th relevant patch (patch 0, base
     # level). By construction, the 0th element is always the l=0 patch.
-    relevantpatches = [i for i in relevantpatches if i <= npatch[0:up_to_level+1].sum()]
+    relevantpatches = [i for i in relevantpatches if i <= npatch[0:up_to_level + 1].sum()]
 
     for ipatch in relevantpatches:
         if verbose:
             print('Covering patch {}'.format(ipatch))
 
         reduction = 2 ** (up_to_level - levels[ipatch])
-        ipatch_cellsize = uniform_cellsize*reduction
+        ipatch_cellsize = uniform_cellsize * reduction
 
         vertices = patch_vertices(levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnz[ipatch], patchrx[ipatch],
                                   patchry[ipatch], patchrz[ipatch], size, nmax)
@@ -836,68 +839,70 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
         # fix left corners
         if pxmin <= bxmin:
             imin = 0
-            Imin = (bxmin-pxmin)/ipatch_cellsize
+            Imin = (bxmin - pxmin) / ipatch_cellsize
         else:
-            imin = int(round((pxmin - bxmin)/uniform_cellsize))
+            imin = int(round((pxmin - bxmin) / uniform_cellsize))
             Imin = 0
 
         if pymin <= bymin:
             jmin = 0
-            Jmin = (bymin-pymin)/ipatch_cellsize
+            Jmin = (bymin - pymin) / ipatch_cellsize
         else:
-            jmin = int(round((pymin - bymin)/uniform_cellsize))
+            jmin = int(round((pymin - bymin) / uniform_cellsize))
             Jmin = 0
 
         if pzmin <= bzmin:
             kmin = 0
-            Kmin = (bzmin-pzmin)/ipatch_cellsize
+            Kmin = (bzmin - pzmin) / ipatch_cellsize
         else:
-            kmin = int(round((pzmin - bzmin)/uniform_cellsize))
+            kmin = int(round((pzmin - bzmin) / uniform_cellsize))
             Kmin = 0
 
         # fix right corners
         if bxmax <= pxmax:
             imax = uniform_size_x
         else:
-            #imax = int(round(patchnx[ipatch]*reduction))
-            Imax = patchnx[ipatch]-1
-            imax = int(round(imin + (Imax - Imin + 1)*reduction))
+            # imax = int(round(patchnx[ipatch]*reduction))
+            Imax = patchnx[ipatch] - 1
+            imax = int(round(imin + (Imax - Imin + 1) * reduction))
 
         if bymax <= pymax:
             jmax = uniform_size_y
         else:
-            #jmax = int(round(patchny[ipatch]*reduction))
+            # jmax = int(round(patchny[ipatch]*reduction))
             Jmax = patchny[ipatch] - 1
             jmax = int(round(jmin + (Jmax - Jmin + 1) * reduction))
 
         if bzmax <= pzmax:
             kmax = uniform_size_z
         else:
-            #kmax = int(round(patchnz[ipatch]*reduction))
+            # kmax = int(round(patchnz[ipatch]*reduction))
             Kmax = patchnz[ipatch] - 1
             kmax = int(round(kmin + (Kmax - Kmin + 1) * reduction))
 
         for i in range(imin, imax):
             for j in range(jmin, jmax):
                 for k in range(kmin, kmax):
-                    I = int(Imin + (i-imin)/reduction)
-                    J = int(Jmin + (j-jmin)/reduction)
-                    K = int(Kmin + (k-kmin)/reduction)
+                    I = int(Imin + (i - imin) / reduction)
+                    J = int(Jmin + (j - jmin) / reduction)
+                    K = int(Kmin + (k - kmin) / reduction)
                     uniform[i, j, k] += field[ipatch][I, J, K]
 
     return uniform
 
 
-def find_rDelta_eqn(r, Delta, background_density, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx, patchry,
+def find_rDelta_eqn(r, Delta, background_density, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx,
+                    patchry,
                     patchrz, npatch, size, nmax, verbose, ncores):
     if verbose:
         print('Evaluating at r={:.3f}'.format(r))
     m = mass_inside(r, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
                     size, nmax, verbose=False, ncores=ncores)
-    return m - (4*np.pi/3) * r**3 * background_density * Delta
+    return m - (4 * np.pi / 3) * r ** 3 * background_density * Delta
 
 
-def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
+def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx, patchry, patchrz,
+                npatch,
                 size, nmax, h, omega_m, rmin=0.1, rmax=6, rtol=1e-3, verbose=False, ncores=1):
     """
     Finds the value (in Mpc) of r_\Delta, the radius enclosing a mean overdensity (of the DM field, by default) equal
@@ -935,4 +940,62 @@ def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, patchnx, patchny, 
     if verbose:
         print('Converged!')
     return rDelta
+
+
+def compute_position_field_onepatch(args):
+    """
+    Returns a 3 matrices with the dimensions of the patch, containing the position for every cell centre
+
+    Args: tuple containing, in this order:
+        nx, ny, nz: extension of the patch (in cells at level n)
+        rx, ry, rz: comoving coordinates of the center of the leftmost cell of the patch
+        level: refinement level of the given patch
+        size: comoving box side (preferred length units)
+        nmax: cells at base level
+
+    Returns:
+        Matrices as defined
+    """
+    nx, ny, nz, rx, ry, rz, level, size, nmax = args
+    cellsize = size / nmax / 2 ** level
+    first_x = rx - cellsize / 2
+    first_y = ry - cellsize / 2
+    first_z = rz - cellsize / 2
+    patch_x = np.zeros((nx, ny, nz))
+    patch_y = np.zeros((nx, ny, nz))
+    patch_z = np.zeros((nx, ny, nz))
+    for i in range(nx):
+        for j in range(ny):
+            for k in range(nz):
+                patch_x[i, j, k] = first_x + i * cellsize
+                patch_y[i, j, k] = first_y + j * cellsize
+                patch_z[i, j, k] = first_z + k * cellsize
+    return patch_x, patch_y, patch_z
+
+
+def compute_position_fields(patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size, nmax, ncores=1):
+    """
+    Returns 3 fields (as usually defined) containing the x, y and z position for each of our cells centres.
+    Args:
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+        (and Y and Z)
+        npatch: number of patches in each level, starting in l=0
+        size: comoving size of the simulation box
+        nmax: cells at base level
+        ncores:
+
+    Returns:
+        3 fields as described above
+    """
+    levels = create_vector_levels(npatch)
+    with Pool(ncores) as p:
+        positions = p.map(compute_position_field_onepatch, [(patchnx[ipatch], patchny[ipatch], patchnz[ipatch], patchrx[ipatch], patchry[ipatch],
+                                   patchrz[ipatch], levels[ipatch], size, nmax) for ipatch in range(len(patchnx))])
+
+    cellsrx = [p[0] for p in positions]
+    cellsry = [p[1] for p in positions]
+    cellsrz = [p[2] for p in positions]
+
+    return cellsrx, cellsry, cellsrz
 
