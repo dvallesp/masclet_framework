@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 3/4/20 10:18
+#  Last update on 3/4/20 14:13
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -195,6 +195,9 @@ def mass_inside(R, clusrx, clusry, clusrz, density, cellsrx, cellsry, cellsrz, n
     levels = tools.create_vector_levels(npatch)
     cells_volume = (size / nmax / 2 ** levels) ** 3
 
+    if np.isnan(R):
+        R = 0
+
     mask = mask_sphere(R, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz)
 
     cellmasses = [d * m * cv for d, m, cv in zip(density, mask, cells_volume)]
@@ -210,7 +213,7 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
     (clusrx, clusry, clusrz).
 
     Args:
-        field: variables (already cleaned) whose profile wants to be got
+        field: variable (already cleaned) whose profile wants to be got
         clusrx, clusry, clusrz: comoving coordinates of the center for the profile
         rmin: starting radius of the profile
         rmax: final radius of the profile
@@ -222,7 +225,6 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
         size: comoving size of the simulation box
         nmax: cells at base level
         verbose: if True, prints the patch being opened at a time
-        ncores: number of cores to perform the paralellization.
 
     Returns:
         Two lists. One of them contains the center of each radial cell. The other contains the value of the field
@@ -277,6 +279,84 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
     return bin_centers, np.asarray(profile)
 
 
+def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins, cellsrx, cellsry,
+                               cellsrz, npatch, size, nmax, verbose=False):
+    """
+    Computes a (volume-weighted) radial profile of the quantity given in the "field" argument, taking center in
+    (clusrx, clusry, clusrz).
+
+    Args:
+        fields: set of fields (already cleaned) whose profile wants to be got
+        clusrx, clusry, clusrz: comoving coordinates of the center for the profile
+        rmin: starting radius of the profile
+        rmax: final radius of the profile
+        nbins: number of points for the profile
+        logbins: if False, radial shells are spaced linearly. If True, they're spaced logarithmically. Not that, if
+                 logbins = True, rmin cannot be 0.
+        cellsrx, cellsry, cellsrz: position fields
+        npatch: number of patches in each level, starting in l=0
+        size: comoving size of the simulation box
+        nmax: cells at base level
+        verbose: if True, prints the patch being opened at a time
+
+    Returns:
+        Two lists. One of them contains the center of each radial cell. The other contains the value of the field
+        averaged across all the cells of the shell.
+
+    """
+    # getting the bins
+    try:
+        assert (rmax > rmin)
+    except AssertionError:
+        print('You would like to input rmax > rmin...')
+        return
+
+    if logbins:
+        try:
+            assert (rmin > 0)
+        except AssertionError:
+            print('Cannot use rmin=0 with logarithmic binning...')
+            return
+        bin_bounds = np.logspace(np.log10(rmin), np.log10(rmax), nbins + 1)
+
+    else:
+        bin_bounds = np.linspace(rmin, rmax, nbins + 1)
+
+    bin_centers = (bin_bounds[1:] + bin_bounds[:-1]) / 2
+    # profile = np.zeros(bin_centers.shape)
+    profile = []
+
+    # finding the volume-weighted mean
+    levels = tools.create_vector_levels(npatch)
+    cell_volume = (size / nmax / 2 ** levels) ** 3
+
+    fields_vw = [[f * cv for f, cv in zip(field, cell_volume)] for field in fields]
+
+    if rmin > 0:
+        cells_outer = mask_sphere(rmin, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz)
+    else:
+        cells_outer = [np.zeros(patch.shape, dtype='bool') for patch in fields[0]]
+
+    profiles = []
+    for r_out in bin_bounds[1:]:
+        if verbose:
+            print('Working at outer radius {} Mpc'.format(r_out))
+        cells_inner = cells_outer
+        cells_outer = mask_sphere(r_out, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz)
+        shell_mask = [inner ^ outer for inner, outer in zip(cells_inner, cells_outer)]
+        sum_vw = sum([(sm * cv).sum() for sm, cv in zip(shell_mask, cell_volume)])
+
+        profile_thisr = [(sum([(fvw * sm).sum() for fvw, sm in zip(field_vw, shell_mask)]) / sum_vw) for field_vw in
+                         fields_vw]
+
+        profiles.append(profile_thisr)
+
+    profiles = np.asarray(profiles)
+    profiles_split = tuple([profiles[:, i] for i in range(profiles.shape[1])])
+
+    return bin_centers, profiles_split
+
+
 def find_rDelta_eqn(r, Delta, background_density, clusrx, clusry, clusrz, density, cellsrx, cellsry, cellsrz, npatch,
                     size, nmax, verbose):
     if verbose:
@@ -286,7 +366,7 @@ def find_rDelta_eqn(r, Delta, background_density, clusrx, clusry, clusrz, densit
 
 
 def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, cellsrx, cellsry, cellsrz,
-                npatch, size, nmax, h, omega_m, rmin=0.1, rmax=6, rtol=1e-3, verbose=False, ncores=1):
+                npatch, size, nmax, h, omega_m, rmin=0.1, rmax=6, rtol=1e-3, verbose=False):
     """
     Finds the value (in Mpc) of r_\Delta, the radius enclosing a mean overdensity (of the DM field, by default) equal
     to Delta times the background density of the universe. By default, it uses the Brent method.
@@ -304,7 +384,6 @@ def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, cellsrx, cellsry, 
         omega_m: matter density parameter
         rmin, rmax: starting two points (M(r) - Delta rho_B 4pi/3 r^3) must change sign
         verbose: if True, prints the patch being opened at a time
-        ncores: number of cores to perform the paralellization.
 
     Returns:
         The value of r_\Delta
