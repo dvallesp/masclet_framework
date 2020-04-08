@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 2/4/20 23:24
+#  Last update on 8/4/20 9:57
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -367,7 +367,10 @@ def clean_field(field, cr0amr, solapst, npatch, up_to_level=1000):
     up_to_level = min(up_to_level, levels.max())
 
     cleanfield = []
-    cleanfield.append(field[0] * cr0amr[0])  # not overlap in l=0
+    if up_to_level == 0:
+        cleanfield.append(field[0])
+    else:
+        cleanfield.append(field[0] * cr0amr[0])  # not overlap in l=0
 
     for level in range(1, up_to_level):
         for ipatch in range(sum(npatch[0:level]) + 1, sum(npatch[0:level + 1]) + 1):
