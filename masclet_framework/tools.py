@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 8/4/20 16:05
+#  Last update on 8/4/20 19:08
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -951,7 +951,7 @@ def uniform_grid_zoom_several(fields, box_limits, up_to_level, npatch, patchnx, 
                 J = int(starting_y + j / reduction)
                 K = int(starting_z + k / reduction)
                 for ifield in range(numfields):
-                    uniforms[ifield][i, j, k] += fields[ifield][0][I, J, K]
+                    uniforms[ifield][i, j, k] = fields[ifield][0][I, J, K]
 
     # REFINEMENT LEVELS
 
