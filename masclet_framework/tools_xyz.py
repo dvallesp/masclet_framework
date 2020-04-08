@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 3/4/20 14:13
+#  Last update on 8/4/20 13:19
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -400,3 +400,241 @@ def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, cellsrx, cellsry, 
     if verbose:
         print('Converged!')
     return rDelta
+
+
+def uniform_grid_zoom(field, box_limits, up_to_level, npatch, cr0amr, solapst, cellsrx, cellsry, cellsrz, patchnx,
+                      patchny, patchnz, patchrx, patchry, patchrz, size, nmax, verbose=False):
+    """
+    Builds a uniform grid, zooming on a box specified by box_limits, at level up_to_level, containing the most refined
+    data at each region.
+
+    Args:
+        field: the ¡uncleaned! field which wants to be represented
+        box_limits: a tuple in the form (xmin, xmax, ymin, ymax, zmin, zmax). Limits should correspond to l=0 cell
+                    boundaries
+        up_to_level: level up to which the fine grid wants to be obtained
+        npatch: number of patches in each level, starting in l=0
+        cr0amr: field containing the refinements of the grid (1: not refined; 0: refined)
+        solapst: field containing the overlaps (1: keep; 0: not keep)
+        cellsrx, cellsry, cellsrz: position fields
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+        (and Y and Z)
+        size: comoving size of the simulation box
+        nmax: cells at base level
+        verbose: if True, prints the patch being opened at a time
+
+    Returns:
+        Uniform grid as described
+    """
+    # clean the field up to the requiered vertex
+    field_clean = tools.clean_field(field, cr0amr, solapst, npatch, up_to_level=up_to_level)
+
+    # geometry
+    bxmin = box_limits[0]
+    bxmax = box_limits[1]
+    bymin = box_limits[2]
+    bymax = box_limits[3]
+    bzmin = box_limits[4]
+    bzmax = box_limits[5]
+
+    uniform_nx = int(round(nmax * (bxmax - bxmin) / size * 2 ** up_to_level))
+    uniform_ny = int(round(nmax * (bymax - bymin) / size * 2 ** up_to_level))
+    uniform_nz = int(round(nmax * (bzmax - bzmin) / size * 2 ** up_to_level))
+    uniform = np.zeros((uniform_nx, uniform_ny, uniform_nz))
+
+    uniform_cellsize = size / nmax / 2 ** up_to_level
+
+    # uniform_verticesrx = np.zeros((uniform_nx, uniform_ny, uniform_nz))
+    # uniform_verticesry = np.zeros((uniform_nx, uniform_ny, uniform_nz))
+    # uniform_verticesrz = np.zeros((uniform_nx, uniform_ny, uniform_nz))
+    uniform_cellsrx = np.zeros(uniform_nx + 1)
+    uniform_cellsry = np.zeros(uniform_ny + 1)
+    uniform_cellsrz = np.zeros(uniform_nz + 1)
+    uniform_verticesrx = np.zeros(uniform_nx + 1)
+    uniform_verticesry = np.zeros(uniform_ny + 1)
+    uniform_verticesrz = np.zeros(uniform_nz + 1)
+
+    for i in range(uniform_nx + 1):
+        uniform_verticesrx[i] = bxmin + i * uniform_cellsize
+        uniform_cellsrx[i] = bxmin + (i + 0.5) * uniform_cellsize
+    for j in range(uniform_ny + 1):
+        uniform_verticesry[j] = bymin + j * uniform_cellsize
+        uniform_cellsry[j] = bymin + (j + 0.5) * uniform_cellsize
+    for k in range(uniform_nz + 1):
+        uniform_verticesrz[k] = bzmin + k * uniform_cellsize
+        uniform_cellsrz[k] = bzmin + (k + 0.5) * uniform_cellsize
+
+    levels = tools.create_vector_levels(npatch)
+    # up_to_level_patches = npatch[0:up_to_level + 1].sum()
+    # relevantpatches = tools.which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, patchry, patchrz,
+    #                                                 npatch, size, nmax)
+    # relevantpatches = [i for i in relevantpatches if i <= npatch[0:up_to_level + 1].sum()]
+    max_relevantpatches = npatch[0:up_to_level + 1].sum()
+
+    # we can simplify things if we only keep cellsrx, cellsry, cellsrz as 1D arrays
+    cells_verticesrx = [
+        np.append(cellrx[:, 0, 0] - size / nmax / 2 ** (l + 1), cellrx[-1, 0, 0] + size / nmax / 2 ** (l + 1)) for
+        cellrx, l in zip(cellsrx, levels)]
+    cells_verticesry = [
+        np.append(cellry[0, :, 0] - size / nmax / 2 ** (l + 1), cellry[0, -1, 0] + size / nmax / 2 ** (l + 1)) for
+        cellry, l in zip(cellsry, levels)]
+    cells_verticesrz = [
+        np.append(cellrz[0, 0, :] - size / nmax / 2 ** (l + 1), cellrz[0, 0, -1] + size / nmax / 2 ** (l + 1)) for
+        cellrz, l in zip(cellsrz, levels)]
+
+    for i in range(uniform_nx):
+        slice_limits = [uniform_verticesrx[i], uniform_verticesrx[i + 1], bymin, bymax, bzmin, bzmax]
+        relevantpatches = tools.which_patches_inside_box(slice_limits, patchnx, patchny, patchnz, patchrx, patchry,
+                                                         patchrz, npatch, size, nmax)
+        relevantpatches = [i for i in relevantpatches if i <= max_relevantpatches]
+        if verbose:
+            print('Slice {} of {}. {} patches to use.'.format(i, uniform_nx, len(relevantpatches)))
+        for j in range(uniform_ny):
+            for k in range(uniform_nz):
+                for ipatch in relevantpatches:
+                    cell_this_x = (cells_verticesrx[ipatch][0:-1] < uniform_cellsrx[i]) * (
+                            uniform_cellsrx[i] < cells_verticesrx[ipatch][1:])
+                    cell_this_y = (cells_verticesry[ipatch][0:-1] < uniform_cellsry[j]) * (
+                            uniform_cellsry[j] < cells_verticesry[ipatch][1:])
+                    cell_this_z = (cells_verticesrz[ipatch][0:-1] < uniform_cellsrz[k]) * (
+                            uniform_cellsrz[k] < cells_verticesrz[ipatch][1:])
+                    cell_this_x = cell_this_x.nonzero()[0]
+                    cell_this_y = cell_this_y.nonzero()[0]
+                    cell_this_z = cell_this_z.nonzero()[0]
+                    if len(cell_this_x) * len(cell_this_y) * len(cell_this_z) > 0:
+                        uniform[i, j, k] += field_clean[ipatch][cell_this_x[0], cell_this_y[0], cell_this_z[0]]
+    # repensar esto. es muy lento.
+
+    # Esto es MUY FÁCIL DE PARALELIZAR: SLICE A SLICE DEL BUCLE EN I!!!!!! (si va lento)
+    return uniform
+
+
+def uniform_grid_zoom_slice(args):
+    i, field_clean, uniform_verticesrx, uniform_verticesry, uniform_verticesrz, bymin, bymax, bzmin, bzmax, \
+    patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size, nmax, max_relevantpatches, uniform_nx, \
+    uniform_ny, uniform_nz, cells_verticesrx, cells_verticesry, cells_verticesrz, uniform_cellsrx, \
+    uniform_cellsry, uniform_cellsrz, verbose = args
+
+    slice_limits = [uniform_verticesrx[i], uniform_verticesrx[i + 1], bymin, bymax, bzmin, bzmax]
+    relevantpatches = tools.which_patches_inside_box(slice_limits, patchnx, patchny, patchnz, patchrx, patchry,
+                                                     patchrz, npatch, size, nmax)
+    relevantpatches = [ipatch for ipatch in relevantpatches if ipatch <= max_relevantpatches]
+
+    uniform_slice = np.zeros((uniform_ny, uniform_nz))
+
+    if verbose:
+        print('Slice {} of {}. {} patches to use.'.format(i, uniform_nx, len(relevantpatches)))
+    for j in range(uniform_ny):
+        for k in range(uniform_nz):
+            for ipatch in relevantpatches:
+                cell_this_x = (cells_verticesrx[ipatch][0:-1] < uniform_cellsrx[i]) * (
+                        uniform_cellsrx[i] < cells_verticesrx[ipatch][1:])
+                cell_this_y = (cells_verticesry[ipatch][0:-1] < uniform_cellsry[j]) * (
+                        uniform_cellsry[j] < cells_verticesry[ipatch][1:])
+                cell_this_z = (cells_verticesrz[ipatch][0:-1] < uniform_cellsrz[k]) * (
+                        uniform_cellsrz[k] < cells_verticesrz[ipatch][1:])
+                cell_this_x = cell_this_x.nonzero()[0]
+                cell_this_y = cell_this_y.nonzero()[0]
+                cell_this_z = cell_this_z.nonzero()[0]
+                if len(cell_this_x) * len(cell_this_y) * len(cell_this_z) > 0:
+                    uniform_slice[j, k] += field_clean[ipatch][cell_this_x[0], cell_this_y[0], cell_this_z[0]]
+
+    return uniform_slice
+
+
+def uniform_grid_zoom_parallel(field, box_limits, up_to_level, npatch, cr0amr, solapst, cellsrx, cellsry, cellsrz,
+                               patchnx, patchny, patchnz, patchrx, patchry, patchrz, size, nmax, ncores=1,
+                               verbose=False):
+    """
+    Builds a uniform grid, zooming on a box specified by box_limits, at level up_to_level, containing the most refined
+    data at each region.
+
+    Parallel version
+
+    Args:
+        field: the ¡uncleaned! field which wants to be represented
+        box_limits: a tuple in the form (xmin, xmax, ymin, ymax, zmin, zmax). Limits should correspond to l=0 cell
+                    boundaries
+        up_to_level: level up to which the fine grid wants to be obtained
+        npatch: number of patches in each level, starting in l=0
+        cr0amr: field containing the refinements of the grid (1: not refined; 0: refined)
+        solapst: field containing the overlaps (1: keep; 0: not keep)
+        cellsrx, cellsry, cellsrz: position fields
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+        (and Y and Z)
+        size: comoving size of the simulation box
+        nmax: cells at base level
+        ncores: number of cores for the parallelization
+        verbose: if True, prints the patch being opened at a time
+
+    Returns:
+        Uniform grid as described
+    """
+    # clean the field up to the requiered vertex
+    field_clean = tools.clean_field(field, cr0amr, solapst, npatch, up_to_level=up_to_level)
+
+    # geometry
+    bxmin = box_limits[0]
+    bxmax = box_limits[1]
+    bymin = box_limits[2]
+    bymax = box_limits[3]
+    bzmin = box_limits[4]
+    bzmax = box_limits[5]
+
+    uniform_nx = int(round(nmax * (bxmax - bxmin) / size * 2 ** up_to_level))
+    uniform_ny = int(round(nmax * (bymax - bymin) / size * 2 ** up_to_level))
+    uniform_nz = int(round(nmax * (bzmax - bzmin) / size * 2 ** up_to_level))
+    uniform = np.zeros((uniform_nx, uniform_ny, uniform_nz))
+
+    uniform_cellsize = size / nmax / 2 ** up_to_level
+
+    # uniform_verticesrx = np.zeros((uniform_nx, uniform_ny, uniform_nz))
+    # uniform_verticesry = np.zeros((uniform_nx, uniform_ny, uniform_nz))
+    # uniform_verticesrz = np.zeros((uniform_nx, uniform_ny, uniform_nz))
+    uniform_cellsrx = np.zeros(uniform_nx + 1)
+    uniform_cellsry = np.zeros(uniform_ny + 1)
+    uniform_cellsrz = np.zeros(uniform_nz + 1)
+    uniform_verticesrx = np.zeros(uniform_nx + 1)
+    uniform_verticesry = np.zeros(uniform_ny + 1)
+    uniform_verticesrz = np.zeros(uniform_nz + 1)
+
+    for i in range(uniform_nx + 1):
+        uniform_verticesrx[i] = bxmin + i * uniform_cellsize
+        uniform_cellsrx[i] = bxmin + (i + 0.5) * uniform_cellsize
+    for j in range(uniform_ny + 1):
+        uniform_verticesry[j] = bymin + j * uniform_cellsize
+        uniform_cellsry[j] = bymin + (j + 0.5) * uniform_cellsize
+    for k in range(uniform_nz + 1):
+        uniform_verticesrz[k] = bzmin + k * uniform_cellsize
+        uniform_cellsrz[k] = bzmin + (k + 0.5) * uniform_cellsize
+
+    levels = tools.create_vector_levels(npatch)
+    # up_to_level_patches = npatch[0:up_to_level + 1].sum()
+    # relevantpatches = tools.which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, patchry, patchrz,
+    #                                                 npatch, size, nmax)
+    # relevantpatches = [i for i in relevantpatches if i <= npatch[0:up_to_level + 1].sum()]
+    max_relevantpatches = npatch[0:up_to_level + 1].sum()
+
+    # we can simplify things if we only keep cellsrx, cellsry, cellsrz as 1D arrays
+    cells_verticesrx = [
+        np.append(cellrx[:, 0, 0] - size / nmax / 2 ** (l + 1), cellrx[-1, 0, 0] + size / nmax / 2 ** (l + 1)) for
+        cellrx, l in zip(cellsrx, levels)]
+    cells_verticesry = [
+        np.append(cellry[0, :, 0] - size / nmax / 2 ** (l + 1), cellry[0, -1, 0] + size / nmax / 2 ** (l + 1)) for
+        cellry, l in zip(cellsry, levels)]
+    cells_verticesrz = [
+        np.append(cellrz[0, 0, :] - size / nmax / 2 ** (l + 1), cellrz[0, 0, -1] + size / nmax / 2 ** (l + 1)) for
+        cellrz, l in zip(cellsrz, levels)]
+
+    with Pool(ncores) as p:
+        uniform_slices = p.map(uniform_grid_zoom_slice, [(i, field_clean, uniform_verticesrx, uniform_verticesry,
+                                                          uniform_verticesrz, bymin, bymax, bzmin, bzmax, patchnx,
+                                                          patchny, patchnz, patchrx, patchry, patchrz, npatch, size,
+                                                          nmax, max_relevantpatches, uniform_nx, uniform_ny, uniform_nz,
+                                                          cells_verticesrx, cells_verticesry, cells_verticesrz,
+                                                          uniform_cellsrx, uniform_cellsry,
+                                                          uniform_cellsrz, verbose) for i in range(uniform_nx)])
+
+    return np.moveaxis(np.dstack(uniform_slices), [0, 1, 2], [1, 2, 0])

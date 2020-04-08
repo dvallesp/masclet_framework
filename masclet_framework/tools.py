@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 8/4/20 9:57
+#  Last update on 8/4/20 16:05
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -892,6 +892,146 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
                     uniform[i, j, k] += field[ipatch][I, J, K]
 
     return uniform
+
+
+def uniform_grid_zoom_several(fields, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry,
+                              patchrz, size, nmax, verbose=False):
+    """
+    Builds a uniform grid, zooming on a box specified by box_limits, at level up_to_level, containing the most refined
+    data at each region.
+
+    Args:
+        fields: fields to be computed at the uniform grid. Must be already cleaned from refinements and overlaps (check
+        clean_field() function). To be passed as a list of fields.
+        box_limits: a tuple in the form (xmin, xmax, ymin, ymax, zmin, zmax). Limits should correspond to l=0 cell
+                    boundaries
+        up_to_level: level up to which the fine grid wants to be obtained
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+                                   (and Y and Z)
+        size: comoving side of the simulation box
+        nmax: cells at base level
+        verbose: if True, prints the patch being opened at a time
+
+    Returns:
+        Uniform grid as described
+
+    """
+    numfields = len(fields)
+
+    uniform_cellsize = size / nmax / 2 ** up_to_level
+
+    bxmin = box_limits[0]
+    bxmax = box_limits[1]
+    bymin = box_limits[2]
+    bymax = box_limits[3]
+    bzmin = box_limits[4]
+    bzmax = box_limits[5]
+
+    # BASE GRID
+    uniform_size_x = int(round(nmax * (bxmax - bxmin) / size * 2 ** up_to_level))
+    uniform_size_y = int(round(nmax * (bymax - bymin) / size * 2 ** up_to_level))
+    uniform_size_z = int(round(nmax * (bzmax - bzmin) / size * 2 ** up_to_level))
+    uniforms = [np.zeros((uniform_size_x, uniform_size_y, uniform_size_z)) for _ in range(numfields)]
+
+    reduction = 2 ** up_to_level
+
+    starting_x = (bxmin + size / 2) * nmax / size
+    # ending_x = (bxmax + size/2) * nmax / size
+    starting_y = (bymin + size / 2) * nmax / size
+    # ending_y = (bymax + size / 2) * nmax / size
+    starting_z = (bzmin + size / 2) * nmax / size
+    # ending_z = (bzmax + size / 2) * nmax / size
+
+    for i in range(uniform_size_x):
+        for j in range(uniform_size_y):
+            for k in range(uniform_size_z):
+                I = int(starting_x + i / reduction)
+                J = int(starting_y + j / reduction)
+                K = int(starting_z + k / reduction)
+                for ifield in range(numfields):
+                    uniforms[ifield][i, j, k] += fields[ifield][0][I, J, K]
+
+    # REFINEMENT LEVELS
+
+    levels = create_vector_levels(npatch)
+    # up_to_level_patches = npatch[0:up_to_level + 1].sum()
+    relevantpatches = which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
+                                               size, nmax)[1:]  # we ignore the 0-th relevant patch (patch 0, base
+    # level). By construction, the 0th element is always the l=0 patch.
+    relevantpatches = [i for i in relevantpatches if i <= npatch[0:up_to_level + 1].sum()]
+
+    for ipatch in relevantpatches:
+        if verbose:
+            print('Covering patch {}'.format(ipatch))
+
+        reduction = 2 ** (up_to_level - levels[ipatch])
+        ipatch_cellsize = uniform_cellsize * reduction
+
+        vertices = patch_vertices(levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnz[ipatch], patchrx[ipatch],
+                                  patchry[ipatch], patchrz[ipatch], size, nmax)
+        pxmin = vertices[0][0]
+        pymin = vertices[0][1]
+        pzmin = vertices[0][2]
+        pxmax = vertices[-1][0]
+        pymax = vertices[-1][1]
+        pzmax = vertices[-1][2]
+
+        # fix left corners
+        if pxmin <= bxmin:
+            imin = 0
+            Imin = (bxmin - pxmin) / ipatch_cellsize
+        else:
+            imin = int(round((pxmin - bxmin) / uniform_cellsize))
+            Imin = 0
+
+        if pymin <= bymin:
+            jmin = 0
+            Jmin = (bymin - pymin) / ipatch_cellsize
+        else:
+            jmin = int(round((pymin - bymin) / uniform_cellsize))
+            Jmin = 0
+
+        if pzmin <= bzmin:
+            kmin = 0
+            Kmin = (bzmin - pzmin) / ipatch_cellsize
+        else:
+            kmin = int(round((pzmin - bzmin) / uniform_cellsize))
+            Kmin = 0
+
+        # fix right corners
+        if bxmax <= pxmax:
+            imax = uniform_size_x
+        else:
+            # imax = int(round(patchnx[ipatch]*reduction))
+            Imax = patchnx[ipatch] - 1
+            imax = int(round(imin + (Imax - Imin + 1) * reduction))
+
+        if bymax <= pymax:
+            jmax = uniform_size_y
+        else:
+            # jmax = int(round(patchny[ipatch]*reduction))
+            Jmax = patchny[ipatch] - 1
+            jmax = int(round(jmin + (Jmax - Jmin + 1) * reduction))
+
+        if bzmax <= pzmax:
+            kmax = uniform_size_z
+        else:
+            # kmax = int(round(patchnz[ipatch]*reduction))
+            Kmax = patchnz[ipatch] - 1
+            kmax = int(round(kmin + (Kmax - Kmin + 1) * reduction))
+
+        for i in range(imin, imax):
+            for j in range(jmin, jmax):
+                for k in range(kmin, kmax):
+                    I = int(Imin + (i - imin) / reduction)
+                    J = int(Jmin + (j - jmin) / reduction)
+                    K = int(Kmin + (k - kmin) / reduction)
+                    for ifield in range(numfields):
+                        uniforms[ifield][i, j, k] += fields[ifield][ipatch][I, J, K]
+
+    return tuple(uniforms)
 
 
 def find_rDelta_eqn(r, Delta, background_density, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, patchrx,
