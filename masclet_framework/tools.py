@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 9/4/20 10:02
+#  Last update on 9/4/20 15:37
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -1029,7 +1029,7 @@ def uniform_grid_zoom_several(fields, box_limits, up_to_level, npatch, patchnx, 
                     J = int(Jmin + (j - jmin) / reduction)
                     K = int(Kmin + (k - kmin) / reduction)
                     for ifield in range(numfields):
-                        uniforms[ifield][i, j, k] = fields[ifield][ipatch][I, J, K]
+                        uniforms[ifield][i, j, k] += fields[ifield][ipatch][I, J, K]
 
     return tuple(uniforms)
 
