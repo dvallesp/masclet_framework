@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 9/4/20 15:37
+#  Last update on 15/4/20 13:50
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -829,6 +829,7 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
 
         reduction = 2 ** (up_to_level - levels[ipatch])
         ipatch_cellsize = uniform_cellsize * reduction
+        round_digits = max(int(np.log10(reduction))+1, 3) # avoids tiny numerical errors which generated void regions
 
         vertices = patch_vertices(levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnz[ipatch], patchrx[ipatch],
                                   patchry[ipatch], patchrz[ipatch], size, nmax)
@@ -842,21 +843,21 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
         # fix left corners
         if pxmin <= bxmin:
             imin = 0
-            Imin = (bxmin - pxmin) / ipatch_cellsize
+            Imin = round((bxmin - pxmin) / ipatch_cellsize, round_digits)
         else:
             imin = int(round((pxmin - bxmin) / uniform_cellsize))
             Imin = 0
 
         if pymin <= bymin:
             jmin = 0
-            Jmin = (bymin - pymin) / ipatch_cellsize
+            Jmin = round((bymin - pymin) / ipatch_cellsize, round_digits)
         else:
             jmin = int(round((pymin - bymin) / uniform_cellsize))
             Jmin = 0
 
         if pzmin <= bzmin:
             kmin = 0
-            Kmin = (bzmin - pzmin) / ipatch_cellsize
+            Kmin = round((bzmin - pzmin) / ipatch_cellsize, round_digits)
         else:
             kmin = int(round((pzmin - bzmin) / uniform_cellsize))
             Kmin = 0
@@ -886,6 +887,7 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
         for i in range(imin, imax):
             for j in range(jmin, jmax):
                 for k in range(kmin, kmax):
+                    # we round the 3rd decimal place to avoid
                     I = int(Imin + (i - imin) / reduction)
                     J = int(Jmin + (j - jmin) / reduction)
                     K = int(Kmin + (k - kmin) / reduction)
@@ -968,6 +970,7 @@ def uniform_grid_zoom_several(fields, box_limits, up_to_level, npatch, patchnx, 
 
         reduction = 2 ** (up_to_level - levels[ipatch])
         ipatch_cellsize = uniform_cellsize * reduction
+        round_digits = max(int(np.log10(reduction)) + 1, 3)  # avoids tiny numerical errors which generated void regions
 
         vertices = patch_vertices(levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnz[ipatch], patchrx[ipatch],
                                   patchry[ipatch], patchrz[ipatch], size, nmax)
@@ -981,21 +984,21 @@ def uniform_grid_zoom_several(fields, box_limits, up_to_level, npatch, patchnx, 
         # fix left corners
         if pxmin <= bxmin:
             imin = 0
-            Imin = (bxmin - pxmin) / ipatch_cellsize
+            Imin = round((bxmin - pxmin) / ipatch_cellsize, round_digits)
         else:
             imin = int(round((pxmin - bxmin) / uniform_cellsize))
             Imin = 0
 
         if pymin <= bymin:
             jmin = 0
-            Jmin = (bymin - pymin) / ipatch_cellsize
+            Jmin = round((bymin - pymin) / ipatch_cellsize, round_digits)
         else:
             jmin = int(round((pymin - bymin) / uniform_cellsize))
             Jmin = 0
 
         if pzmin <= bzmin:
             kmin = 0
-            Kmin = (bzmin - pzmin) / ipatch_cellsize
+            Kmin = round((bzmin - pzmin) / ipatch_cellsize, round_digits)
         else:
             kmin = int(round((pzmin - bzmin) / uniform_cellsize))
             Kmin = 0
