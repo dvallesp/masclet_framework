@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 8/4/20 13:19
+#  Last update on 19/4/20 17:17
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -408,6 +408,8 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, cr0amr, solapst, c
     Builds a uniform grid, zooming on a box specified by box_limits, at level up_to_level, containing the most refined
     data at each region.
 
+    DEPRECATED
+
     Args:
         field: the ¡uncleaned! field which wants to be represented
         box_limits: a tuple in the form (xmin, xmax, ymin, ymax, zmin, zmax). Limits should correspond to l=0 cell
@@ -552,6 +554,8 @@ def uniform_grid_zoom_parallel(field, box_limits, up_to_level, npatch, cr0amr, s
 
     Parallel version
 
+    DEPRECATED
+
     Args:
         field: the ¡uncleaned! field which wants to be represented
         box_limits: a tuple in the form (xmin, xmax, ymin, ymax, zmin, zmax). Limits should correspond to l=0 cell
@@ -638,3 +642,25 @@ def uniform_grid_zoom_parallel(field, box_limits, up_to_level, npatch, cr0amr, s
                                                           uniform_cellsrz, verbose) for i in range(uniform_nx)])
 
     return np.moveaxis(np.dstack(uniform_slices), [0, 1, 2], [1, 2, 0])
+
+
+def angular_momentum_particles(x, y, z, vx, vy, vz, m, inside):
+    """
+    Computes the angular momentum of a list of particles
+
+    Args:
+        x, y, z: (recentered) position of the particles
+        vx, vy, vz: components of the particles velocities
+        m: particles' masses
+        inside: vector of bool values (whether the particles are inside or outside)
+
+    Returns:
+        The angular momentum, in code units, of the given particle distribution. The three components are returned
+        in a tuple.
+
+    """
+    Lx = [pm * (py * pvz - pz * pvy) * ins for pm, py, pz, pvy, pvz, ins in zip(m, y, z, vy, vz, inside)]
+    Ly = [pm * (pz * pvx - px * pvz) * ins for pm, px, pz, pvx, pvz, ins in zip(m, x, z, vx, vz, inside)]
+    Lz = [pm * (px * pvy - py * pvx) * ins for pm, px, py, pvx, pvy, ins in zip(m, x, y, vx, vy, inside)]
+
+    return Lx, Ly, Lz
