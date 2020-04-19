@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 19/4/20 17:17
+#  Last update on 19/4/20 17:32
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -655,12 +655,12 @@ def angular_momentum_particles(x, y, z, vx, vy, vz, m, inside):
         inside: vector of bool values (whether the particles are inside or outside)
 
     Returns:
-        The angular momentum, in code units, of the given particle distribution. The three components are returned
+        The angular momentum of the given particle distribution. The three components are returned
         in a tuple.
 
     """
-    Lx = [pm * (py * pvz - pz * pvy) * ins for pm, py, pz, pvy, pvz, ins in zip(m, y, z, vy, vz, inside)]
-    Ly = [pm * (pz * pvx - px * pvz) * ins for pm, px, pz, pvx, pvz, ins in zip(m, x, z, vx, vz, inside)]
-    Lz = [pm * (px * pvy - py * pvx) * ins for pm, px, py, pvx, pvy, ins in zip(m, x, y, vx, vy, inside)]
+    Lx = sum([pm * (py * pvz - pz * pvy) * ins for pm, py, pz, pvy, pvz, ins in zip(m, y, z, vy, vz, inside)])
+    Ly = sum([pm * (pz * pvx - px * pvz) * ins for pm, px, pz, pvx, pvz, ins in zip(m, x, z, vx, vz, inside)])
+    Lz = sum([pm * (px * pvy - py * pvx) * ins for pm, px, py, pvx, pvy, ins in zip(m, x, y, vx, vy, inside)])
 
     return Lx, Ly, Lz

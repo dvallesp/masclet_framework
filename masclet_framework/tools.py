@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 19/4/20 17:24
+#  Last update on 19/4/20 17:35
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -1085,3 +1085,28 @@ def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, patchnx, patchny, 
     if verbose:
         print('Converged!')
     return rDelta
+
+
+def angular_momentum_cells(cellsrx, cellsry, cellsrz, vx, vy, vz, cellsm, inside):
+    """
+    Computes the angular momentum of a list of particles
+
+    Args:
+        cellsrx, cellsry, cellsrz: (recentered) position fields of the cells
+        vx, vy, vz: velocity fields
+        m: mass inside the cells
+        inside: field containing True if the cell is inside the considered system, false otherwise. Must be
+                cleaned from refinements and overlaps.
+
+    Returns:
+        The angular momentum of the given material component (gas). The three components are returned in a tuple.
+
+    """
+    Lx = sum([(cellm * (celly * cellvz - cellz * cellvy) * ins).sum() for cellm, celly, cellz, cellvy, cellvz, ins in
+              zip(cellsm, cellsry, cellsrz, vy, vz, inside)])
+    Ly = sum([(cellm * (cellz * cellvx - cellx * cellvz) * ins).sum() for cellm, cellx, cellz, cellvx, cellvz, ins in
+              zip(cellsm, cellsrx, cellsrz, vx, vz, inside)])
+    Lz = sum([(cellm * (cellx * cellvy - celly * cellvx) * ins).sum() for cellm, cellx, celly, cellvx, cellvy, ins in
+              zip(cellsm, cellsrx, cellsry, vx, vy, inside)])
+
+    return Lx, Ly, Lz
