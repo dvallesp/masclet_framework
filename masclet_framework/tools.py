@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 19/4/20 20:21
+#  Last update on 19/4/20 20:56
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -1135,3 +1135,26 @@ def shape_tensor_cells(cellsrx, cellsry, cellsrz, cellsm, inside):
     Syz = sum([(m * y * z * ins).sum() for m, y, z, ins in zip(cellsm, cellsry, cellsrz, inside)]) / mass_tot_inside
 
     return np.array([[Sxx, Sxy, Sxz],[Sxy, Syy, Syz],[Sxz, Syz, Szz]])
+
+
+def diagonalize_ascending(matrix):
+    """
+    Given a squared matrix, finds its eigenvalues and eigenvectors, and returns both order by ascending order (smaller
+    first). This function makes use of numpy.linalg.eig() function.
+
+    Args:
+        matrix: squared, diagonalizable matrx
+
+    Returns:
+        list of eigenvalues and list of their corresponding eigenvectors
+
+    """
+    matrix_eigenvalues, matrix_eigenvectors = np.linalg.eig(matrix)
+    eigenvalues = []
+    eigenvectors = []
+    for eigenvalue in sorted(np.unique(matrix_eigenvalues)):
+        for index in np.where(matrix_eigenvalues == eigenvalue)[0]:
+            eigenvalues.append(eigenvalue)
+            eigenvectors.append(matrix_eigenvectors[:, index])
+
+    return eigenvalues, eigenvectors
