@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 15/4/20 13:50
+#  Last update on 19/4/20 17:24
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -812,7 +812,7 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
                 I = int(starting_x + i / reduction)
                 J = int(starting_y + j / reduction)
                 K = int(starting_z + k / reduction)
-                uniform[i, j, k] += field[0][I, J, K]
+                uniform[i, j, k] = field[0][I, J, K]
 
     # REFINEMENT LEVELS
 
@@ -829,7 +829,7 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
 
         reduction = 2 ** (up_to_level - levels[ipatch])
         ipatch_cellsize = uniform_cellsize * reduction
-        round_digits = max(int(np.log10(reduction))+1, 3) # avoids tiny numerical errors which generated void regions
+        round_digits = max(int(np.log10(reduction)) + 1, 3)  # avoids tiny numerical errors which generated void regions
 
         vertices = patch_vertices(levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnz[ipatch], patchrx[ipatch],
                                   patchry[ipatch], patchrz[ipatch], size, nmax)
@@ -887,7 +887,6 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
         for i in range(imin, imax):
             for j in range(jmin, jmax):
                 for k in range(kmin, kmax):
-                    # we round the 3rd decimal place to avoid
                     I = int(Imin + (i - imin) / reduction)
                     J = int(Jmin + (j - jmin) / reduction)
                     K = int(Kmin + (k - kmin) / reduction)
@@ -1086,62 +1085,3 @@ def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, patchnx, patchny, 
     if verbose:
         print('Converged!')
     return rDelta
-
-
-def compute_position_field_onepatch(args):
-    """
-    Returns a 3 matrices with the dimensions of the patch, containing the position for every cell centre
-
-    Args: tuple containing, in this order:
-        nx, ny, nz: extension of the patch (in cells at level n)
-        rx, ry, rz: comoving coordinates of the center of the leftmost cell of the patch
-        level: refinement level of the given patch
-        size: comoving box side (preferred length units)
-        nmax: cells at base level
-
-    Returns:
-        Matrices as defined
-    """
-    nx, ny, nz, rx, ry, rz, level, size, nmax = args
-    cellsize = size / nmax / 2 ** level
-    first_x = rx - cellsize / 2
-    first_y = ry - cellsize / 2
-    first_z = rz - cellsize / 2
-    patch_x = np.zeros((nx, ny, nz))
-    patch_y = np.zeros((nx, ny, nz))
-    patch_z = np.zeros((nx, ny, nz))
-    for i in range(nx):
-        for j in range(ny):
-            for k in range(nz):
-                patch_x[i, j, k] = first_x + i * cellsize
-                patch_y[i, j, k] = first_y + j * cellsize
-                patch_z[i, j, k] = first_z + k * cellsize
-    return patch_x, patch_y, patch_z
-
-
-def compute_position_fields(patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size, nmax, ncores=1):
-    """
-    Returns 3 fields (as usually defined) containing the x, y and z position for each of our cells centres.
-    Args:
-        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
-        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
-        (and Y and Z)
-        npatch: number of patches in each level, starting in l=0
-        size: comoving size of the simulation box
-        nmax: cells at base level
-        ncores:
-
-    Returns:
-        3 fields as described above
-    """
-    levels = create_vector_levels(npatch)
-    with Pool(ncores) as p:
-        positions = p.map(compute_position_field_onepatch, [(patchnx[ipatch], patchny[ipatch], patchnz[ipatch], patchrx[ipatch], patchry[ipatch],
-                                   patchrz[ipatch], levels[ipatch], size, nmax) for ipatch in range(len(patchnx))])
-
-    cellsrx = [p[0] for p in positions]
-    cellsry = [p[1] for p in positions]
-    cellsrz = [p[2] for p in positions]
-
-    return cellsrx, cellsry, cellsrz
-
