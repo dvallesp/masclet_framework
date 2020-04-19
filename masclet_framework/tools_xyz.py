@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 19/4/20 17:32
+#  Last update on 19/4/20 17:58
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -659,8 +659,8 @@ def angular_momentum_particles(x, y, z, vx, vy, vz, m, inside):
         in a tuple.
 
     """
-    Lx = sum([pm * (py * pvz - pz * pvy) * ins for pm, py, pz, pvy, pvz, ins in zip(m, y, z, vy, vz, inside)])
-    Ly = sum([pm * (pz * pvx - px * pvz) * ins for pm, px, pz, pvx, pvz, ins in zip(m, x, z, vx, vz, inside)])
-    Lz = sum([pm * (px * pvy - py * pvx) * ins for pm, px, py, pvx, pvy, ins in zip(m, x, y, vx, vy, inside)])
+    Lx = (m * (y * vz - z * vy) * inside).sum()
+    Ly = (m * (z * vx - x * vz) * inside).sum()
+    Lz = (m * (x * vy - y * vx) * inside).sum()
 
     return Lx, Ly, Lz
