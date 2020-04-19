@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 19/4/20 17:35
+#  Last update on 19/4/20 20:21
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -1089,7 +1089,7 @@ def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, patchnx, patchny, 
 
 def angular_momentum_cells(cellsrx, cellsry, cellsrz, vx, vy, vz, cellsm, inside):
     """
-    Computes the angular momentum of a list of particles
+    Computes the angular momentum of a matter distribution
 
     Args:
         cellsrx, cellsry, cellsrz: (recentered) position fields of the cells
@@ -1110,3 +1110,28 @@ def angular_momentum_cells(cellsrx, cellsry, cellsrz, vx, vy, vz, cellsm, inside
               zip(cellsm, cellsrx, cellsry, vx, vy, inside)])
 
     return Lx, Ly, Lz
+
+
+def shape_tensor_cells(cellsrx, cellsry, cellsrz, cellsm, inside):
+    """
+    Computes the shape tensor of a matter distribution
+
+    Args:
+        cellsrx, cellsry, cellsrz: (recentered) position fields of the cells
+        m: mass inside the cells
+        inside: field containing True if the cell is inside the considered system, false otherwise. Must be
+                cleaned from refinements and overlaps.
+
+    Returns:
+        Shape tensor as a 3x3 matrix
+    """
+    mass_tot_inside = sum([(m * ins).sum() for m, ins in zip(cellsm, inside)])
+
+    Sxx = sum([(m * x ** 2 * ins).sum() for m, x, ins in zip(cellsm, cellsrx, inside)]) / mass_tot_inside
+    Syy = sum([(m * y ** 2 * ins).sum() for m, y, ins in zip(cellsm, cellsry, inside)]) / mass_tot_inside
+    Szz = sum([(m * z ** 2 * ins).sum() for m, z, ins in zip(cellsm, cellsrz, inside)]) / mass_tot_inside
+    Sxy = sum([(m * x * y * ins).sum() for m, x, y, ins in zip(cellsm, cellsrx, cellsry, inside)]) / mass_tot_inside
+    Sxz = sum([(m * x * z * ins).sum() for m, x, z, ins in zip(cellsm, cellsrx, cellsrz, inside)]) / mass_tot_inside
+    Syz = sum([(m * y * z * ins).sum() for m, y, z, ins in zip(cellsm, cellsry, cellsrz, inside)]) / mass_tot_inside
+
+    return np.array([[Sxx, Sxy, Sxz],[Sxy, Syy, Syz],[Sxz, Syz, Szz]])
