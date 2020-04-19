@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 19/4/20 17:58
+#  Last update on 19/4/20 20:25
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -646,7 +646,7 @@ def uniform_grid_zoom_parallel(field, box_limits, up_to_level, npatch, cr0amr, s
 
 def angular_momentum_particles(x, y, z, vx, vy, vz, m, inside):
     """
-    Computes the angular momentum of a list of particles
+    Computes the angular momentum of a particle distribution
 
     Args:
         x, y, z: (recentered) position of the particles
@@ -664,3 +664,27 @@ def angular_momentum_particles(x, y, z, vx, vy, vz, m, inside):
     Lz = (m * (x * vy - y * vx) * inside).sum()
 
     return Lx, Ly, Lz
+
+
+def shape_tensor_particles(x, y, z, m, inside):
+    """
+    Computes the shape tensor of a particle distribution
+
+    Args:
+        x, y, z: (recentered) position of the particles
+        m: particles' masses
+        inside: vector of bool values (whether the particles are inside or outside)
+
+    Returns:
+        Shape tensor as a 3x3 matrix
+    """
+    mass_tot_inside = (m * inside).sum()
+
+    Sxx = (m * x ** 2 * inside).sum() / mass_tot_inside
+    Syy = (m * y ** 2 * inside).sum() / mass_tot_inside
+    Szz = (m * z ** 2 * inside).sum() / mass_tot_inside
+    Sxy = (m * x * y * inside).sum() / mass_tot_inside
+    Sxz = (m * x * z * inside).sum() / mass_tot_inside
+    Syz = (m * y * z * inside).sum() / mass_tot_inside
+
+    return np.array([[Sxx, Sxy, Sxz],[Sxy, Syy, Syz],[Sxz, Syz, Szz]])
