@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 31/3/20 19:16
+#  Last update on 19/4/20 17:08
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -406,7 +406,7 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
 
         # read header
         it_cldm = f.read_vector('i')[0]
-        #assert (it == it_cldm)
+
         f.seek(0)  # this is a little bit ugly but whatever
         time, mdmpart, z = tuple(f.read_vector('f')[1:4])
 
@@ -492,7 +492,9 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
     return tuple(returnvariables)
 
 
-def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltastar=True, verbose=False):
+def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltastar=True, verbose=False,
+              output_position=False, output_velocity=False, output_mass=False, output_temp=False,
+              output_metalicity=False, output_id=False):
     """
     Reads the stellar (clst) file.
     For now, it only reads the delta.
@@ -504,13 +506,20 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         digits: number of digits the filename is written with (int)
         max_refined_level: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
         output_deltastar: whether deltadm (dark matter density contrast) is returned (bool)
+        output_position: whether particles' positions are returned (bool)
+        output_velocity: whether particles' velocities are returned (bool)
+        output_mass: whether particles' masses are returned (bool)
+        output_temp: whether particles' temperatures are returned (bool)
+        output_metalicity: whether particles' metalicities are returned (bool)
+        output_id: whether particles' ids are returned (bool)
         verbose: whether a message is printed when each refinement level is started (bool)
 
     Returns:
         Chosen quantities, in the order specified by the order of the parameters in this definition.
         delta_dm is returned as a list of numpy matrices. The 0-th element corresponds to l=0. The i-th element
         corresponds to the i-th patch.
-        //The rest of quantities are outputted as numpy vectors, the i-th element corresponding to the i-th DM particle.
+        The rest of quantities are outputted as numpy vectors, the i-th element corresponding to the i-th stellar
+        particle.
 
 
     """
@@ -525,7 +534,7 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
 
         # read header
         it_clst = f.read_vector('i')[0]
-        #assert (it == it_cldm)
+
         f.seek(0)  # this is a little bit ugly but whatever
         time, z = tuple(f.read_vector('f')[1:3])
 
@@ -538,8 +547,38 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         else:
             f.skip()
 
-        # positions, ids, masses, etc.
-        f.skip(9)
+        if output_position:
+            stpart_x = f.read_vector('f')
+            stpart_y = f.read_vector('f')
+            stpart_z = f.read_vector('f')
+        else:
+            f.skip(3)
+
+        if output_velocity:
+            stpart_vx = f.read_vector('f')
+            stpart_vy = f.read_vector('f')
+            stpart_vz = f.read_vector('f')
+        else:
+            f.skip(3)
+
+        if output_mass:
+            stpart_mass = f.read_vector('f')
+        else:
+            f.skip()
+
+        if output_temp:
+            stpart_temp = f.read_vector('f')
+        else:
+            f.skip()
+
+        if output_metalicity:
+            stpart_metalicity = f.read_vector('f')
+        else:
+            f.skip()
+
+        if output_id:
+            stpart_id = np.zeros(stpart_x.size)
+
 
         # refinement levels
         for l in range(1, min(nlevels + 1, max_refined_level + 1)):
@@ -553,12 +592,56 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                 else:
                     f.skip()
 
-            f.skip(10)
+            if output_position:
+                stpart_x = np.append(stpart_x, f.read_vector('f'))
+                stpart_y = np.append(stpart_y, f.read_vector('f'))
+                stpart_z = np.append(stpart_z, f.read_vector('f'))
+            else:
+                f.skip(3)
+
+            if output_velocity:
+                stpart_vx = np.append(stpart_vx, f.read_vector('f'))
+                stpart_vy = np.append(stpart_vy, f.read_vector('f'))
+                stpart_vz = np.append(stpart_vz, f.read_vector('f'))
+            else:
+                f.skip(3)
+
+            if output_mass:
+                stpart_mass = np.append(stpart_mass, f.read_vector('f'))
+            else:
+                f.skip()
+
+            if output_temp:
+                stpart_temp = np.append(stpart_temp, f.read_vector('f'))
+            else:
+                f.skip()
+
+            if output_metalicity:
+                stpart_metalicity = np.append(stpart_metalicity, f.read_vector('f'))
+            else:
+                f.skip()
+
+            if output_id:
+                stpart_id = np.append(stpart_id, f.read_vector('i'))
+            else:
+                f.skip()
 
     returnvariables = []
 
     if output_deltastar:
         returnvariables.append(delta_star)
+    if output_position:
+        returnvariables.extend([stpart_x, stpart_y, stpart_z])
+    if output_velocity:
+        returnvariables.extend([stpart_vx, stpart_vy, stpart_vz])
+    if output_mass:
+        returnvariables.append(stpart_mass)
+    if output_temp:
+        returnvariables.append(stpart_temp)
+    if output_metalicity:
+        returnvariables.append(stpart_metalicity)
+    if output_id:
+        returnvariables.append(stpart_id)
 
     return tuple(returnvariables)
 
