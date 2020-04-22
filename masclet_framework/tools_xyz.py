@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 22/4/20 17:32
+#  Last update on 22/4/20 18:13
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -722,6 +722,11 @@ def ellipsoidal_shape_particles(x, y, z, m, r, tol=1e-3, maxiter=100, verbose=Fa
     ppal_x = u_xtilde
     ppal_y = u_ytilde
     ppal_z = u_ztilde
+
+    if verbose:
+        print('Iteration -1: spherical')
+        print('New ratios are', axisratio1, axisratio2)
+        print('New eigenvectors are ', ppal_x, ppal_y, ppal_z)
 
     for i in range(maxiter):
         if verbose:

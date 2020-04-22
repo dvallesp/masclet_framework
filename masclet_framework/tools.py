@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 19/4/20 20:56
+#  Last update on 22/4/20 18:13
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -1118,7 +1118,7 @@ def shape_tensor_cells(cellsrx, cellsry, cellsrz, cellsm, inside):
 
     Args:
         cellsrx, cellsry, cellsrz: (recentered) position fields of the cells
-        m: mass inside the cells
+        cellsm: mass inside the cells
         inside: field containing True if the cell is inside the considered system, false otherwise. Must be
                 cleaned from refinements and overlaps.
 
@@ -1134,7 +1134,7 @@ def shape_tensor_cells(cellsrx, cellsry, cellsrz, cellsm, inside):
     Sxz = sum([(m * x * z * ins).sum() for m, x, z, ins in zip(cellsm, cellsrx, cellsrz, inside)]) / mass_tot_inside
     Syz = sum([(m * y * z * ins).sum() for m, y, z, ins in zip(cellsm, cellsry, cellsrz, inside)]) / mass_tot_inside
 
-    return np.array([[Sxx, Sxy, Sxz],[Sxy, Syy, Syz],[Sxz, Syz, Szz]])
+    return np.array([[Sxx, Sxy, Sxz], [Sxy, Syy, Syz], [Sxz, Syz, Szz]])
 
 
 def diagonalize_ascending(matrix):
@@ -1158,3 +1158,103 @@ def diagonalize_ascending(matrix):
             eigenvectors.append(matrix_eigenvectors[:, index])
 
     return eigenvalues, eigenvectors
+
+
+def ellipsoidal_shape_cells(cellsrx, cellsry, cellsrz, cellsm, r, tol=1e-3, maxiter=100, verbose=False):
+    """
+    Finds the shape of a matter distribution (eigenvalues and eigenvectors of the intertia tensor) by using
+    the iterative method in Zemp et al (2011).
+
+    Args:
+        cellsrx, cellsry, cellsrz: (recentered) position fields of the cells
+        cellsm: mass inside the cells
+        r: initial radius (will be kept as the major semi-axis length
+        tol: relative error allowed to the quotient between semiaxes
+        maxiter: maximum number of allowed iterations
+
+    Returns:
+        List of eigenvalues and list of eigenvectors.
+
+    """
+    inside = [cellrx ** 2 + cellry ** 2 + cellrz ** 2 < r ** 2 for cellrx, cellry, cellrz in zip(cellsrx, cellsry,
+                                                                                                 cellsrz)]
+    shapetensor = shape_tensor_cells(cellsrx, cellsry, cellsrz, cellsm, inside)
+    S_eigenvalues, S_eigenvectors = diagonalize_ascending(shapetensor)
+    lambda_xtilde = S_eigenvalues[0]
+    lambda_ytilde = S_eigenvalues[1]
+    lambda_ztilde = S_eigenvalues[2]
+    u_xtilde = S_eigenvectors[0]
+    u_ytilde = S_eigenvectors[1]
+    u_ztilde = S_eigenvectors[2]
+    axisratio1 = np.sqrt(lambda_ytilde / lambda_ztilde)
+    axisratio2 = np.sqrt(lambda_xtilde / lambda_ztilde)
+
+    # these will keep track of the ppal axes positions as the thing rotates over and over
+    ppal_x = u_xtilde
+    ppal_y = u_ytilde
+    ppal_z = u_ztilde
+
+    if verbose:
+        print('Iteration -1: spherical')
+        print('New ratios are', axisratio1, axisratio2)
+        print('New eigenvectors are ', ppal_x, ppal_y, ppal_z)
+
+    for i in range(maxiter):
+        if verbose:
+            print('Iteration {}'.format(i))
+        # rotating the cells coordinates
+        cellsrxprev = cellsrx
+        cellsryprev = cellsry
+        cellsrzprev = cellsrz
+        cellsrx = [cellrx * u_xtilde[0] + cellry * u_xtilde[1] +
+                   cellrz * u_xtilde[2] for cellrx, cellry, cellrz in zip(cellsrxprev, cellsryprev, cellsrzprev)]
+        cellsry = [cellrx * u_ytilde[0] + cellry * u_ytilde[1] +
+                   cellrz * u_ytilde[2] for cellrx, cellry, cellrz in zip(cellsrxprev, cellsryprev, cellsrzprev)]
+        cellsrz = [cellrx * u_ztilde[0] + cellry * u_ztilde[1] +
+                   cellrz * u_ztilde[2] for cellrx, cellry, cellrz in zip(cellsrxprev, cellsryprev, cellsrzprev)]
+        del cellsrxprev, cellsryprev, cellsrzprev
+
+        # compute the new 'inside' cells, considering the ellipsoidal shape, keeping the major semiaxis length
+        # note that the major semiaxis corresponds to the ztilde component (by construction, see diagonalize_ascending)
+        inside = [(cellrx / axisratio2) ** 2 + (cellry / axisratio1) ** 2 +
+                  cellrz ** 2 < r ** 2 for cellrx, cellry, cellrz in zip(cellsrx, cellsry, cellsrz)]
+
+        # keep track of the previous axisratios
+        axisratio1_prev = axisratio1
+        axisratio2_prev = axisratio2
+
+        # diagonalize the new cell selection
+        shapetensor = shape_tensor_cells(cellsrx, cellsry, cellsrz, cellsm, inside)
+        S_eigenvalues, S_eigenvectors = diagonalize_ascending(shapetensor)
+        lambda_xtilde = S_eigenvalues[0]
+        lambda_ytilde = S_eigenvalues[1]
+        lambda_ztilde = S_eigenvalues[2]
+        u_xtilde = S_eigenvectors[0]
+        u_ytilde = S_eigenvectors[1]
+        u_ztilde = S_eigenvectors[2]
+        axisratio1 = np.sqrt(lambda_ytilde / lambda_ztilde)
+        axisratio2 = np.sqrt(lambda_xtilde / lambda_ztilde)
+        if verbose:
+            print('New ratios are', axisratio1, axisratio2)
+
+        # keep track of the newly rotated vectors
+        temp_x = u_xtilde[0] * ppal_x + u_xtilde[1] * ppal_y + u_xtilde[2] * ppal_z
+        temp_y = u_ytilde[0] * ppal_x + u_ytilde[1] * ppal_y + u_ytilde[2] * ppal_z
+        temp_z = u_ztilde[0] * ppal_x + u_ztilde[1] * ppal_y + u_ztilde[2] * ppal_z
+        ppal_x = temp_x
+        ppal_y = temp_y
+        ppal_z = temp_z
+        del temp_x, temp_y, temp_z
+        if verbose:
+            print('New eigenvectors are ', ppal_x, ppal_y, ppal_z)
+
+        # check for tolerance
+        if verbose:
+            print('Rel. change is {:.6f} and {:.6f}'.format(axisratio1 / axisratio1_prev - 1,
+                                                            axisratio2 / axisratio2_prev - 1))
+        if abs(axisratio1 / axisratio1_prev - 1) < tol and abs(axisratio2 / axisratio2_prev - 1) < tol:
+            if verbose:
+                print('Converged!')
+            break
+
+    return S_eigenvalues, [ppal_x, ppal_y, ppal_z]
