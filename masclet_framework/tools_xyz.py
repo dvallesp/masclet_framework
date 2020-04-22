@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 19/4/20 20:25
+#  Last update on 22/4/20 17:32
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -688,3 +688,96 @@ def shape_tensor_particles(x, y, z, m, inside):
     Syz = (m * y * z * inside).sum() / mass_tot_inside
 
     return np.array([[Sxx, Sxy, Sxz],[Sxy, Syy, Syz],[Sxz, Syz, Szz]])
+
+
+def ellipsoidal_shape_particles(x, y, z, m, r, tol=1e-3, maxiter=100, verbose=False):
+    """
+    Finds the shape of a particle distribution (eigenvalues and eigenvectors of the intertia tensor) by using
+    the iterative method in Zemp et al (2011).
+
+    Args:
+        x, y, z: (recentered!) position of the particles
+        m: particles' masses
+        r: initial radius (will be kept as the major semi-axis length
+        tol: relative error allowed to the quotient between semiaxes
+        maxiter: maximum number of allowed iterations
+
+    Returns:
+        List of eigenvalues and list of eigenvectors.
+
+    """
+    inside = x ** 2 + y ** 2 + z ** 2 < r ** 2
+    shapetensor = shape_tensor_particles(x, y, z, m, inside)
+    S_eigenvalues, S_eigenvectors = tools.diagonalize_ascending(shapetensor)
+    lambda_xtilde = S_eigenvalues[0]
+    lambda_ytilde = S_eigenvalues[1]
+    lambda_ztilde = S_eigenvalues[2]
+    u_xtilde = S_eigenvectors[0]
+    u_ytilde = S_eigenvectors[1]
+    u_ztilde = S_eigenvectors[2]
+    axisratio1 = np.sqrt(lambda_ytilde / lambda_ztilde)
+    axisratio2 = np.sqrt(lambda_xtilde / lambda_ztilde)
+
+    # these will keep track of the ppal axes positions as the thing rotates over and over
+    ppal_x = u_xtilde
+    ppal_y = u_ytilde
+    ppal_z = u_ztilde
+
+    for i in range(maxiter):
+        if verbose:
+            print('Iteration {}'.format(i))
+        # rotating the particle coordinates
+        xprev = x
+        yprev = y
+        zprev = z
+        x = xprev * u_xtilde[0] + yprev * u_xtilde[1] + zprev * u_xtilde[2]
+        y = xprev * u_ytilde[0] + yprev * u_ytilde[1] + zprev * u_ytilde[2]
+        z = xprev * u_ztilde[0] + yprev * u_ztilde[1] + zprev * u_ztilde[2]
+        del xprev, yprev, zprev
+
+        # compute the new 'inside' particles, considering the ellipsoidal shape, keeping the major semiaxis length
+        # note that the major semiaxis corresponds to the ztilde component (by construction, see diagonalize_ascending)
+        inside = (x / axisratio2) ** 2 + (y / axisratio1) ** 2 + z ** 2 < r ** 2
+
+        # keep track of the previous axisratios
+        axisratio1_prev = axisratio1
+        axisratio2_prev = axisratio2
+
+        # diagonalize the new particle selection
+        shapetensor = shape_tensor_particles(x, y, z, m, inside)
+        S_eigenvalues, S_eigenvectors = tools.diagonalize_ascending(shapetensor)
+        lambda_xtilde = S_eigenvalues[0]
+        lambda_ytilde = S_eigenvalues[1]
+        lambda_ztilde = S_eigenvalues[2]
+        u_xtilde = S_eigenvectors[0]
+        u_ytilde = S_eigenvectors[1]
+        u_ztilde = S_eigenvectors[2]
+        axisratio1 = np.sqrt(lambda_ytilde / lambda_ztilde)
+        axisratio2 = np.sqrt(lambda_xtilde / lambda_ztilde)
+        if verbose:
+            print('New ratios are', axisratio1, axisratio2)
+
+        # keep track of the newly rotated vectors
+        temp_x = u_xtilde[0] * ppal_x + u_xtilde[1] * ppal_y + u_xtilde[2] * ppal_z
+        temp_y = u_ytilde[0] * ppal_x + u_ytilde[1] * ppal_y + u_ytilde[2] * ppal_z
+        temp_z = u_ztilde[0] * ppal_x + u_ztilde[1] * ppal_y + u_ztilde[2] * ppal_z
+        ppal_x = temp_x
+        ppal_y = temp_y
+        ppal_z = temp_z
+        del temp_x, temp_y, temp_z
+        if verbose:
+            print('New eigenvectors are ', ppal_x, ppal_y, ppal_z)
+
+        # check for tolerance
+        if verbose:
+            print('Rel. change is {:.6f} and {:.6f}'.format(axisratio1/axisratio1_prev - 1,
+                                                            axisratio2/axisratio2_prev - 1))
+        if abs(axisratio1/axisratio1_prev - 1) < tol and abs(axisratio2/axisratio2_prev - 1) < tol:
+            if verbose:
+                print('Converged!')
+            break
+
+    return S_eigenvalues, [ppal_x, ppal_y, ppal_z]
+
+
+
