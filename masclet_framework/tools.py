@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 23/4/20 10:11
+#  Last update on 23/4/20 11:38
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -1173,7 +1173,7 @@ def ellipsoidal_shape_cells(cellsrx, cellsry, cellsrz, cellsm, r, tol=1e-3, maxi
         maxiter: maximum number of allowed iterations
 
     Returns:
-        List of eigenvalues and list of eigenvectors.
+        List of semiaxes lengths and list of eigenvectors.
 
     """
     inside = [cellrx ** 2 + cellry ** 2 + cellrz ** 2 < r ** 2 for cellrx, cellry, cellrz in zip(cellsrx, cellsry,
@@ -1188,6 +1188,9 @@ def ellipsoidal_shape_cells(cellsrx, cellsry, cellsrz, cellsm, r, tol=1e-3, maxi
     u_ztilde = S_eigenvectors[2]
     axisratio1 = np.sqrt(lambda_ytilde / lambda_ztilde)
     axisratio2 = np.sqrt(lambda_xtilde / lambda_ztilde)
+    semiax_x = axisratio2 * r
+    semiax_y = axisratio1 * r
+    semiax_z = r
 
     # these will keep track of the ppal axes positions as the thing rotates over and over
     ppal_x = u_xtilde
@@ -1197,6 +1200,7 @@ def ellipsoidal_shape_cells(cellsrx, cellsry, cellsrz, cellsm, r, tol=1e-3, maxi
     if verbose:
         print('Iteration -1: spherical')
         print('New ratios are', axisratio1, axisratio2)
+        print('New semiaxes are', semiax_x, semiax_y, semiax_z)
         print('New eigenvectors are ', ppal_x, ppal_y, ppal_z)
 
     for i in range(maxiter):
@@ -1216,8 +1220,8 @@ def ellipsoidal_shape_cells(cellsrx, cellsry, cellsrz, cellsm, r, tol=1e-3, maxi
 
         # compute the new 'inside' cells, considering the ellipsoidal shape, keeping the major semiaxis length
         # note that the major semiaxis corresponds to the ztilde component (by construction, see diagonalize_ascending)
-        inside = [(cellrx / axisratio2) ** 2 + (cellry / axisratio1) ** 2 +
-                  cellrz ** 2 < r ** 2 for cellrx, cellry, cellrz in zip(cellsrx, cellsry, cellsrz)]
+        inside = [(cellrx / semiax_x) ** 2 + (cellry / semiax_y) ** 2 +
+                  (cellrz / semiax_z) ** 2 < 1 for cellrx, cellry, cellrz in zip(cellsrx, cellsry, cellsrz)]
 
         # keep track of the previous axisratios
         axisratio1_prev = axisratio1
@@ -1239,8 +1243,12 @@ def ellipsoidal_shape_cells(cellsrx, cellsry, cellsrz, cellsm, r, tol=1e-3, maxi
         u_ztilde = S_eigenvectors[2]
         axisratio1 = np.sqrt(lambda_ytilde / lambda_ztilde)
         axisratio2 = np.sqrt(lambda_xtilde / lambda_ztilde)
+        semiax_x = axisratio2 * r
+        semiax_y = axisratio1 * r
+        semiax_z = r
         if verbose:
             print('New ratios are', axisratio1, axisratio2)
+            print('New semiaxes are', semiax_x, semiax_y, semiax_z)
 
         # keep track of the newly rotated vectors
         temp_x = u_xtilde[0] * ppal_x + u_xtilde[1] * ppal_y + u_xtilde[2] * ppal_z
@@ -1262,4 +1270,4 @@ def ellipsoidal_shape_cells(cellsrx, cellsry, cellsrz, cellsm, r, tol=1e-3, maxi
                 print('Converged!')
             break
 
-    return S_eigenvalues, [ppal_x, ppal_y, ppal_z]
+    return [semiax_x, semiax_y, semiax_z], [ppal_x, ppal_y, ppal_z]
