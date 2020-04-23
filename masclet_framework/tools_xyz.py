@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 23/4/20 11:38
+#  Last update on 23/4/20 12:39
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -690,7 +690,7 @@ def shape_tensor_particles(x, y, z, m, inside):
     return np.array([[Sxx, Sxy, Sxz],[Sxy, Syy, Syz],[Sxz, Syz, Szz]])
 
 
-def ellipsoidal_shape_particles(x, y, z, m, r, tol=1e-3, maxiter=100, verbose=False):
+def ellipsoidal_shape_particles(x, y, z, m, r, tol=1e-3, maxiter=100, preserve='major', verbose=False):
     """
     Finds the shape of a particle distribution (eigenvalues and eigenvectors of the intertia tensor) by using
     the iterative method in Zemp et al (2011).
@@ -701,6 +701,8 @@ def ellipsoidal_shape_particles(x, y, z, m, r, tol=1e-3, maxiter=100, verbose=Fa
         r: initial radius (will be kept as the major semi-axis length
         tol: relative error allowed to the quotient between semiaxes
         maxiter: maximum number of allowed iterations
+        preserve: which quantity to preserve when changing the axes (could be 'major', 'intermediate', 'minor' or
+                    'volume')
 
     Returns:
         List of semiaxes lengths and list of eigenvectors.
@@ -717,9 +719,22 @@ def ellipsoidal_shape_particles(x, y, z, m, r, tol=1e-3, maxiter=100, verbose=Fa
     u_ztilde = S_eigenvectors[2]
     axisratio1 = np.sqrt(lambda_ytilde / lambda_ztilde)
     axisratio2 = np.sqrt(lambda_xtilde / lambda_ztilde)
-    semiax_x= axisratio2 * r
-    semiax_y = axisratio1 * r
-    semiax_z = r
+    if preserve == 'major':
+        semiax_x = axisratio2 * r
+        semiax_y = axisratio1 * r
+        semiax_z = r
+    elif preserve == 'intermediate':
+        semiax_x = axisratio2/axisratio1 * r
+        semiax_y = r
+        semiax_z = r / axisratio1
+    elif preserve == 'minor':
+        semiax_x = r
+        semiax_y = axisratio1/axisratio2 * r
+        semiax_z = r / axisratio2
+    elif preserve == 'volume':
+        semiax_z = r / (axisratio1 * axisratio2)**(1/3)
+        semiax_x = axisratio2 * semiax_z
+        semiax_y = axisratio1 * semiax_z
 
     # these will keep track of the ppal axes positions as the thing rotates over and over
     ppal_x = u_xtilde
@@ -768,9 +783,22 @@ def ellipsoidal_shape_particles(x, y, z, m, r, tol=1e-3, maxiter=100, verbose=Fa
         u_ztilde = S_eigenvectors[2]
         axisratio1 = np.sqrt(lambda_ytilde / lambda_ztilde)
         axisratio2 = np.sqrt(lambda_xtilde / lambda_ztilde)
-        semiax_x = axisratio2 * r
-        semiax_y = axisratio1 * r
-        semiax_z = r
+        if preserve == 'major':
+            semiax_x = axisratio2 * r
+            semiax_y = axisratio1 * r
+            semiax_z = r
+        elif preserve == 'intermediate':
+            semiax_x = axisratio2 / axisratio1 * r
+            semiax_y = r
+            semiax_z = r / axisratio1
+        elif preserve == 'minor':
+            semiax_x = r
+            semiax_y = axisratio1 / axisratio2 * r
+            semiax_z = r / axisratio2
+        elif preserve == 'volume':
+            semiax_z = r / (axisratio1 * axisratio2) ** (1 / 3)
+            semiax_x = axisratio2 * semiax_z
+            semiax_y = axisratio1 * semiax_z
         if verbose:
             print('New ratios are', axisratio1, axisratio2)
             print('New semiaxes are', semiax_x, semiax_y, semiax_z)
