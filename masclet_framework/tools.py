@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 22/4/20 18:13
+#  Last update on 23/4/20 10:11
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -1225,7 +1225,12 @@ def ellipsoidal_shape_cells(cellsrx, cellsry, cellsrz, cellsm, r, tol=1e-3, maxi
 
         # diagonalize the new cell selection
         shapetensor = shape_tensor_cells(cellsrx, cellsry, cellsrz, cellsm, inside)
-        S_eigenvalues, S_eigenvectors = diagonalize_ascending(shapetensor)
+        try:
+            S_eigenvalues, S_eigenvectors = diagonalize_ascending(shapetensor)
+        except np.linalg.LinAlgError:
+            print('Shape tensor had {} nans. Operation impossible.'.format(np.isnan(shapetensor).sum()))
+            return None, None
+
         lambda_xtilde = S_eigenvalues[0]
         lambda_ytilde = S_eigenvalues[1]
         lambda_ztilde = S_eigenvalues[2]
