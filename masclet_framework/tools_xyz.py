@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 24/4/20 15:49
+#  Last update on 24/4/20 23:06
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -20,7 +20,7 @@ import numpy as np
 
 from multiprocessing import Pool
 
-from masclet_framework import cosmo_tools, units, tools
+from masclet_framework import cosmo_tools, tools
 
 from scipy import optimize
 
@@ -328,8 +328,6 @@ def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins
         bin_bounds = np.linspace(rmin, rmax, nbins + 1)
 
     bin_centers = (bin_bounds[1:] + bin_bounds[:-1]) / 2
-    # profile = np.zeros(bin_centers.shape)
-    profile = []
 
     # finding the volume-weighted mean
     levels = tools.create_vector_levels(npatch)
@@ -408,60 +406,65 @@ def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, cellsrx, cellsry, 
     return rDelta
 
 
-def angular_momentum_particles(x, y, z, vx, vy, vz, m, inside):
+def angular_momentum_cells(cellsrx, cellsry, cellsrz, vx, vy, vz, cellsm, inside):
     """
-    Computes the angular momentum of a particle distribution
+    Computes the angular momentum of a matter distribution
 
     Args:
-        x, y, z: (recentered) position of the particles
-        vx, vy, vz: components of the particles velocities
-        m: particles' masses
-        inside: vector of bool values (whether the particles are inside or outside)
+        cellsrx, cellsry, cellsrz: (recentered) position fields of the cells
+        vx, vy, vz: velocity fields
+        m: mass inside the cells
+        inside: field containing True if the cell is inside the considered system, false otherwise. Must be
+                cleaned from refinements and overlaps.
 
     Returns:
-        The angular momentum of the given particle distribution. The three components are returned
-        in a tuple.
+        The angular momentum of the given material component (gas). The three components are returned in a tuple.
 
     """
-    Lx = (m * (y * vz - z * vy) * inside).sum()
-    Ly = (m * (z * vx - x * vz) * inside).sum()
-    Lz = (m * (x * vy - y * vx) * inside).sum()
+    Lx = sum([(cellm * (celly * cellvz - cellz * cellvy) * ins).sum() for cellm, celly, cellz, cellvy, cellvz, ins in
+              zip(cellsm, cellsry, cellsrz, vy, vz, inside)])
+    Ly = sum([(cellm * (cellz * cellvx - cellx * cellvz) * ins).sum() for cellm, cellx, cellz, cellvx, cellvz, ins in
+              zip(cellsm, cellsrx, cellsrz, vx, vz, inside)])
+    Lz = sum([(cellm * (cellx * cellvy - celly * cellvx) * ins).sum() for cellm, cellx, celly, cellvx, cellvy, ins in
+              zip(cellsm, cellsrx, cellsry, vx, vy, inside)])
 
     return Lx, Ly, Lz
 
 
-def shape_tensor_particles(x, y, z, m, inside):
+def shape_tensor_cells(cellsrx, cellsry, cellsrz, cellsm, inside):
     """
-    Computes the shape tensor of a particle distribution
+    Computes the shape tensor of a matter distribution
 
     Args:
-        x, y, z: (recentered) position of the particles
-        m: particles' masses
-        inside: vector of bool values (whether the particles are inside or outside)
+        cellsrx, cellsry, cellsrz: (recentered) position fields of the cells
+        cellsm: mass inside the cells
+        inside: field containing True if the cell is inside the considered system, false otherwise. Must be
+                cleaned from refinements and overlaps.
 
     Returns:
         Shape tensor as a 3x3 matrix
     """
-    mass_tot_inside = (m * inside).sum()
+    mass_tot_inside = sum([(m * ins).sum() for m, ins in zip(cellsm, inside)])
 
-    Sxx = (m * x ** 2 * inside).sum() / mass_tot_inside
-    Syy = (m * y ** 2 * inside).sum() / mass_tot_inside
-    Szz = (m * z ** 2 * inside).sum() / mass_tot_inside
-    Sxy = (m * x * y * inside).sum() / mass_tot_inside
-    Sxz = (m * x * z * inside).sum() / mass_tot_inside
-    Syz = (m * y * z * inside).sum() / mass_tot_inside
+    Sxx = sum([(m * x ** 2 * ins).sum() for m, x, ins in zip(cellsm, cellsrx, inside)]) / mass_tot_inside
+    Syy = sum([(m * y ** 2 * ins).sum() for m, y, ins in zip(cellsm, cellsry, inside)]) / mass_tot_inside
+    Szz = sum([(m * z ** 2 * ins).sum() for m, z, ins in zip(cellsm, cellsrz, inside)]) / mass_tot_inside
+    Sxy = sum([(m * x * y * ins).sum() for m, x, y, ins in zip(cellsm, cellsrx, cellsry, inside)]) / mass_tot_inside
+    Sxz = sum([(m * x * z * ins).sum() for m, x, z, ins in zip(cellsm, cellsrx, cellsrz, inside)]) / mass_tot_inside
+    Syz = sum([(m * y * z * ins).sum() for m, y, z, ins in zip(cellsm, cellsry, cellsrz, inside)]) / mass_tot_inside
 
-    return np.array([[Sxx, Sxy, Sxz],[Sxy, Syy, Syz],[Sxz, Syz, Szz]])
+    return np.array([[Sxx, Sxy, Sxz], [Sxy, Syy, Syz], [Sxz, Syz, Szz]])
 
 
-def ellipsoidal_shape_particles(x, y, z, m, r, tol=1e-3, maxiter=100, preserve='major', verbose=False):
+def ellipsoidal_shape_cells(cellsrx, cellsry, cellsrz, cellsm, r, tol=1e-3, maxiter=100, preserve='major',
+                            verbose=False):
     """
-    Finds the shape of a particle distribution (eigenvalues and eigenvectors of the intertia tensor) by using
+    Finds the shape of a matter distribution (eigenvalues and eigenvectors of the intertia tensor) by using
     the iterative method in Zemp et al (2011).
 
     Args:
-        x, y, z: (recentered!) position of the particles
-        m: particles' masses
+        cellsrx, cellsry, cellsrz: (recentered) position fields of the cells
+        cellsm: mass inside the cells
         r: initial radius (will be kept as the major semi-axis length
         tol: relative error allowed to the quotient between semiaxes
         maxiter: maximum number of allowed iterations
@@ -472,8 +475,9 @@ def ellipsoidal_shape_particles(x, y, z, m, r, tol=1e-3, maxiter=100, preserve='
         List of semiaxes lengths and list of eigenvectors.
 
     """
-    inside = x ** 2 + y ** 2 + z ** 2 < r ** 2
-    shapetensor = shape_tensor_particles(x, y, z, m, inside)
+    inside = [cellrx ** 2 + cellry ** 2 + cellrz ** 2 < r ** 2 for cellrx, cellry, cellrz in zip(cellsrx, cellsry,
+                                                                                                 cellsrz)]
+    shapetensor = shape_tensor_cells(cellsrx, cellsry, cellsrz, cellsm, inside)
     S_eigenvalues, S_eigenvectors = tools.diagonalize_ascending(shapetensor)
     lambda_xtilde = S_eigenvalues[0]
     lambda_ytilde = S_eigenvalues[1]
@@ -488,15 +492,15 @@ def ellipsoidal_shape_particles(x, y, z, m, r, tol=1e-3, maxiter=100, preserve='
         semiax_y = axisratio1 * r
         semiax_z = r
     elif preserve == 'intermediate':
-        semiax_x = axisratio2/axisratio1 * r
+        semiax_x = axisratio2 / axisratio1 * r
         semiax_y = r
         semiax_z = r / axisratio1
     elif preserve == 'minor':
         semiax_x = r
-        semiax_y = axisratio1/axisratio2 * r
+        semiax_y = axisratio1 / axisratio2 * r
         semiax_z = r / axisratio2
     elif preserve == 'volume':
-        semiax_z = r / (axisratio1 * axisratio2)**(1/3)
+        semiax_z = r / (axisratio1 * axisratio2) ** (1 / 3)
         semiax_x = axisratio2 * semiax_z
         semiax_y = axisratio1 * semiax_z
 
@@ -514,25 +518,29 @@ def ellipsoidal_shape_particles(x, y, z, m, r, tol=1e-3, maxiter=100, preserve='
     for i in range(maxiter):
         if verbose:
             print('Iteration {}'.format(i))
-        # rotating the particle coordinates
-        xprev = x
-        yprev = y
-        zprev = z
-        x = xprev * u_xtilde[0] + yprev * u_xtilde[1] + zprev * u_xtilde[2]
-        y = xprev * u_ytilde[0] + yprev * u_ytilde[1] + zprev * u_ytilde[2]
-        z = xprev * u_ztilde[0] + yprev * u_ztilde[1] + zprev * u_ztilde[2]
-        del xprev, yprev, zprev
+        # rotating the cells coordinates
+        cellsrxprev = cellsrx
+        cellsryprev = cellsry
+        cellsrzprev = cellsrz
+        cellsrx = [cellrx * u_xtilde[0] + cellry * u_xtilde[1] +
+                   cellrz * u_xtilde[2] for cellrx, cellry, cellrz in zip(cellsrxprev, cellsryprev, cellsrzprev)]
+        cellsry = [cellrx * u_ytilde[0] + cellry * u_ytilde[1] +
+                   cellrz * u_ytilde[2] for cellrx, cellry, cellrz in zip(cellsrxprev, cellsryprev, cellsrzprev)]
+        cellsrz = [cellrx * u_ztilde[0] + cellry * u_ztilde[1] +
+                   cellrz * u_ztilde[2] for cellrx, cellry, cellrz in zip(cellsrxprev, cellsryprev, cellsrzprev)]
+        del cellsrxprev, cellsryprev, cellsrzprev
 
-        # compute the new 'inside' particles, considering the ellipsoidal shape, keeping the major semiaxis length
+        # compute the new 'inside' cells, considering the ellipsoidal shape, keeping the major semiaxis length
         # note that the major semiaxis corresponds to the ztilde component (by construction, see diagonalize_ascending)
-        inside = (x / semiax_x) ** 2 + (y / semiax_y) ** 2 + (z / semiax_z) ** 2 < 1
+        inside = [(cellrx / semiax_x) ** 2 + (cellry / semiax_y) ** 2 +
+                  (cellrz / semiax_z) ** 2 < 1 for cellrx, cellry, cellrz in zip(cellsrx, cellsry, cellsrz)]
 
         # keep track of the previous axisratios
         axisratio1_prev = axisratio1
         axisratio2_prev = axisratio2
 
-        # diagonalize the new particle selection
-        shapetensor = shape_tensor_particles(x, y, z, m, inside)
+        # diagonalize the new cell selection
+        shapetensor = shape_tensor_cells(cellsrx, cellsry, cellsrz, cellsm, inside)
         try:
             S_eigenvalues, S_eigenvectors = tools.diagonalize_ascending(shapetensor)
         except np.linalg.LinAlgError:
@@ -580,14 +588,15 @@ def ellipsoidal_shape_particles(x, y, z, m, r, tol=1e-3, maxiter=100, preserve='
 
         # check for tolerance
         if verbose:
-            print('Rel. change is {:.6f} and {:.6f}'.format(axisratio1/axisratio1_prev - 1,
-                                                            axisratio2/axisratio2_prev - 1))
-        if abs(axisratio1/axisratio1_prev - 1) < tol and abs(axisratio2/axisratio2_prev - 1) < tol:
+            print('Rel. change is {:.6f} and {:.6f}'.format(axisratio1 / axisratio1_prev - 1,
+                                                            axisratio2 / axisratio2_prev - 1))
+        if abs(axisratio1 / axisratio1_prev - 1) < tol and abs(axisratio2 / axisratio2_prev - 1) < tol:
             if verbose:
                 print('Converged!')
             break
 
     return [semiax_x, semiax_y, semiax_z], [ppal_x, ppal_y, ppal_z]
+
 
 
 

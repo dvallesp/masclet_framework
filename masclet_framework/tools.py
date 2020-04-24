@@ -10,18 +10,18 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 24/4/20 22:46
+#  Last update on 24/4/20 23:06
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
 # numpy
 import numpy as np
 
-from multiprocessing import Pool
+# from multiprocessing import Pool
 
-from masclet_framework import cosmo_tools, units
+# from masclet_framework import cosmo_tools, units
 
-from scipy import optimize
+# from scipy import optimize
 
 
 # FUNCTIONS DEFINED IN THIS MODULE
@@ -255,7 +255,7 @@ def patch_left_edge_comoving(rx, ry, rz, level, size, nmax):
     Returns:
         tuple containing the x, y, z physical coordinates of the patch left corner.
     """
-    cellsize = size / nmax / 2 ** (level)
+    cellsize = size / nmax / 2 ** level
     x = rx - cellsize
     y = ry - cellsize
     z = rz - cellsize
@@ -268,7 +268,8 @@ def patch_left_edge_natural(rx, ry, rz, level, size, nmax):
         of a patch, given its rx, ry, rz.
 
         Args:
-            rx, ry, rz: physical coordinate of the center of the leftmost parent cell (as read from patchrx, patchry, ...)
+            rx, ry, rz: physical coordinate of the center of the leftmost parent cell (as read from patchrx, patchry,
+                    ...)
             level: level of the considered patch
             size: comoving side of the simulation box
             nmax: number of cells per dimension on the base level
@@ -499,7 +500,7 @@ def uniform_grid(field, up_to_level, npatch, patchnx, patchny, patchnz, patchrx,
 
     Args:
         field: field to be computed at the uniform grid. Must be already cleaned from refinements and overlaps (check
-        clean_field() function).
+                clean_field() function).
         up_to_level: level up to which the fine grid wants to be obtained
         npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
         patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
@@ -659,56 +660,6 @@ def uniform_grid_zoom_several(fields, box_limits, up_to_level, npatch, patchnx, 
     return tuple(uniforms)
 
 
-def angular_momentum_cells(cellsrx, cellsry, cellsrz, vx, vy, vz, cellsm, inside):
-    """
-    Computes the angular momentum of a matter distribution
-
-    Args:
-        cellsrx, cellsry, cellsrz: (recentered) position fields of the cells
-        vx, vy, vz: velocity fields
-        m: mass inside the cells
-        inside: field containing True if the cell is inside the considered system, false otherwise. Must be
-                cleaned from refinements and overlaps.
-
-    Returns:
-        The angular momentum of the given material component (gas). The three components are returned in a tuple.
-
-    """
-    Lx = sum([(cellm * (celly * cellvz - cellz * cellvy) * ins).sum() for cellm, celly, cellz, cellvy, cellvz, ins in
-              zip(cellsm, cellsry, cellsrz, vy, vz, inside)])
-    Ly = sum([(cellm * (cellz * cellvx - cellx * cellvz) * ins).sum() for cellm, cellx, cellz, cellvx, cellvz, ins in
-              zip(cellsm, cellsrx, cellsrz, vx, vz, inside)])
-    Lz = sum([(cellm * (cellx * cellvy - celly * cellvx) * ins).sum() for cellm, cellx, celly, cellvx, cellvy, ins in
-              zip(cellsm, cellsrx, cellsry, vx, vy, inside)])
-
-    return Lx, Ly, Lz
-
-
-def shape_tensor_cells(cellsrx, cellsry, cellsrz, cellsm, inside):
-    """
-    Computes the shape tensor of a matter distribution
-
-    Args:
-        cellsrx, cellsry, cellsrz: (recentered) position fields of the cells
-        cellsm: mass inside the cells
-        inside: field containing True if the cell is inside the considered system, false otherwise. Must be
-                cleaned from refinements and overlaps.
-
-    Returns:
-        Shape tensor as a 3x3 matrix
-    """
-    mass_tot_inside = sum([(m * ins).sum() for m, ins in zip(cellsm, inside)])
-
-    Sxx = sum([(m * x ** 2 * ins).sum() for m, x, ins in zip(cellsm, cellsrx, inside)]) / mass_tot_inside
-    Syy = sum([(m * y ** 2 * ins).sum() for m, y, ins in zip(cellsm, cellsry, inside)]) / mass_tot_inside
-    Szz = sum([(m * z ** 2 * ins).sum() for m, z, ins in zip(cellsm, cellsrz, inside)]) / mass_tot_inside
-    Sxy = sum([(m * x * y * ins).sum() for m, x, y, ins in zip(cellsm, cellsrx, cellsry, inside)]) / mass_tot_inside
-    Sxz = sum([(m * x * z * ins).sum() for m, x, z, ins in zip(cellsm, cellsrx, cellsrz, inside)]) / mass_tot_inside
-    Syz = sum([(m * y * z * ins).sum() for m, y, z, ins in zip(cellsm, cellsry, cellsrz, inside)]) / mass_tot_inside
-
-    return np.array([[Sxx, Sxy, Sxz], [Sxy, Syy, Syz], [Sxz, Syz, Szz]])
-
-
 def diagonalize_ascending(matrix):
     """
     Given a squared matrix, finds its eigenvalues and eigenvectors, and returns both order by ascending order (smaller
@@ -730,145 +681,3 @@ def diagonalize_ascending(matrix):
             eigenvectors.append(matrix_eigenvectors[:, index])
 
     return eigenvalues, eigenvectors
-
-
-def ellipsoidal_shape_cells(cellsrx, cellsry, cellsrz, cellsm, r, tol=1e-3, maxiter=100, preserve='major',
-                            verbose=False):
-    """
-    Finds the shape of a matter distribution (eigenvalues and eigenvectors of the intertia tensor) by using
-    the iterative method in Zemp et al (2011).
-
-    Args:
-        cellsrx, cellsry, cellsrz: (recentered) position fields of the cells
-        cellsm: mass inside the cells
-        r: initial radius (will be kept as the major semi-axis length
-        tol: relative error allowed to the quotient between semiaxes
-        maxiter: maximum number of allowed iterations
-        preserve: which quantity to preserve when changing the axes (could be 'major', 'intermediate', 'minor' or
-                    'volume')
-
-    Returns:
-        List of semiaxes lengths and list of eigenvectors.
-
-    """
-    inside = [cellrx ** 2 + cellry ** 2 + cellrz ** 2 < r ** 2 for cellrx, cellry, cellrz in zip(cellsrx, cellsry,
-                                                                                                 cellsrz)]
-    shapetensor = shape_tensor_cells(cellsrx, cellsry, cellsrz, cellsm, inside)
-    S_eigenvalues, S_eigenvectors = diagonalize_ascending(shapetensor)
-    lambda_xtilde = S_eigenvalues[0]
-    lambda_ytilde = S_eigenvalues[1]
-    lambda_ztilde = S_eigenvalues[2]
-    u_xtilde = S_eigenvectors[0]
-    u_ytilde = S_eigenvectors[1]
-    u_ztilde = S_eigenvectors[2]
-    axisratio1 = np.sqrt(lambda_ytilde / lambda_ztilde)
-    axisratio2 = np.sqrt(lambda_xtilde / lambda_ztilde)
-    if preserve == 'major':
-        semiax_x = axisratio2 * r
-        semiax_y = axisratio1 * r
-        semiax_z = r
-    elif preserve == 'intermediate':
-        semiax_x = axisratio2 / axisratio1 * r
-        semiax_y = r
-        semiax_z = r / axisratio1
-    elif preserve == 'minor':
-        semiax_x = r
-        semiax_y = axisratio1 / axisratio2 * r
-        semiax_z = r / axisratio2
-    elif preserve == 'volume':
-        semiax_z = r / (axisratio1 * axisratio2) ** (1 / 3)
-        semiax_x = axisratio2 * semiax_z
-        semiax_y = axisratio1 * semiax_z
-
-    # these will keep track of the ppal axes positions as the thing rotates over and over
-    ppal_x = u_xtilde
-    ppal_y = u_ytilde
-    ppal_z = u_ztilde
-
-    if verbose:
-        print('Iteration -1: spherical')
-        print('New ratios are', axisratio1, axisratio2)
-        print('New semiaxes are', semiax_x, semiax_y, semiax_z)
-        print('New eigenvectors are ', ppal_x, ppal_y, ppal_z)
-
-    for i in range(maxiter):
-        if verbose:
-            print('Iteration {}'.format(i))
-        # rotating the cells coordinates
-        cellsrxprev = cellsrx
-        cellsryprev = cellsry
-        cellsrzprev = cellsrz
-        cellsrx = [cellrx * u_xtilde[0] + cellry * u_xtilde[1] +
-                   cellrz * u_xtilde[2] for cellrx, cellry, cellrz in zip(cellsrxprev, cellsryprev, cellsrzprev)]
-        cellsry = [cellrx * u_ytilde[0] + cellry * u_ytilde[1] +
-                   cellrz * u_ytilde[2] for cellrx, cellry, cellrz in zip(cellsrxprev, cellsryprev, cellsrzprev)]
-        cellsrz = [cellrx * u_ztilde[0] + cellry * u_ztilde[1] +
-                   cellrz * u_ztilde[2] for cellrx, cellry, cellrz in zip(cellsrxprev, cellsryprev, cellsrzprev)]
-        del cellsrxprev, cellsryprev, cellsrzprev
-
-        # compute the new 'inside' cells, considering the ellipsoidal shape, keeping the major semiaxis length
-        # note that the major semiaxis corresponds to the ztilde component (by construction, see diagonalize_ascending)
-        inside = [(cellrx / semiax_x) ** 2 + (cellry / semiax_y) ** 2 +
-                  (cellrz / semiax_z) ** 2 < 1 for cellrx, cellry, cellrz in zip(cellsrx, cellsry, cellsrz)]
-
-        # keep track of the previous axisratios
-        axisratio1_prev = axisratio1
-        axisratio2_prev = axisratio2
-
-        # diagonalize the new cell selection
-        shapetensor = shape_tensor_cells(cellsrx, cellsry, cellsrz, cellsm, inside)
-        try:
-            S_eigenvalues, S_eigenvectors = diagonalize_ascending(shapetensor)
-        except np.linalg.LinAlgError:
-            print('Shape tensor had {} nans. Operation impossible.'.format(np.isnan(shapetensor).sum()))
-            return None, None
-
-        lambda_xtilde = S_eigenvalues[0]
-        lambda_ytilde = S_eigenvalues[1]
-        lambda_ztilde = S_eigenvalues[2]
-        u_xtilde = S_eigenvectors[0]
-        u_ytilde = S_eigenvectors[1]
-        u_ztilde = S_eigenvectors[2]
-        axisratio1 = np.sqrt(lambda_ytilde / lambda_ztilde)
-        axisratio2 = np.sqrt(lambda_xtilde / lambda_ztilde)
-        if preserve == 'major':
-            semiax_x = axisratio2 * r
-            semiax_y = axisratio1 * r
-            semiax_z = r
-        elif preserve == 'intermediate':
-            semiax_x = axisratio2 / axisratio1 * r
-            semiax_y = r
-            semiax_z = r / axisratio1
-        elif preserve == 'minor':
-            semiax_x = r
-            semiax_y = axisratio1 / axisratio2 * r
-            semiax_z = r / axisratio2
-        elif preserve == 'volume':
-            semiax_z = r / (axisratio1 * axisratio2) ** (1 / 3)
-            semiax_x = axisratio2 * semiax_z
-            semiax_y = axisratio1 * semiax_z
-        if verbose:
-            print('New ratios are', axisratio1, axisratio2)
-            print('New semiaxes are', semiax_x, semiax_y, semiax_z)
-
-        # keep track of the newly rotated vectors
-        temp_x = u_xtilde[0] * ppal_x + u_xtilde[1] * ppal_y + u_xtilde[2] * ppal_z
-        temp_y = u_ytilde[0] * ppal_x + u_ytilde[1] * ppal_y + u_ytilde[2] * ppal_z
-        temp_z = u_ztilde[0] * ppal_x + u_ztilde[1] * ppal_y + u_ztilde[2] * ppal_z
-        ppal_x = temp_x
-        ppal_y = temp_y
-        ppal_z = temp_z
-        del temp_x, temp_y, temp_z
-        if verbose:
-            print('New eigenvectors are ', ppal_x, ppal_y, ppal_z)
-
-        # check for tolerance
-        if verbose:
-            print('Rel. change is {:.6f} and {:.6f}'.format(axisratio1 / axisratio1_prev - 1,
-                                                            axisratio2 / axisratio2_prev - 1))
-        if abs(axisratio1 / axisratio1_prev - 1) < tol and abs(axisratio2 / axisratio2_prev - 1) < tol:
-            if verbose:
-                print('Converged!')
-            break
-
-    return [semiax_x, semiax_y, semiax_z], [ppal_x, ppal_y, ppal_z]

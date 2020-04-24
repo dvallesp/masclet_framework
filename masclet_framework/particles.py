@@ -9,40 +9,36 @@ Contains several useful functions in order to deal with particles
 
 Created by David Vallés
 """
-#  Last update on 1/4/20 10:07
+#  Last update on 24/4/20 23:06
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
 # numpy
 import numpy as np
 
-from multiprocessing import Pool
+# from multiprocessing import Pool
 
-from masclet_framework import cosmo_tools, units
+from masclet_framework import cosmo_tools, units, tools
 
 import collections
 from scipy import optimize
 
+
 # FUNCTIONS DEFINED IN THIS MODULE
 
 
-def correct_positive_oripa(oripa, mass, npart):
+def correct_positive_oripa(oripa, mass):
     """
     Corrects a bug in the simulation's ouput, which caused all oripa to be positive.
     The expected behaviour was that particles which were originally at l=0 retain negative oripa.
     Args:
         oripa: np array contaning the directly read (incorrect) oripa for each particle
         mass: np array containing the mass of each particle
-        npart: NPART array, as read from read_grids() (number of dm particles per level)
 
     Returns:
         corrected oripa array, where particles which originally were at l=0 have negative oripa.
 
     """
-    # particles
-    #for i in range(npart[0]):
-    #    oripa[i] = - oripa[i]
-
     dups = collections.defaultdict(list)
     for i, e in enumerate(oripa):
         dups[e].append(i)
@@ -74,10 +70,10 @@ def shared_particles(x1, y1, z1, oripa1, rx1, ry1, rz1, r1, x2, y2, z2, oripa2, 
     Returns:
         A numpy array containing the intersecting oripas
     """
-    inside_1 = (x1 - rx1)**2 + (y1 - ry1)**2 + (z1 - rz1)**2 < r1**2
+    inside_1 = (x1 - rx1) ** 2 + (y1 - ry1) ** 2 + (z1 - rz1) ** 2 < r1 ** 2
     inside_1 = oripa1[inside_1]
 
-    inside_2 = (x2 - rx2)**2 + (y2 - ry2)**2 + (z2 - rz2)**2 < r2**2
+    inside_2 = (x2 - rx2) ** 2 + (y2 - ry2) ** 2 + (z2 - rz2) ** 2 < r2 ** 2
     inside_2 = oripa2[inside_2]
 
     intersect = np.intersect1d(inside_1, inside_2, return_indices=False, assume_unique=True)
@@ -129,7 +125,7 @@ def find_rDelta_eqn_particles(r, Delta, background_density, zeta, clusrx, clusry
     inside_1 = (x - clusrx) ** 2 + (y - clusry) ** 2 + (z - clusrz) ** 2 < r ** 2
     m = m[inside_1].sum() * units.mass_to_sun
 
-    return m - (4*np.pi/3) * (r/(1+zeta))**3 * background_density * Delta
+    return m - (4 * np.pi / 3) * (r / (1 + zeta)) ** 3 * background_density * Delta
 
 
 def find_rDelta_particles(Delta, zeta, clusrx, clusry, clusrz, x, y, z, m, h, omega_m, rmin=0.1, rmax=6, rtol=1e-3,
@@ -165,3 +161,184 @@ def find_rDelta_particles(Delta, zeta, clusrx, clusry, clusrz, x, y, z, m, h, om
         print('Converged!')
     return rDelta
 
+
+def angular_momentum_particles(x, y, z, vx, vy, vz, m, inside):
+    """
+    Computes the angular momentum of a particle distribution
+
+    Args:
+        x, y, z: (recentered) position of the particles
+        vx, vy, vz: components of the particles velocities
+        m: particles' masses
+        inside: vector of bool values (whether the particles are inside or outside)
+
+    Returns:
+        The angular momentum of the given particle distribution. The three components are returned
+        in a tuple.
+
+    """
+    Lx = (m * (y * vz - z * vy) * inside).sum()
+    Ly = (m * (z * vx - x * vz) * inside).sum()
+    Lz = (m * (x * vy - y * vx) * inside).sum()
+
+    return Lx, Ly, Lz
+
+
+def shape_tensor_particles(x, y, z, m, inside):
+    """
+    Computes the shape tensor of a particle distribution
+
+    Args:
+        x, y, z: (recentered) position of the particles
+        m: particles' masses
+        inside: vector of bool values (whether the particles are inside or outside)
+
+    Returns:
+        Shape tensor as a 3x3 matrix
+    """
+    mass_tot_inside = (m * inside).sum()
+
+    Sxx = (m * x ** 2 * inside).sum() / mass_tot_inside
+    Syy = (m * y ** 2 * inside).sum() / mass_tot_inside
+    Szz = (m * z ** 2 * inside).sum() / mass_tot_inside
+    Sxy = (m * x * y * inside).sum() / mass_tot_inside
+    Sxz = (m * x * z * inside).sum() / mass_tot_inside
+    Syz = (m * y * z * inside).sum() / mass_tot_inside
+
+    return np.array([[Sxx, Sxy, Sxz], [Sxy, Syy, Syz], [Sxz, Syz, Szz]])
+
+
+def ellipsoidal_shape_particles(x, y, z, m, r, tol=1e-3, maxiter=100, preserve='major', verbose=False):
+    """
+    Finds the shape of a particle distribution (eigenvalues and eigenvectors of the intertia tensor) by using
+    the iterative method in Zemp et al (2011).
+
+    Args:
+        x, y, z: (recentered!) position of the particles
+        m: particles' masses
+        r: initial radius (will be kept as the major semi-axis length
+        tol: relative error allowed to the quotient between semiaxes
+        maxiter: maximum number of allowed iterations
+        preserve: which quantity to preserve when changing the axes (could be 'major', 'intermediate', 'minor' or
+                    'volume')
+
+    Returns:
+        List of semiaxes lengths and list of eigenvectors.
+
+    """
+    inside = x ** 2 + y ** 2 + z ** 2 < r ** 2
+    shapetensor = shape_tensor_particles(x, y, z, m, inside)
+    S_eigenvalues, S_eigenvectors = tools.diagonalize_ascending(shapetensor)
+    lambda_xtilde = S_eigenvalues[0]
+    lambda_ytilde = S_eigenvalues[1]
+    lambda_ztilde = S_eigenvalues[2]
+    u_xtilde = S_eigenvectors[0]
+    u_ytilde = S_eigenvectors[1]
+    u_ztilde = S_eigenvectors[2]
+    axisratio1 = np.sqrt(lambda_ytilde / lambda_ztilde)
+    axisratio2 = np.sqrt(lambda_xtilde / lambda_ztilde)
+    if preserve == 'major':
+        semiax_x = axisratio2 * r
+        semiax_y = axisratio1 * r
+        semiax_z = r
+    elif preserve == 'intermediate':
+        semiax_x = axisratio2 / axisratio1 * r
+        semiax_y = r
+        semiax_z = r / axisratio1
+    elif preserve == 'minor':
+        semiax_x = r
+        semiax_y = axisratio1 / axisratio2 * r
+        semiax_z = r / axisratio2
+    elif preserve == 'volume':
+        semiax_z = r / (axisratio1 * axisratio2) ** (1 / 3)
+        semiax_x = axisratio2 * semiax_z
+        semiax_y = axisratio1 * semiax_z
+
+    # these will keep track of the ppal axes positions as the thing rotates over and over
+    ppal_x = u_xtilde
+    ppal_y = u_ytilde
+    ppal_z = u_ztilde
+
+    if verbose:
+        print('Iteration -1: spherical')
+        print('New ratios are', axisratio1, axisratio2)
+        print('New semiaxes are', semiax_x, semiax_y, semiax_z)
+        print('New eigenvectors are ', ppal_x, ppal_y, ppal_z)
+
+    for i in range(maxiter):
+        if verbose:
+            print('Iteration {}'.format(i))
+        # rotating the particle coordinates
+        xprev = x
+        yprev = y
+        zprev = z
+        x = xprev * u_xtilde[0] + yprev * u_xtilde[1] + zprev * u_xtilde[2]
+        y = xprev * u_ytilde[0] + yprev * u_ytilde[1] + zprev * u_ytilde[2]
+        z = xprev * u_ztilde[0] + yprev * u_ztilde[1] + zprev * u_ztilde[2]
+        del xprev, yprev, zprev
+
+        # compute the new 'inside' particles, considering the ellipsoidal shape, keeping the major semiaxis length
+        # note that the major semiaxis corresponds to the ztilde component (by construction, see diagonalize_ascending)
+        inside = (x / semiax_x) ** 2 + (y / semiax_y) ** 2 + (z / semiax_z) ** 2 < 1
+
+        # keep track of the previous axisratios
+        axisratio1_prev = axisratio1
+        axisratio2_prev = axisratio2
+
+        # diagonalize the new particle selection
+        shapetensor = shape_tensor_particles(x, y, z, m, inside)
+        try:
+            S_eigenvalues, S_eigenvectors = tools.diagonalize_ascending(shapetensor)
+        except np.linalg.LinAlgError:
+            print('Shape tensor had {} nans. Operation impossible.'.format(np.isnan(shapetensor).sum()))
+            return None, None
+
+        lambda_xtilde = S_eigenvalues[0]
+        lambda_ytilde = S_eigenvalues[1]
+        lambda_ztilde = S_eigenvalues[2]
+        u_xtilde = S_eigenvectors[0]
+        u_ytilde = S_eigenvectors[1]
+        u_ztilde = S_eigenvectors[2]
+        axisratio1 = np.sqrt(lambda_ytilde / lambda_ztilde)
+        axisratio2 = np.sqrt(lambda_xtilde / lambda_ztilde)
+        if preserve == 'major':
+            semiax_x = axisratio2 * r
+            semiax_y = axisratio1 * r
+            semiax_z = r
+        elif preserve == 'intermediate':
+            semiax_x = axisratio2 / axisratio1 * r
+            semiax_y = r
+            semiax_z = r / axisratio1
+        elif preserve == 'minor':
+            semiax_x = r
+            semiax_y = axisratio1 / axisratio2 * r
+            semiax_z = r / axisratio2
+        elif preserve == 'volume':
+            semiax_z = r / (axisratio1 * axisratio2) ** (1 / 3)
+            semiax_x = axisratio2 * semiax_z
+            semiax_y = axisratio1 * semiax_z
+        if verbose:
+            print('New ratios are', axisratio1, axisratio2)
+            print('New semiaxes are', semiax_x, semiax_y, semiax_z)
+
+        # keep track of the newly rotated vectors
+        temp_x = u_xtilde[0] * ppal_x + u_xtilde[1] * ppal_y + u_xtilde[2] * ppal_z
+        temp_y = u_ytilde[0] * ppal_x + u_ytilde[1] * ppal_y + u_ytilde[2] * ppal_z
+        temp_z = u_ztilde[0] * ppal_x + u_ztilde[1] * ppal_y + u_ztilde[2] * ppal_z
+        ppal_x = temp_x
+        ppal_y = temp_y
+        ppal_z = temp_z
+        del temp_x, temp_y, temp_z
+        if verbose:
+            print('New eigenvectors are ', ppal_x, ppal_y, ppal_z)
+
+        # check for tolerance
+        if verbose:
+            print('Rel. change is {:.6f} and {:.6f}'.format(axisratio1 / axisratio1_prev - 1,
+                                                            axisratio2 / axisratio2_prev - 1))
+        if abs(axisratio1 / axisratio1_prev - 1) < tol and abs(axisratio2 / axisratio2_prev - 1) < tol:
+            if verbose:
+                print('Converged!')
+            break
+
+    return [semiax_x, semiax_y, semiax_z], [ppal_x, ppal_y, ppal_z]
