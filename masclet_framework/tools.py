@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 24/4/20 22:44
+#  Last update on 24/4/20 22:46
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -290,59 +290,6 @@ def patch_left_edge_natural(rx, ry, rz, level, size, nmax):
     return xg, yg, zg
 
 
-def uniform_grid(field, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry, patchrz, size, nmax,
-                 verbose=False):
-    """
-    Builds a uniform grid at level up_to_level, containing the most refined data at each region.
-
-    Args:
-        field: field to be computed at the uniform grid. Must be already cleaned from refinements and overlaps (check
-        clean_field() function).
-        up_to_level: level up to which the fine grid wants to be obtained
-        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
-        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
-        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
-        (and Y and Z)
-        size: comoving side of the simulation box
-        nmax: cells at base level
-        verbose: if True, prints the patch being opened at a time
-
-    Returns:
-        Uniform grid as described
-
-    """
-    uniform_size = nmax * 2 ** up_to_level
-    uniform = np.zeros((uniform_size, uniform_size, uniform_size))
-
-    reduction = 2 ** up_to_level
-    for i in range(uniform_size):
-        for j in range(uniform_size):
-            for k in range(uniform_size):
-                I = int(i / reduction)
-                J = int(j / reduction)
-                K = int(k / reduction)
-                uniform[i, j, k] += field[0][I, J, K]
-
-    levels = create_vector_levels(npatch)
-    relevantpatches = npatch[0:up_to_level + 1].sum()
-
-    for ipatch in range(1, relevantpatches + 1):
-        if verbose:
-            print('Covering patch {}'.format(ipatch))
-        reduction = 2 ** (up_to_level - levels[ipatch])
-        shift = np.array(patch_left_edge_natural(patchrx[ipatch], patchry[ipatch], patchrz[ipatch],
-                                                 levels[ipatch], size, nmax)) * 2 ** up_to_level
-        for i in range(patchnx[ipatch] * reduction):
-            for j in range(patchny[ipatch] * reduction):
-                for k in range(patchnz[ipatch] * reduction):
-                    I = int(i / reduction)
-                    J = int(j / reduction)
-                    K = int(k / reduction)
-                    uniform[int(shift[0]) + i, int(shift[1]) + j, int(shift[2]) + k] += field[ipatch][I, J, K]
-
-    return uniform
-
-
 def patch_is_inside_box(box_limits, level, nx, ny, nz, rx, ry, rz, size, nmax):
     """
     See "Returns:"
@@ -543,6 +490,32 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
                     uniform[i, j, k] += field[ipatch][I, J, K]
 
     return uniform
+
+
+def uniform_grid(field, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry, patchrz, size, nmax,
+                 verbose=False):
+    """
+    Builds a uniform grid at level up_to_level, containing the most refined data at each region.
+
+    Args:
+        field: field to be computed at the uniform grid. Must be already cleaned from refinements and overlaps (check
+        clean_field() function).
+        up_to_level: level up to which the fine grid wants to be obtained
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+        (and Y and Z)
+        size: comoving side of the simulation box
+        nmax: cells at base level
+        verbose: if True, prints the patch being opened at a time
+
+    Returns:
+        Uniform grid as described
+
+    """
+    box_limits = [-size/2, size/2, -size/2, size/2, -size/2, size/2]
+    return uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry,
+                             patchrz, size, nmax, verbose=verbose)
 
 
 def uniform_grid_zoom_several(fields, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry,
