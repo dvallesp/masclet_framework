@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 25/4/20 0:03
+#  Last update on 25/4/20 0:09
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -27,7 +27,7 @@ from scipy import optimize
 
 # FUNCTIONS DEFINED IN THIS MODULE
 
-# compute the position fields
+# SECTION: compute the position fields
 def compute_position_field_onepatch(args):
     """
     Returns a 3 matrices with the dimensions of the patch, containing the position for every cell centre
@@ -87,7 +87,7 @@ def compute_position_fields(patchnx, patchny, patchnz, patchrx, patchry, patchrz
     return cellsrx, cellsry, cellsrz
 
 
-# other functions
+# SECTION: grid geometry
 def patch_vertices(ipatch, cellsrx, cellsry, cellsrz):
     """
     Returns, for a given patch, the comoving coordinates of its 8 vertices.
@@ -140,6 +140,7 @@ def mask_sphere(R, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz):
     return mask
 
 
+# SECTION: calculations with coordinates: masses, profiles, etc.
 def mass_inside(R, clusrx, clusry, clusrz, density, cellsrx, cellsry, cellsrz, npatch, size, nmax):
     """
         Computes the mass inside a radius R sphere centered on (clusrx, clusry, clusrz), from the density field.
@@ -328,6 +329,7 @@ def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins
     return bin_centers, profiles_split
 
 
+# SECTION: find radius from R_\Delta radii definitions
 def find_rDelta_eqn(r, Delta, background_density, clusrx, clusry, clusrz, density, cellsrx, cellsry, cellsrz, npatch,
                     size, nmax, verbose):
     if verbose:
@@ -373,6 +375,7 @@ def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, cellsrx, cellsry, 
     return rDelta
 
 
+# SECTION: kinematical quantities: angular momenta, shape tensor, etc.
 def angular_momentum_cells(cellsrx, cellsry, cellsrz, vx, vy, vz, cellsm, inside):
     """
     Computes the angular momentum of a matter distribution

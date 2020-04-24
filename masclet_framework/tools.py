@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 24/4/20 23:06
+#  Last update on 25/4/20 0:10
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -26,7 +26,7 @@ import numpy as np
 
 # FUNCTIONS DEFINED IN THIS MODULE
 
-
+# SECTION: basic tools
 def create_vector_levels(npatch):
     """
     Creates a vector containing the level for each patch. Nothing really important, just for ease
@@ -43,6 +43,67 @@ def create_vector_levels(npatch):
     return np.array(vector)
 
 
+def clean_field(field, cr0amr, solapst, npatch, up_to_level=1000):
+    """
+    Receives a field (with its refinement patches) and, using the cr0amr and solapst variables, returns the field
+    having "cleaned" for refinements and overlaps. The user can specify the level of refinement required. This last
+    level will be cleaned of overlaps, but not of refinements!
+
+    Args:
+        field: field to be cleaned
+        cr0amr: field containing the refinements of the grid (1: not refined; 0: refined)
+        solapst: field containing the overlaps (1: keep; 0: not keep)
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        up_to_level: specify if only cleaning until certain level is desired
+
+    Returns:
+        "Clean" version of the field, with the same structure.
+
+    """
+    levels = create_vector_levels(npatch)
+    up_to_level = min(up_to_level, levels.max())
+
+    cleanfield = []
+    if up_to_level == 0:
+        cleanfield.append(field[0])
+    else:
+        cleanfield.append(field[0] * cr0amr[0])  # not overlap in l=0
+
+    for level in range(1, up_to_level):
+        for ipatch in range(sum(npatch[0:level]) + 1, sum(npatch[0:level + 1]) + 1):
+            cleanfield.append(field[ipatch] * cr0amr[ipatch] * solapst[ipatch])
+
+    # last level: no refinements
+    for ipatch in range(sum(npatch[0:up_to_level]) + 1, sum(npatch[0:up_to_level + 1]) + 1):
+        cleanfield.append(field[ipatch] * solapst[ipatch])
+
+    return cleanfield
+
+
+def diagonalize_ascending(matrix):
+    """
+    Given a squared matrix, finds its eigenvalues and eigenvectors, and returns both order by ascending order (smaller
+    first). This function makes use of numpy.linalg.eig() function.
+
+    Args:
+        matrix: squared, diagonalizable matrx
+
+    Returns:
+        list of eigenvalues and list of their corresponding eigenvectors
+
+    """
+    matrix_eigenvalues, matrix_eigenvectors = np.linalg.eig(matrix)
+    eigenvalues = []
+    eigenvectors = []
+    for eigenvalue in sorted(np.unique(matrix_eigenvalues)):
+        for index in np.where(matrix_eigenvalues == eigenvalue)[0]:
+            eigenvalues.append(eigenvalue)
+            eigenvectors.append(matrix_eigenvectors[:, index])
+
+    return eigenvalues, eigenvectors
+
+
+# SECTION: grid geometry
 def find_absolute_grid_position(ipatch, npatch, patchx, patchy, patchz, pare):
     """
     Given a patch in a certain iteration, finds the grid (natural) coordinates of its left corner.
@@ -205,43 +266,6 @@ def which_patches_inside_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, pat
     return which_ipatch
 
 
-def clean_field(field, cr0amr, solapst, npatch, up_to_level=1000):
-    """
-    Receives a field (with its refinement patches) and, using the cr0amr and solapst variables, returns the field
-    having "cleaned" for refinements and overlaps. The user can specify the level of refinement required. This last
-    level will be cleaned of overlaps, but not of refinements!
-
-    Args:
-        field: field to be cleaned
-        cr0amr: field containing the refinements of the grid (1: not refined; 0: refined)
-        solapst: field containing the overlaps (1: keep; 0: not keep)
-        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
-        up_to_level: specify if only cleaning until certain level is desired
-
-    Returns:
-        "Clean" version of the field, with the same structure.
-
-    """
-    levels = create_vector_levels(npatch)
-    up_to_level = min(up_to_level, levels.max())
-
-    cleanfield = []
-    if up_to_level == 0:
-        cleanfield.append(field[0])
-    else:
-        cleanfield.append(field[0] * cr0amr[0])  # not overlap in l=0
-
-    for level in range(1, up_to_level):
-        for ipatch in range(sum(npatch[0:level]) + 1, sum(npatch[0:level + 1]) + 1):
-            cleanfield.append(field[ipatch] * cr0amr[ipatch] * solapst[ipatch])
-
-    # last level: no refinements
-    for ipatch in range(sum(npatch[0:up_to_level]) + 1, sum(npatch[0:up_to_level + 1]) + 1):
-        cleanfield.append(field[ipatch] * solapst[ipatch])
-
-    return cleanfield
-
-
 def patch_left_edge_comoving(rx, ry, rz, level, size, nmax):
     """
     Computes comoving coordinates of the left edge of a patch, given its rx, ry, rz.
@@ -356,6 +380,7 @@ def which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, pat
     return which_ipatch
 
 
+# SECTION: uniform grids
 def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry, patchrz,
                       size, nmax, verbose=False):
     """
@@ -658,26 +683,3 @@ def uniform_grid_zoom_several(fields, box_limits, up_to_level, npatch, patchnx, 
                         uniforms[ifield][i, j, k] += fields[ifield][ipatch][I, J, K]
 
     return tuple(uniforms)
-
-
-def diagonalize_ascending(matrix):
-    """
-    Given a squared matrix, finds its eigenvalues and eigenvectors, and returns both order by ascending order (smaller
-    first). This function makes use of numpy.linalg.eig() function.
-
-    Args:
-        matrix: squared, diagonalizable matrx
-
-    Returns:
-        list of eigenvalues and list of their corresponding eigenvectors
-
-    """
-    matrix_eigenvalues, matrix_eigenvectors = np.linalg.eig(matrix)
-    eigenvalues = []
-    eigenvectors = []
-    for eigenvalue in sorted(np.unique(matrix_eigenvalues)):
-        for index in np.where(matrix_eigenvalues == eigenvalue)[0]:
-            eigenvalues.append(eigenvalue)
-            eigenvectors.append(matrix_eigenvectors[:, index])
-
-    return eigenvalues, eigenvectors

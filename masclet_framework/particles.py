@@ -9,7 +9,7 @@ Contains several useful functions in order to deal with particles
 
 Created by David Vallés
 """
-#  Last update on 24/4/20 23:06
+#  Last update on 25/4/20 0:09
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -27,6 +27,7 @@ from scipy import optimize
 # FUNCTIONS DEFINED IN THIS MODULE
 
 
+# SECTION: manipulate MASCLET data
 def correct_positive_oripa(oripa, mass):
     """
     Corrects a bug in the simulation's ouput, which caused all oripa to be positive.
@@ -53,6 +54,7 @@ def correct_positive_oripa(oripa, mass):
     return oripa
 
 
+# SECTION: compare particles by IDs
 def shared_particles(x1, y1, z1, oripa1, rx1, ry1, rz1, r1, x2, y2, z2, oripa2, rx2, ry2, rz2, r2):
     """
     Finds the shared particles between two haloes (of DM particles; although it can be used for any particle simulation)
@@ -118,6 +120,7 @@ def shared_mass(x1, y1, z1, m1, oripa1, rx1, ry1, rz1, r1, x2, y2, z2, m2, oripa
     return m1[indices1].sum() * units.mass_to_sun
 
 
+# SECTION: find radius from R_\Delta radii definitions
 def find_rDelta_eqn_particles(r, Delta, background_density, zeta, clusrx, clusry, clusrz, x, y, z, m, verbose):
     if verbose:
         print('Evaluating at r={:.3f}'.format(r))
@@ -162,6 +165,7 @@ def find_rDelta_particles(Delta, zeta, clusrx, clusry, clusrz, x, y, z, m, h, om
     return rDelta
 
 
+# SECTION: kinematical quantities: angular momenta, shape tensor, etc.
 def angular_momentum_particles(x, y, z, vx, vy, vz, m, inside):
     """
     Computes the angular momentum of a particle distribution
