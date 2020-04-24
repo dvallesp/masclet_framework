@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 24/4/20 14:07
+#  Last update on 24/4/20 15:49
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -207,7 +207,7 @@ def mass_inside(R, clusrx, clusry, clusrz, density, cellsrx, cellsry, cellsrz, n
 
 
 def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins, cellsrx, cellsry,
-                      cellsrz, npatch, size, nmax, verbose=False):
+                      cellsrz, cr0amr, solapst, npatch, size, nmax, verbose=False):
     """
     Computes a (volume-weighted) radial profile of the quantity given in the "field" argument, taking center in
     (clusrx, clusry, clusrz).
@@ -221,6 +221,8 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
         logbins: if False, radial shells are spaced linearly. If True, they're spaced logarithmically. Not that, if
                  logbins = True, rmin cannot be 0.
         cellsrx, cellsry, cellsrz: position fields
+        cr0amr: field containing the refinements of the grid (1: not refined; 0: refined)
+        solapst: field containing the overlaps (1: keep; 0: not keep)
         npatch: number of patches in each level, starting in l=0
         size: comoving size of the simulation box
         nmax: cells at base level
@@ -270,6 +272,7 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
         cells_inner = cells_outer
         cells_outer = mask_sphere(r_out, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz)
         shell_mask = [inner ^ outer for inner, outer in zip(cells_inner, cells_outer)]
+        shell_mask = tools.clean_field(shell_mask, cr0amr, solapst, npatch)
 
         sum_field_vw = sum([(fvw * sm).sum() for fvw, sm in zip(field_vw, shell_mask)])
         sum_vw = sum([(sm * cv).sum() for sm, cv in zip(shell_mask, cell_volume)])
@@ -280,7 +283,7 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
 
 
 def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins, cellsrx, cellsry,
-                               cellsrz, npatch, size, nmax, verbose=False):
+                               cellsrz, cr0amr, solapst, npatch, size, nmax, verbose=False):
     """
     Computes a (volume-weighted) radial profile of the quantity given in the "field" argument, taking center in
     (clusrx, clusry, clusrz).
@@ -294,6 +297,8 @@ def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins
         logbins: if False, radial shells are spaced linearly. If True, they're spaced logarithmically. Not that, if
                  logbins = True, rmin cannot be 0.
         cellsrx, cellsry, cellsrz: position fields
+        cr0amr: field containing the refinements of the grid (1: not refined; 0: refined)
+        solapst: field containing the overlaps (1: keep; 0: not keep)
         npatch: number of patches in each level, starting in l=0
         size: comoving size of the simulation box
         nmax: cells at base level
@@ -344,6 +349,7 @@ def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins
         cells_inner = cells_outer
         cells_outer = mask_sphere(r_out, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz)
         shell_mask = [inner ^ outer for inner, outer in zip(cells_inner, cells_outer)]
+        shell_mask = tools.clean_field(shell_mask, cr0amr, solapst, npatch)
         sum_vw = sum([(sm * cv).sum() for sm, cv in zip(shell_mask, cell_volume)])
 
         profile_thisr = [(sum([(fvw * sm).sum() for fvw, sm in zip(field_vw, shell_mask)]) / sum_vw) for field_vw in
