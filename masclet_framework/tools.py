@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 23/4/20 12:41
+#  Last update on 24/4/20 14:12
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -218,6 +218,8 @@ def which_cells_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, 
         size: comoving box side (preferred length units)
         nmax: cells at base level
 
+    DEPRECATED (see tools_xyz module)
+
     Returns:
         isinside: numpy bool array, the size of the patch, containing for each cell 1 if inside and 0 otherwise
     """
@@ -247,6 +249,8 @@ def mask_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, p
     If a patch has all "False", an array is not ouputted, but a False is, instead.
 
     Non-parallel version!
+
+    DEPRECATED (see tools_xyz module)
 
     Args:
         R: radius of the considered sphere
@@ -284,6 +288,8 @@ def mask_patch(args):
     """
     Given a patch and a sphere, returns a matrix containing True (means the cell must be considered), False otherwise.
 
+    DEPRECATED (see tools_xyz module)
+
     Args: tuple containing, in this order:
         R: radius of the considered sphere
         clusrx, clusry, clusrz: comoving coordinates of the center of the sphere
@@ -319,6 +325,8 @@ def mask_sphere_parallel(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, p
     If a patch has all "False", an array is not ouputted, but a False is, instead.
 
     Parallel version.
+
+    DEPRECATED (see tools_xyz module)
 
     Args:
         R: radius of the considered sphere
@@ -494,6 +502,8 @@ def mass_inside(R, clusrx, clusry, clusrz, density, patchnx, patchny, patchnz, p
 
         Parallel version.
 
+        DEPRECATED (see tools_xyz module)
+
         Args:
             R: radius of the considered sphere
             clusrx, clusry, clusrz: comoving coordinates of the center of the sphere
@@ -537,6 +547,8 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
     """
     Computes a (volume-weighted) radial profile of the quantity given in the "field" argument, taking center in
     (clusrx, clusry, clusrz).
+
+    DEPRECATED (see tools_xyz module)
 
     Args:
         field: variables (already cleaned) whose profile wants to be got
@@ -614,6 +626,8 @@ def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins
     """
     Computes several (volume-weighted) radial profiles at once, of the quantities given in the "fields" argument, as a
     list of regular fields,taking center in (clusrx, clusry, clusrz).
+
+    DEPRECATED (see tools_xyz module)
 
     Args:
         fields: list of variables (already cleaned) whose profile wants to be got

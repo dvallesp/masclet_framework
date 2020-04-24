@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 24/4/20 14:06
+#  Last update on 24/4/20 14:07
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -400,6 +400,7 @@ def find_rDelta(Delta, zeta, clusrx, clusry, clusrz, density, cellsrx, cellsry, 
     if verbose:
         print('Converged!')
     return rDelta
+
 
 def angular_momentum_particles(x, y, z, vx, vy, vz, m, inside):
     """
