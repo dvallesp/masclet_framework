@@ -2,7 +2,7 @@
 
 This library implements some functions which can be used to handle the outputs from the cosmological code MASCLET (Quilis, 2004). Do not hesitate to contact the creator of the library (David Vallés) for any troubles you might encounter or suggestions you might have regarding this library.
 
-In the following lines, we add some brief information about each of the modules of the library. 
+In the following lines, we add some brief information about each of the modules of the library. More information about the specific usage of each function can be found in their corresponding docstrings. 
 
 ## Installation
 The modules can be imported independently,
