@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 24/4/20 23:06
+#  Last update on 25/4/20 0:03
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -138,39 +138,6 @@ def mask_sphere(R, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz):
             zip(cellsrx, cellsry, cellsrz)]
 
     return mask
-
-
-def clean_field(field, cr0amr, solapst, npatch, up_to_level=1000):
-    """
-    Receives a field (with its refinement patches) and, using the cr0amr and solapst variables, returns the field
-    having "cleaned" for refinements and overlaps. The user can specify the level of refinement required. This last
-    level will be cleaned of overlaps, but not of refinements!
-
-    Args:
-        field: field to be cleaned
-        cr0amr: field containing the refinements of the grid (1: not refined; 0: refined)
-        solapst: field containing the overlaps (1: keep; 0: not keep)
-        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
-        up_to_level: specify if only cleaning until certain level is desired
-
-    Returns:
-        "Clean" version of the field, with the same structure.
-
-    """
-    levels = tools.create_vector_levels(npatch)
-    up_to_level = min(up_to_level, levels.max())
-
-    cleanfield = [field[0] * cr0amr[0]]
-
-    for level in range(1, up_to_level):
-        for ipatch in range(sum(npatch[0:level]) + 1, sum(npatch[0:level + 1]) + 1):
-            cleanfield.append(field[ipatch] * cr0amr[ipatch] * solapst[ipatch])
-
-    # last level: no refinements
-    for ipatch in range(sum(npatch[0:up_to_level]) + 1, sum(npatch[0:up_to_level + 1]) + 1):
-        cleanfield.append(field[ipatch] * solapst[ipatch])
-
-    return cleanfield
 
 
 def mass_inside(R, clusrx, clusry, clusrz, density, cellsrx, cellsry, cellsrz, npatch, size, nmax):
