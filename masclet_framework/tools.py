@@ -10,12 +10,13 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 25/4/20 0:10
+#  Last update on 27/4/20 1:23
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
 # numpy
 import numpy as np
+
 
 # from multiprocessing import Pool
 
@@ -539,7 +540,7 @@ def uniform_grid(field, up_to_level, npatch, patchnx, patchny, patchnz, patchrx,
         Uniform grid as described
 
     """
-    box_limits = [-size/2, size/2, -size/2, size/2, -size/2, size/2]
+    box_limits = [-size / 2, size / 2, -size / 2, size / 2, -size / 2, size / 2]
     return uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry,
                              patchrz, size, nmax, verbose=verbose)
 
@@ -683,3 +684,101 @@ def uniform_grid_zoom_several(fields, box_limits, up_to_level, npatch, patchnx, 
                         uniforms[ifield][i, j, k] += fields[ifield][ipatch][I, J, K]
 
     return tuple(uniforms)
+
+
+def mask_gas_clumps(shell_mask, gas_density, fcut=3.5, mode='zhuravleva13'):
+    """
+    Given a radial shell mask and the gas density field, this routine yields a new mask where the substructures
+     (clumps) are indicated.
+
+    Args:
+        shell_mask: bool field, where cells belonging to the shell are marked as "True"
+        gas_density: gas density field (normalization should be unimportant)
+        fcut: cells with log gas density at more than fcut standard deviations from the median log gas density are
+            removed. Defaults to 3.5.
+        mode: specifies the algorithm applied. Defaults to 'zhuravleva13'
+
+    Returns:
+        A mask containing the cells which must be eliminated.
+
+    """
+    # densities inside the shell
+    masked_density = [d * m for d, m in zip(gas_density, shell_mask)]
+
+    if mode == 'zhuravleva13':
+        # median and std of the logdensities in the shell
+        logdensities = np.log10(np.concatenate([d[d > 0] for d in masked_density]))
+        median = np.median(logdensities)
+        sigma = np.std(logdensities)
+
+        # upper bound according to Zhuravleva13
+        upper_bound = 10 ** (median + fcut * sigma)
+
+        mask_substructures = [m > upper_bound for m in masked_density]
+
+    return mask_substructures
+
+
+def mask_gas_filaments(shell_mask, gas_density, gas_vr, fcut_low=1, fcut_high=3.5, mode='lau15'):
+    """
+    Given a radial shell mask, a gas density field and a gas radial (clustercentric) velocity field,
+    this routine yields a new mask where the filamentary substructures are indicated.
+
+    Args:
+        shell_mask: bool field, where cells belonging to the shell are marked as "True"
+        gas_density: gas density field (normalization should be unimportant)
+        gas_vr: gas radial velocity field
+        fcut_low, fcut_high: infalling cells with log gas density between [fcut_low, fcut_high] above the median are
+                            marked as filamentary structures
+        mode: specifies the algorithm applied. Defaults to 'lau15'
+
+    Returns:
+        A mask containing the cells which must be eliminated.
+
+    """
+    # densities inside the shell
+    masked_density = [d * m for d, m in zip(gas_density, shell_mask)]
+
+    if mode == 'lau15':
+        # median and std of the logdensities in the shell
+        logdensities = np.log10(np.concatenate([d[d > 0] for d in masked_density]))
+        median = np.median(logdensities)
+        sigma = np.std(logdensities)
+
+        # lower and upper bounds according to Lau15
+        lower_bound = 10 ** (median + fcut_low * sigma)
+        upper_bound = 10 ** (median + fcut_high * sigma)
+
+        mask_substructures = [(m > lower_bound) * (m < upper_bound) * (vr < 0) for m, vr in zip(masked_density, gas_vr)]
+
+    return mask_substructures
+
+
+def remove_gas_substructures(gas_density, mask_substructures, shell_mask, refill='median'):
+    """
+    Given a radial shell mask and the gas density field, this routine yields the density where the substructures
+        (clumps or filaments) have been substracted and replaced by some value.
+
+    Args:
+        gas_density: gas density field (normalization should be unimportant)
+        mask_substructures: mask containing the identified clumps or filaments for this radial bin
+                            (see mask_gas_clumps() and mask_gas_filaments() functions in this module)
+        shell_mask: bool field, where cells belonging to the shell are marked as "True"
+        refill: clumps are refilled with the 'median' or 'mean' density, according to the specified parameter
+
+    Returns:
+        The gas density field, where the clumps have been removed
+
+    """
+    masked_density = [d * m for d, m in zip(gas_density, shell_mask)]
+    bindensities = np.concatenate([d[d > 0] for d in masked_density])
+
+    if refill == 'median':
+        refill_value = np.median(bindensities)
+    elif refill == 'mean':
+        refill_value = np.mean(bindensities)
+
+    for ipatch in range(len(gas_density)):
+        gas_density[ipatch][mask_substructures[ipatch]] = refill_value
+
+    return gas_density
