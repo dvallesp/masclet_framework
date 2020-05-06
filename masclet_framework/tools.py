@@ -10,15 +10,16 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 27/4/20 1:23
+#  Last update on 6/5/20 20:51
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
 # numpy
 import numpy as np
 
+from multiprocessing import Pool
 
-# from multiprocessing import Pool
+import gc
 
 # from masclet_framework import cosmo_tools, units
 
@@ -515,6 +516,110 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
                     J = int(Jmin + (j - jmin) / reduction)
                     K = int(Kmin + (k - kmin) / reduction)
                     uniform[i, j, k] += field[ipatch][I, J, K]
+
+    return uniform
+
+
+def p_uniform_grid_zoom(args):
+    print('Sub-box {} of {}'.format(args[0], args[1]))
+    return masclet.tools.uniform_grid_zoom(*args[2:])
+
+
+def uniform_grid_zoom_parallel(field, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry,
+                               patchrz, size, nmax, ncores=1, copies=2, verbose=False):
+    l0_cellsize = size / nmax
+    uniform_cellsize = size / nmax / 2 ** up_to_level
+
+    bxmin = box_limits[0]
+    bxmax = box_limits[1]
+    bymin = box_limits[2]
+    bymax = box_limits[3]
+    bzmin = box_limits[4]
+    bzmax = box_limits[5]
+
+    # BASE GRID
+    uniform_size_x = int(round(nmax * (bxmax - bxmin) / size * 2 ** up_to_level))
+    uniform_size_y = int(round(nmax * (bymax - bymin) / size * 2 ** up_to_level))
+    uniform_size_z = int(round(nmax * (bzmax - bzmin) / size * 2 ** up_to_level))
+    uniform = np.zeros((uniform_size_x, uniform_size_y, uniform_size_z))
+
+    reduction = 2 ** up_to_level
+
+    uniform_sizex_l0 = uniform_size_x / reduction
+    uniform_sizey_l0 = uniform_size_x / reduction
+    uniform_sizez_l0 = uniform_size_x / reduction
+
+    #step_x = int(uniform_sizex_l0 / copies)
+    #step_y = int(uniform_sizey_l0 / copies)
+    #step_z = int(uniform_sizez_l0 / copies)
+    step_x = uniform_sizex_l0 / copies
+    step_y = uniform_sizey_l0 / copies
+    step_z = uniform_sizez_l0 / copies
+
+    #step_x_mpc = step_x * size / nmax
+    #step_y_mpc = step_y * size / nmax
+    #step_z_mpc = step_z * size / nmax
+
+    box_limits_list = []
+    box_limits_list_indices = []
+    for i in range(copies):
+        for j in range(copies):
+            for k in range(copies):
+                #i_low = i * step_x * reduction
+                i_low = int(i * step_x * reduction)
+                #x_low = bxmin + i * step_x_mpc
+                x_low = bxmin + i_low * uniform_cellsize
+                if i != copies - 1:
+                    #i_high = i_low + step_x * reduction
+                    i_high = int((i+1) * step_x * reduction)
+                    #x_high = x_low + step_x_mpc
+                    x_high = bxmin + i_high * uniform_cellsize
+                else:
+                    i_high = uniform_size_x
+                    x_high = bxmax
+
+                #y_low = bymin + j * step_y_mpc
+                j_low = int(j * step_y * reduction)
+                #j_low = j * step_y * reduction
+                y_low = bymin + j_low * uniform_cellsize
+                if j != copies - 1:
+                    #y_high = y_low + step_y_mpc
+                    j_high = int((j + 1) * step_y * reduction)
+                    #j_high = j_low + step_y * reduction
+                    y_high = bymin + j_high * uniform_cellsize
+                else:
+                    y_high = bymax
+                    j_high = uniform_size_y
+
+                #z_low = bzmin + k * step_z_mpc
+                k_low = int(k * step_z * reduction)
+                #k_low = k * step_z * reduction
+                z_low = bzmin + k_low * uniform_cellsize
+                if k != copies - 1:
+                    #z_high = z_low + step_z_mpc
+                    k_high = int((k + 1) * step_z * reduction)
+                    #k_high = k_low + step_z * reduction
+                    z_high = bzmin + k_high * uniform_cellsize
+                else:
+                    z_high = bzmax
+                    k_high = uniform_size_z
+
+                box_limits_list.append((x_low, x_high, y_low, y_high, z_low, z_high))
+                box_limits_list_indices.append((i_low, i_high, j_low, j_high, k_low, k_high))
+
+    args = []
+    for ilimits, limits in enumerate(box_limits_list):
+        args.append((ilimits, len(box_limits_list), field, limits, up_to_level, npatch, patchnx, patchny, patchnz,
+                     patchrx, patchry, patchrz, size, nmax, verbose))
+
+    with Pool(ncores) as p:
+        uniform_grids = p.map(p_uniform_grid_zoom, args)
+
+    del args
+    gc.collect()
+
+    for lim, u in zip(box_limits_list_indices, uniform_grids):
+        uniform[lim[0]:lim[1], lim[2]:lim[3], lim[4]:lim[5]] = u
 
     return uniform
 
