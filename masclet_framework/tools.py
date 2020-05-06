@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 6/5/20 20:51
+#  Last update on 7/5/20 1:02
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -522,7 +522,7 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
 
 def p_uniform_grid_zoom(args):
     print('Sub-box {} of {}'.format(args[0], args[1]))
-    return masclet.tools.uniform_grid_zoom(*args[2:])
+    return uniform_grid_zoom(*args[2:])
 
 
 def uniform_grid_zoom_parallel(field, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry,
