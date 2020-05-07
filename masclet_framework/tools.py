@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 7/5/20 9:48
+#  Last update on 7/5/20 9:51
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -542,6 +542,32 @@ def p_uniforms_grid_zoom(args):
 
 def uniform_grid_zoom_parallel(field, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry,
                                patchrz, size, nmax, ncores=1, copies=2, several=False, verbose=False):
+    '''
+    Builds a uniform grid, zooming on a box specified by box_limits, at level up_to_level, containing the most refined
+    data at each region. Can perform with a field (several=False) or a list of fields (several=True).
+    Parallel implementation through domain decomposition.
+
+    Args:
+        field: field to be computed at the uniform grid. Must be already cleaned from refinements and overlaps (check
+                clean_field() function).
+        box_limits: a tuple in the form (xmin, xmax, ymin, ymax, zmin, zmax). Limits should correspond to l=0 cell
+                    boundaries
+        up_to_level: level up to which the fine grid wants to be obtained
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+                                   (and Y and Z)
+        size: comoving side of the simulation box
+        nmax: cells at base level
+        ncores: number of cores to be used for parallelization
+        copies: the number of decomposed domains will be copies ** 3
+        several: set it to True when using a list of fields
+        verbose: if True, prints the domain being uniformized at a time
+
+    Returns:
+        If several=False, returns the uniform grid.
+        If several=True, returns a tuple with the different uniform grids.
+    '''
     l0_cellsize = size / nmax
     uniform_cellsize = size / nmax / 2 ** up_to_level
 
