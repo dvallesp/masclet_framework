@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 7/5/20 9:51
+#  Last update on 7/5/20 10:41
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -656,7 +656,7 @@ def uniform_grid_zoom_parallel(field, box_limits, up_to_level, npatch, patchnx, 
         for lim, u in zip(box_limits_list_indices, uniforms_grids):
             for ifield in range(len(field)):
                 uniforms[ifield][lim[0]:lim[1], lim[2]:lim[3], lim[4]:lim[5]] = u[ifield]
-        return tuple(uniform)
+        return tuple(uniforms)
 
 
 def uniform_grid(field, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry, patchrz, size, nmax,
