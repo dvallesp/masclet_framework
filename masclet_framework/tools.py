@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 7/5/20 10:41
+#  Last update on 11/5/20 12:30
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -591,8 +591,8 @@ def uniform_grid_zoom_parallel(field, box_limits, up_to_level, npatch, patchnx, 
     reduction = 2 ** up_to_level
 
     uniform_sizex_l0 = uniform_size_x / reduction
-    uniform_sizey_l0 = uniform_size_x / reduction
-    uniform_sizez_l0 = uniform_size_x / reduction
+    uniform_sizey_l0 = uniform_size_y / reduction
+    uniform_sizez_l0 = uniform_size_z / reduction
 
     step_x = uniform_sizex_l0 / copies
     step_y = uniform_sizey_l0 / copies
