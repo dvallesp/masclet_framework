@@ -9,7 +9,7 @@ Contains several useful functions in order to deal with particles
 
 Created by David Vallés
 """
-#  Last update on 25/4/20 0:09
+#  Last update on 12/5/20 17:34
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -163,6 +163,74 @@ def find_rDelta_particles(Delta, zeta, clusrx, clusry, clusrz, x, y, z, m, h, om
     if verbose:
         print('Converged!')
     return rDelta
+
+
+# SECTION: radial profiles
+def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins, x, y, z, verbose=False):
+    """
+    Computes a radial profile of the quantity given in the "field" argument, taking center in (clusrx, clusry, clusrz).
+    No weight is applied (all particles treated equally). In order to produce an, e.g., mass weighted profile, consider
+    producing the profiles of mass and mass * quantity,
+
+    Args:
+        fields: set of particles' quantities whose profiles are wanted to be found
+        clusrx, clusry, clusrz: comoving coordinates of the center for the profile
+        rmin: starting radius of the profile
+        rmax: final radius of the profile
+        nbins: number of points for the profile
+        logbins: if False, radial shells are spaced linearly. If True, they're spaced logarithmically. Not that, if
+                 logbins = True, rmin cannot be 0.
+        x, y, z: positions of the particles
+        verbose: if True, prints the patch being opened at a time
+
+    Returns:
+        Two lists. One of them contains the center of each radial cell. The other contains the value of the field
+        averaged across all the cells of the shell.
+
+    """
+    # getting the bins
+    try:
+        assert (rmax > rmin)
+    except AssertionError:
+        print('You would like to input rmax > rmin...')
+        return
+
+    if logbins:
+        try:
+            assert (rmin > 0)
+        except AssertionError:
+            print('Cannot use rmin=0 with logarithmic binning...')
+            return
+        bin_bounds = np.logspace(np.log10(rmin), np.log10(rmax), nbins + 1)
+
+    else:
+        bin_bounds = np.linspace(rmin, rmax, nbins + 1)
+
+    bin_centers = (bin_bounds[1:] + bin_bounds[:-1]) / 2
+
+    # first shell / interior sphere
+    if rmin > 0:
+        particles_outer = (x - clusrx) ** 2 (y - clusry) ** 2 (z - clusrz) ** 2 < rmin ** 2
+    else:
+        particles_outer = np.zeros(x.shape, dtype='bool')
+
+    # subsequent spheres
+    profiles = []
+    for r_out in bin_bounds[1:]:
+        if verbose:
+            print('Working at outer radius {} Mpc'.format(r_out))
+        particles_inner = particles_outer
+        particles_outer = (x - clusrx) ** 2 (y - clusry) ** 2 (z - clusrz) ** 2 < r_out ** 2
+        shell_mask = particles_inner ^ particles_outer
+
+        profile_thisr = [(field * shell_mask).sum() for field in fields]
+
+        profiles.append(profile_thisr)
+
+    profiles = np.asarray(profiles)
+    profiles_split = tuple([profiles[:, i] for i in range(profiles.shape[1])])
+
+    return bin_centers, profiles_split
 
 
 # SECTION: kinematical quantities: angular momenta, shape tensor, etc.
