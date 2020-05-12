@@ -9,7 +9,7 @@ Contains several useful functions in order to deal with particles
 
 Created by David Vallés
 """
-#  Last update on 12/5/20 17:34
+#  Last update on 12/5/20 17:42
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -166,7 +166,7 @@ def find_rDelta_particles(Delta, zeta, clusrx, clusry, clusrz, x, y, z, m, h, om
 
 
 # SECTION: radial profiles
-def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins, x, y, z, verbose=False):
+def several_radial_profiles(fields, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins, x, y, z, verbose=False):
     """
     Computes a radial profile of the quantity given in the "field" argument, taking center in (clusrx, clusry, clusrz).
     No weight is applied (all particles treated equally). In order to produce an, e.g., mass weighted profile, consider
