@@ -9,7 +9,7 @@ Contains several useful functions in order to deal with particles
 
 Created by David Vallés
 """
-#  Last update on 12/5/20 17:42
+#  Last update on 12/5/20 17:53
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -210,7 +210,7 @@ def several_radial_profiles(fields, clusrx, clusry, clusrz, rmin, rmax, nbins, l
 
     # first shell / interior sphere
     if rmin > 0:
-        particles_outer = (x - clusrx) ** 2 (y - clusry) ** 2 (z - clusrz) ** 2 < rmin ** 2
+        particles_outer = (x - clusrx) ** 2 + (y - clusry) ** 2 + (z - clusrz) ** 2 < rmin ** 2
     else:
         particles_outer = np.zeros(x.shape, dtype='bool')
 
@@ -220,7 +220,7 @@ def several_radial_profiles(fields, clusrx, clusry, clusrz, rmin, rmax, nbins, l
         if verbose:
             print('Working at outer radius {} Mpc'.format(r_out))
         particles_inner = particles_outer
-        particles_outer = (x - clusrx) ** 2 (y - clusry) ** 2 (z - clusrz) ** 2 < r_out ** 2
+        particles_outer = (x - clusrx) ** 2 + (y - clusry) ** 2 + (z - clusrz) ** 2 < r_out ** 2
         shell_mask = particles_inner ^ particles_outer
 
         profile_thisr = [(field * shell_mask).sum() for field in fields]
