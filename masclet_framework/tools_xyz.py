@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 25/4/20 0:09
+#  Last update on 1/6/20 23:46
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -511,11 +511,13 @@ def ellipsoidal_shape_cells(cellsrx, cellsry, cellsrz, cellsm, r, tol=1e-3, maxi
 
         # diagonalize the new cell selection
         shapetensor = shape_tensor_cells(cellsrx, cellsry, cellsrz, cellsm, inside)
-        try:
-            S_eigenvalues, S_eigenvectors = tools.diagonalize_ascending(shapetensor)
-        except np.linalg.LinAlgError:
-            print('Shape tensor had {} nans. Operation impossible.'.format(np.isnan(shapetensor).sum()))
+
+        if np.isnan(shapetensor).sum() != 0 or np.isinf(shapetensor).sum() != 0:
+            print('Shape tensor had {} nans. Operation impossible.'.format(np.isnan(shapetensor).sum() +
+                                                                           np.isinf(shapetensor).sum()))
             return None, None
+        else:
+            S_eigenvalues, S_eigenvectors = tools.diagonalize_ascending(shapetensor)
 
         lambda_xtilde = S_eigenvalues[0]
         lambda_ytilde = S_eigenvalues[1]
