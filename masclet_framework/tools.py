@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 26/6/20 15:43
+#  Last update on 26/6/20 16:37
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -656,6 +656,9 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
         else:
             Kmax = patchnz[ipatch] - 1
             kmax = int(round(kmin + (Kmax - Kmin + 1) * reduction))
+
+        if imin == imax or jmin == jmax or kmin == kmax:
+            continue
 
         projectedpatch = np.kron(field[ipatch][int(Imin):Imax + 1, int(Jmin):Jmax + 1, int(Kmin):Kmax + 1],
                                  np.ones((reduction, reduction, reduction)))[0:imax - imin, 0:jmax - jmin,
