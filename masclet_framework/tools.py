@@ -10,7 +10,7 @@ Contains several useful functions that other modules might need
 Created by David Vallés
 """
 
-#  Last update on 11/5/20 12:30
+#  Last update on 26/6/20 15:43
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -20,6 +20,7 @@ import numpy as np
 from multiprocessing import Pool
 
 import gc
+
 
 # from masclet_framework import cosmo_tools, units
 
@@ -94,7 +95,10 @@ def diagonalize_ascending(matrix):
         list of eigenvalues and list of their corresponding eigenvectors
 
     """
-    matrix_eigenvalues, matrix_eigenvectors = np.linalg.eig(matrix)
+    try:
+        matrix_eigenvalues, matrix_eigenvectors = np.linalg.eig(matrix)
+    except np.linalg.LinAlgError:
+        raise np.linalg.LinAlgError
     eigenvalues = []
     eigenvectors = []
     for eigenvalue in sorted(np.unique(matrix_eigenvalues)):
@@ -383,9 +387,10 @@ def which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, pat
 
 
 # SECTION: uniform grids
-def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry, patchrz,
-                      size, nmax, verbose=False):
+def uniform_grid_zoom_old(field, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry, patchrz,
+                          size, nmax, verbose=False):
     """
+    OLD, SLOW VERSION. WILL BE DEPRECATED IN FUTURE UPDATES. CHECK uniform_grid_zoom() FOR THE NEWER, FASTER ONE.
     Builds a uniform grid, zooming on a box specified by box_limits, at level up_to_level, containing the most refined
     data at each region.
 
@@ -520,8 +525,149 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
     return uniform
 
 
+def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry, patchrz,
+                      size, nmax, verbose=False):
+    """
+    Builds a uniform grid, zooming on a box specified by box_limits, at level up_to_level, containing the most refined
+    data at each region.
+
+    Args:
+        field: field to be computed at the uniform grid. Must be already cleaned from refinements and overlaps (check
+                clean_field() function).
+        box_limits: a tuple in the form (xmin, xmax, ymin, ymax, zmin, zmax). Limits should correspond to l=0 cell
+                    boundaries
+        up_to_level: level up to which the fine grid wants to be obtained
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+                                   (and Y and Z)
+        size: comoving side of the simulation box
+        nmax: cells at base level
+        verbose: if True, prints the patch being opened at a time
+
+    Returns:
+        Uniform grid as described
+
+    """
+    uniform_cellsize = size / nmax / 2 ** up_to_level
+
+    bxmin = box_limits[0]
+    bxmax = box_limits[1]
+    bymin = box_limits[2]
+    bymax = box_limits[3]
+    bzmin = box_limits[4]
+    bzmax = box_limits[5]
+
+    # BASE GRID
+    uniform_size_x = int(round(nmax * (bxmax - bxmin) / size * 2 ** up_to_level))
+    uniform_size_y = int(round(nmax * (bymax - bymin) / size * 2 ** up_to_level))
+    uniform_size_z = int(round(nmax * (bzmax - bzmin) / size * 2 ** up_to_level))
+    # uniform = np.zeros((uniform_size_x, uniform_size_y, uniform_size_z))
+
+    reduction = 2 ** up_to_level
+
+    starting_x = (bxmin + size / 2) * nmax / size
+    starting_xrefined = int(starting_x * 2 ** up_to_level + .5)
+    starting_y = (bymin + size / 2) * nmax / size
+    starting_yrefined = int(starting_y * 2 ** up_to_level + .5)
+    starting_z = (bzmin + size / 2) * nmax / size
+    starting_zrefined = int(starting_z * 2 ** up_to_level + .5)
+
+    ending_x = (bxmax + size / 2) * nmax / size
+    ending_y = (bymax + size / 2) * nmax / size
+    ending_z = (bzmax + size / 2) * nmax / size
+
+    minx = starting_xrefined - int(starting_x) * reduction
+    miny = starting_yrefined - int(starting_y) * reduction
+    minz = starting_zrefined - int(starting_z) * reduction
+    maxx = minx + uniform_size_x
+    maxy = miny + uniform_size_y
+    maxz = minz + uniform_size_z
+
+    uniform = np.kron(field[0][int(starting_x):int(ending_x + 1), int(starting_y):int(ending_y + 1),
+                      int(starting_z):int(ending_z + 1)], np.ones((reduction, reduction, reduction)))[minx:maxx,
+              miny:maxy, minz:maxz]
+
+    # REFINEMENT LEVELS
+
+    levels = create_vector_levels(npatch)
+    relevantpatches = which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
+                                               size, nmax)[1:]  # we ignore the 0-th relevant patch (patch 0, base
+    # level). By construction, the 0th element is always the l=0 patch.
+    relevantpatches = [i for i in relevantpatches if i <= npatch[0:up_to_level + 1].sum()]
+
+    for ipatch in relevantpatches:
+        if verbose:
+            print('Covering patch {}'.format(ipatch))
+
+        reduction = 2 ** (up_to_level - levels[ipatch])
+        ipatch_cellsize = uniform_cellsize * reduction
+        round_digits = max(int(np.log10(reduction)) + 1, 3)  # avoids tiny numerical errors which generated void regions
+
+        vertices = patch_vertices(levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnz[ipatch], patchrx[ipatch],
+                                  patchry[ipatch], patchrz[ipatch], size, nmax)
+        pxmin = vertices[0][0]
+        pymin = vertices[0][1]
+        pzmin = vertices[0][2]
+        pxmax = vertices[-1][0]
+        pymax = vertices[-1][1]
+        pzmax = vertices[-1][2]
+
+        # fix left corners
+        if pxmin <= bxmin:
+            imin = 0
+            Imin = round((bxmin - pxmin) / ipatch_cellsize, round_digits)
+        else:
+            imin = int(round((pxmin - bxmin) / uniform_cellsize))
+            Imin = 0
+
+        if pymin <= bymin:
+            jmin = 0
+            Jmin = round((bymin - pymin) / ipatch_cellsize, round_digits)
+        else:
+            jmin = int(round((pymin - bymin) / uniform_cellsize))
+            Jmin = 0
+
+        if pzmin <= bzmin:
+            kmin = 0
+            Kmin = round((bzmin - pzmin) / ipatch_cellsize, round_digits)
+        else:
+            kmin = int(round((pzmin - bzmin) / uniform_cellsize))
+            Kmin = 0
+
+        # fix right corners
+        if bxmax <= pxmax:
+            imax = uniform_size_x
+            Imax = int(Imin + (imax - imin) / reduction)
+        else:
+            Imax = patchnx[ipatch] - 1
+            imax = int(round(imin + (Imax - Imin + 1) * reduction))
+
+        if bymax <= pymax:
+            jmax = uniform_size_y
+            Jmax = int(Jmin + (jmax - jmin) / reduction)
+        else:
+            Jmax = patchny[ipatch] - 1
+            jmax = int(round(jmin + (Jmax - Jmin + 1) * reduction))
+
+        if bzmax <= pzmax:
+            kmax = uniform_size_z
+            Kmax = int(Kmin + (kmax - kmin) / reduction)
+        else:
+            Kmax = patchnz[ipatch] - 1
+            kmax = int(round(kmin + (Kmax - Kmin + 1) * reduction))
+
+        projectedpatch = np.kron(field[ipatch][int(Imin):Imax + 1, int(Jmin):Jmax + 1, int(Kmin):Kmax + 1],
+                                 np.ones((reduction, reduction, reduction)))[0:imax - imin, 0:jmax - jmin,
+                         0:kmax - kmin]
+
+        uniform[imin:imax, jmin:jmax, kmin:kmax] += projectedpatch
+
+    return uniform
+
+
 def p_uniform_grid_zoom(args):
-    if args[-1]: # verbose
+    if args[-1]:  # verbose
         print('Sub-box {} of {}'.format(args[0], args[1]))
     # we keep from the 3rd argument on (the ones to be passed to uniform_grid_zoom)
     args = list(args)[2:]
@@ -531,7 +677,7 @@ def p_uniform_grid_zoom(args):
 
 
 def p_uniforms_grid_zoom(args):
-    if args[-1]: # verbose
+    if args[-1]:  # verbose
         print('Sub-box {} of {}'.format(args[0], args[1]))
     # we keep from the 3rd argument on (the ones to be passed to uniform_grid_zoom)
     args = list(args)[2:]
@@ -606,7 +752,7 @@ def uniform_grid_zoom_parallel(field, box_limits, up_to_level, npatch, patchnx, 
                 i_low = int(i * step_x * reduction)
                 x_low = bxmin + i_low * uniform_cellsize
                 if i != copies - 1:
-                    i_high = int((i+1) * step_x * reduction)
+                    i_high = int((i + 1) * step_x * reduction)
                     x_high = bxmin + i_high * uniform_cellsize
                 else:
                     i_high = uniform_size_x
@@ -688,6 +834,151 @@ def uniform_grid(field, up_to_level, npatch, patchnx, patchny, patchnz, patchrx,
 def uniform_grid_zoom_several(fields, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry,
                               patchrz, size, nmax, verbose=False):
     """
+    Builds a uniform grid, zooming on a box specified by box_limits, at level up_to_level, containing the most refined
+    data at each region.
+
+    Args:
+        fields: fields to be computed at the uniform grid. Must be already cleaned from refinements and overlaps (check
+                clean_field() function). To be passed as a list of fields.
+        box_limits: a tuple in the form (xmin, xmax, ymin, ymax, zmin, zmax). Limits should correspond to l=0 cell
+                    boundaries
+        up_to_level: level up to which the fine grid wants to be obtained
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+                                   (and Y and Z)
+        size: comoving side of the simulation box
+        nmax: cells at base level
+        verbose: if True, prints the patch being opened at a time
+
+    Returns:
+        Uniform grid as described
+
+    """
+    numfields = len(fields)
+
+    uniform_cellsize = size / nmax / 2 ** up_to_level
+
+    bxmin = box_limits[0]
+    bxmax = box_limits[1]
+    bymin = box_limits[2]
+    bymax = box_limits[3]
+    bzmin = box_limits[4]
+    bzmax = box_limits[5]
+
+    # BASE GRID
+    uniform_size_x = int(round(nmax * (bxmax - bxmin) / size * 2 ** up_to_level))
+    uniform_size_y = int(round(nmax * (bymax - bymin) / size * 2 ** up_to_level))
+    uniform_size_z = int(round(nmax * (bzmax - bzmin) / size * 2 ** up_to_level))
+    uniforms = [np.zeros((uniform_size_x, uniform_size_y, uniform_size_z)) for _ in range(numfields)]
+
+    reduction = 2 ** up_to_level
+
+    starting_x = (bxmin + size / 2) * nmax / size
+    starting_xrefined = int(starting_x * 2 ** up_to_level + .5)
+    starting_y = (bymin + size / 2) * nmax / size
+    starting_yrefined = int(starting_y * 2 ** up_to_level + .5)
+    starting_z = (bzmin + size / 2) * nmax / size
+    starting_zrefined = int(starting_z * 2 ** up_to_level + .5)
+
+    ending_x = (bxmax + size / 2) * nmax / size
+    ending_y = (bymax + size / 2) * nmax / size
+    ending_z = (bzmax + size / 2) * nmax / size
+
+    minx = starting_xrefined - int(starting_x) * reduction
+    miny = starting_yrefined - int(starting_y) * reduction
+    minz = starting_zrefined - int(starting_z) * reduction
+    maxx = minx + uniform_size_x
+    maxy = miny + uniform_size_y
+    maxz = minz + uniform_size_z
+
+    for ifield in range(numfields):
+        uniforms[ifield] = np.kron(fields[ifield][0][int(starting_x):int(ending_x + 1),
+                                   int(starting_y):int(ending_y + 1), int(starting_z):int(ending_z + 1)],
+                                   np.ones((reduction, reduction, reduction)))[minx:maxx, miny:maxy, minz:maxz]
+
+    # REFINEMENT LEVELS
+
+    levels = create_vector_levels(npatch)
+    relevantpatches = which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
+                                               size, nmax)[1:]  # we ignore the 0-th relevant patch (patch 0, base
+    # level). By construction, the 0th element is always the l=0 patch.
+    relevantpatches = [i for i in relevantpatches if i <= npatch[0:up_to_level + 1].sum()]
+
+    for ipatch in relevantpatches:
+        if verbose:
+            print('Covering patch {}'.format(ipatch))
+
+        reduction = 2 ** (up_to_level - levels[ipatch])
+        ipatch_cellsize = uniform_cellsize * reduction
+        round_digits = max(int(np.log10(reduction)) + 1, 3)  # avoids tiny numerical errors which generated void regions
+
+        vertices = patch_vertices(levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnz[ipatch], patchrx[ipatch],
+                                  patchry[ipatch], patchrz[ipatch], size, nmax)
+        pxmin = vertices[0][0]
+        pymin = vertices[0][1]
+        pzmin = vertices[0][2]
+        pxmax = vertices[-1][0]
+        pymax = vertices[-1][1]
+        pzmax = vertices[-1][2]
+
+        # fix left corners
+        if pxmin <= bxmin:
+            imin = 0
+            Imin = round((bxmin - pxmin) / ipatch_cellsize, round_digits)
+        else:
+            imin = int(round((pxmin - bxmin) / uniform_cellsize))
+            Imin = 0
+
+        if pymin <= bymin:
+            jmin = 0
+            Jmin = round((bymin - pymin) / ipatch_cellsize, round_digits)
+        else:
+            jmin = int(round((pymin - bymin) / uniform_cellsize))
+            Jmin = 0
+
+        if pzmin <= bzmin:
+            kmin = 0
+            Kmin = round((bzmin - pzmin) / ipatch_cellsize, round_digits)
+        else:
+            kmin = int(round((pzmin - bzmin) / uniform_cellsize))
+            Kmin = 0
+
+        # fix right corners
+        if bxmax <= pxmax:
+            imax = uniform_size_x
+            Imax = int(Imin + (imax - imin) / reduction)
+        else:
+            Imax = patchnx[ipatch] - 1
+            imax = int(round(imin + (Imax - Imin + 1) * reduction))
+
+        if bymax <= pymax:
+            jmax = uniform_size_y
+            Jmax = int(Jmin + (jmax - jmin) / reduction)
+        else:
+            Jmax = patchny[ipatch] - 1
+            jmax = int(round(jmin + (Jmax - Jmin + 1) * reduction))
+
+        if bzmax <= pzmax:
+            kmax = uniform_size_z
+            Kmax = int(Kmin + (kmax - kmin) / reduction)
+        else:
+            Kmax = patchnz[ipatch] - 1
+            kmax = int(round(kmin + (Kmax - Kmin + 1) * reduction))
+
+        for ifield in range(numfields):
+            projectedpatch = np.kron(fields[ifield][ipatch][int(Imin):Imax + 1, int(Jmin):Jmax + 1, int(Kmin):Kmax + 1],
+                                     np.ones((reduction, reduction, reduction)))[0:imax - imin, 0:jmax - jmin,
+                                                                                0:kmax - kmin]
+            uniforms[ifield][imin:imax, jmin:jmax, kmin:kmax] += projectedpatch
+
+    return tuple(uniforms)
+
+
+def uniform_grid_zoom_several_old(fields, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry,
+                                  patchrz, size, nmax, verbose=False):
+    """
+    OLD, SLOW VERSION. WILL BE DEPRECATED IN FUTURE UPDATES. CHECK uniform_grid_zoom() FOR THE NEWER, FASTER ONE.
     Builds a uniform grid, zooming on a box specified by box_limits, at level up_to_level, containing the most refined
     data at each region.
 
