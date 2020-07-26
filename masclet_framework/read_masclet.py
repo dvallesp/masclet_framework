@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 19/4/20 17:08
+#  Last update on 26/7/20 11:31
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -41,14 +41,14 @@ def filename(it, filetype, digits=5):
     Returns: filename (str)
 
     """
-    names = {'g': "grids", 'b': 'clus', 'd': 'cldm', 's': 'clst'}
+    names = {'g': "grids", 'b': 'clus', 'd': 'cldm', 's': 'clst', 'v': 'velocity'}
     try:
         if np.floor(np.log10(it)) < digits:
             return names[filetype] + str(it).zfill(digits)
         else:
             raise ValueError("Digits should be greater to handle that iteration number")
     except KeyError:
-        print('Insert a correct type: g, b, d or s')
+        print('Insert a correct type: g, b, d, s or v')
 
 
 def read_grids(it, path='', parameters_path='', digits=5, read_general=True, read_patchnum=True, read_dmpartnum=True,
@@ -104,15 +104,15 @@ def read_grids(it, path='', parameters_path='', digits=5, read_general=True, rea
 
     """
     nmax, nmay, nmaz, size = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=False,
-                                                           load_namr=False, load_size=True, path=parameters_path)
-    rx = - size/2 + size/nmax
+                                                        load_namr=False, load_size=True, path=parameters_path)
+    rx = - size / 2 + size / nmax
 
     grids = open(os.path.join(path, filename(it, 'g', digits)), 'r')
 
     # first, we load some general parameters
     irr, t, nl, mass_dmpart, _ = tuple(float(i) for i in grids.readline().split())
     irr = int(irr)
-    #assert (it == irr)
+    # assert (it == irr)
     nl = int(nl)
     zeta = float(grids.readline().split()[0])
     # l=0
@@ -150,9 +150,9 @@ def read_grids(it, path='', parameters_path='', digits=5, read_general=True, rea
             patchnx.append(this_nx)
             patchny.append(this_ny)
             patchnz.append(this_nz)
-            patchx.append(this_x-1)
-            patchy.append(this_y-1)
-            patchz.append(this_z-1)
+            patchx.append(this_x - 1)
+            patchy.append(this_y - 1)
+            patchz.append(this_z - 1)
             patchrx.append(this_rx)
             patchry.append(this_ry)
             patchrz.append(this_rz)
@@ -197,7 +197,7 @@ def read_grids(it, path='', parameters_path='', digits=5, read_general=True, rea
 
 def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_delta=True, output_v=True,
               output_pres=True, output_pot=True, output_opot=False, output_temp=True, output_metalicity=True,
-              output_cr0amr=True,output_solapst=True, verbose=False):
+              output_cr0amr=True, output_solapst=True, verbose=False):
     """
     Reads the gas (baryonic, clus) file
 
@@ -230,10 +230,10 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                                                    read_patchnum=True, read_dmpartnum=False,
                                                    read_patchcellextension=True, read_patchcellposition=False,
                                                    read_patchposition=False, read_patchparent=False)
-    with FF(os.path.join(path,filename(it, 'b', digits))) as f:
+    with FF(os.path.join(path, filename(it, 'b', digits))) as f:
         # read header
         it_clus = f.read_vector('i')[0]
-        #assert(it == it_clus)
+        # assert(it == it_clus)
         f.seek(0)  # this is a little bit ugly but whatever
         time, z = tuple(f.read_vector('f')[1:3])
 
@@ -319,12 +319,14 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                     f.skip()
 
                 if output_opot:
-                    opot.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    opot.append(
+                        np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
                 else:
                     f.skip()
 
                 if output_temp:
-                    temp.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    temp.append(
+                        np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
                 else:
                     f.skip()
 
@@ -449,7 +451,7 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
             for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
                 if output_deltadm:
                     delta_dm.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
-                                           'F'))
+                                               'F'))
                 else:
                     f.skip()
             if output_position:
@@ -579,7 +581,6 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         if output_id:
             stpart_id = np.zeros(stpart_x.size)
 
-
         # refinement levels
         for l in range(1, min(nlevels + 1, max_refined_level + 1)):
             if verbose:
@@ -587,8 +588,9 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                 print('{} patches'.format(npatch[l]))
             for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
                 if output_deltastar:
-                    delta_star.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
-                                           'F'))
+                    delta_star.append(
+                        np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                   'F'))
                 else:
                     f.skip()
 
@@ -668,3 +670,138 @@ def read_npz_field(filename, path=''):
             field.append(f[arrayname])
 
     return field
+
+
+def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_divrot=True, are_potentials=True,
+                are_velocities=True, verbose=False):
+    """
+    Reads the vortex (Helmholtz-Hodge decomposition) files
+
+    Args:
+        it: iteration number (int)
+        path: path of the grids file in the system (str)
+        parameters_path: path of the json parameters file of the simulation
+        digits: number of digits the filename is written with (int)
+        max_refined_level: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
+        are_divrot: whehther velocity divergences and rotationals are written in the file
+        are_potentials: whether (scalar and vector) potentials are written in the file
+        are_velocities: whether (total, compressional and rotational) velocities are written in the file
+
+    Returns:
+        Chosen quantities, as a list of arrays (one for each patch, starting with l=0 and subsequently);
+        in the order specified by the order of the parameters in this definition.
+    """
+
+    nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
+                                                           load_namr=False, load_size=False, path=parameters_path)
+    npatch, patchnx, patchny, patchnz = read_grids(it, path=grids_path, parameters_path=parameters_path, read_general=False,
+                                                   read_patchnum=True, read_dmpartnum=False,
+                                                   read_patchcellextension=True, read_patchcellposition=False,
+                                                   read_patchposition=False, read_patchparent=False)
+    with FF(os.path.join(path, filename(it, 'v', digits))) as f:
+        # read header
+        it_clus = f.read_vector('i')[0]
+        # assert(it == it_clus)
+        f.seek(0)  # this is a little bit ugly but whatever
+        time, z = tuple(f.read_vector('f')[1:3])
+
+        returnvariables = []
+
+        if are_divrot:
+            # divergence
+            if verbose:
+                print('Reading divergence...')
+            div = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+            for l in range(1, nlevels + 1):
+                for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                    div.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    # for some arbitrary reason, we have not written these files in fortran order...
+
+            # rotational
+            if verbose:
+                print('Reading rotational...')
+            rotx = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+            roty = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+            rotz = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+            for l in range(1, nlevels + 1):
+                for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                    rotx.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    roty.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    rotz.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+
+            returnvariables.extend([div, rotx, roty, rotz])
+
+            if are_potentials:
+                # scalar
+                if verbose:
+                    print('Reading scalar potential...')
+                scalarpot = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                for l in range(1, nlevels + 1):
+                    for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                        scalarpot.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch],
+                                                                         patchnz[ipatch]), 'F'))
+
+                # vector
+                if verbose:
+                    print('Reading vector potential...')
+                vecpotx = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                vecpoty = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                vecpotz = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                for l in range(1, nlevels + 1):
+                    for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                        vecpotx.append(
+                            np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        vecpoty.append(
+                            np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        vecpotz.append(
+                            np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                returnvariables.extend([scalarpot, vecpotx, vecpoty, vecpotz])
+
+                if are_velocities:
+                    # total
+                    if verbose:
+                        print('Reading total velocity...')
+                    vx = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                    vy = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                    vz = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                    for l in range(1, nlevels + 1):
+                        for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                            vx.append(
+                                np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                            vy.append(
+                                np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                            vz.append(
+                                np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+
+                    # compressive
+                    if verbose:
+                        print('Reading compressive velocity...')
+                    velcompx = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                    velcompy = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                    velcompz = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                    for l in range(1, nlevels + 1):
+                        for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                            velcompx.append(
+                                np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                            velcompy.append(
+                                np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                            velcompz.append(
+                                np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    # rotational
+                    if verbose:
+                        print('Reading rotational velocity...')
+                    velrotx = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                    velroty = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                    velrotz = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                    for l in range(1, nlevels + 1):
+                        for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                            velrotx.append(np.reshape(f.read_vector('f'),
+                                                      (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                            velroty.append(np.reshape(f.read_vector('f'),
+                                                      (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                            velrotz.append(np.reshape(f.read_vector('f'),
+                                                      (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+
+                    returnvariables.extend([vx, vy, vz, velcompx, velcompy, velcompz, velrotx, velroty, velrotz])
+
+    return tuple(returnvariables)
