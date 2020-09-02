@@ -11,7 +11,7 @@ intensive use of computing x,y,z fields (much faster, but more memory consuming)
 Created by David Vallés
 """
 
-#  Last update on 1/6/20 23:46
+#  Last update on 2/9/20 17:06
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -50,12 +50,14 @@ def compute_position_field_onepatch(args):
     patch_x = np.zeros((nx, ny, nz))
     patch_y = np.zeros((nx, ny, nz))
     patch_z = np.zeros((nx, ny, nz))
+
     for i in range(nx):
-        for j in range(ny):
-            for k in range(nz):
-                patch_x[i, j, k] = first_x + i * cellsize
-                patch_y[i, j, k] = first_y + j * cellsize
-                patch_z[i, j, k] = first_z + k * cellsize
+        patch_x[i, :, :] = first_x + i * cellsize
+    for j in range(ny):
+        patch_y[:, j, :] = first_y + j * cellsize
+    for k in range(nz):
+        patch_z[:, :, k] = first_z + k * cellsize
+
     return patch_x, patch_y, patch_z
 
 
