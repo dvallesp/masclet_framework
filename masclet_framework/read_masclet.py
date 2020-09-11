@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 11/9/20 12:33
+#  Last update on 11/9/20 12:42
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -812,8 +812,9 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
                     for l in range(1, nlevels + 1):
                         for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
                             solapst.append(np.reshape(f.read_vector('i'),
-                                                      (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                                                      (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                                      'F').astype('bool'))
 
-                returnvariables.append(solapst.astype('bool'))
+                returnvariables.append(solapst)
 
     return tuple(returnvariables)
