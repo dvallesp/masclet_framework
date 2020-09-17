@@ -11,7 +11,7 @@ memory
 Created by David Vallés
 """
 
-#  Last update on 12/9/20 16:12
+#  Last update on 17/9/20 12:01
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
@@ -673,7 +673,7 @@ def read_npz_field(filename, path=''):
 
 
 def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_divrot=True, are_potentials=True,
-                are_velocities=True, is_solapst=True, verbose=False):
+                are_velocities=True, is_error=True, verbose=False):
     """
     Reads the vortex (Helmholtz-Hodge decomposition) files
 
@@ -686,7 +686,7 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
         are_divrot: whehther velocity divergences and rotationals are written in the file
         are_potentials: whether (scalar and vector) potentials are written in the file
         are_velocities: whether (total, compressional and rotational) velocities are written in the file
-        is_solapst: whether the overlap variable computed using the error estimate is written in the file
+        is_error: whether the relative error estimate is written in the file
 
     Returns:
         Chosen quantities, as a list of arrays (one for each patch, starting with l=0 and subsequently);
@@ -805,16 +805,16 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
 
                     returnvariables.extend([vx, vy, vz, velcompx, velcompy, velcompz, velrotx, velroty, velrotz])
 
-                if is_solapst:
+                if is_error:
                     if verbose:
-                        print('Reading solapst...')
-                    solapst = [0]
+                        print('Reading error...')
+                    error = [0]
                     for l in range(1, nlevels + 1):
                         for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
-                            solapst.append(np.reshape(f.read_vector('i'),
+                            error.append(np.reshape(f.read_vector('f'),
                                                       (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
                                                       'F').astype('bool'))
 
-                    returnvariables.append(solapst)
+                    returnvariables.append(error)
 
     return tuple(returnvariables)
