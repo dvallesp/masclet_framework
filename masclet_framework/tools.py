@@ -1122,6 +1122,7 @@ def uniform_grid_zoom_several_old(fields, box_limits, up_to_level, npatch, patch
 
 def mask_gas_clumps(shell_mask, gas_density, fcut=3.5, mode='zhuravleva13'):
     """
+    DEPRECATED: WILL BE REMOVED SOON
     Given a radial shell mask and the gas density field, this routine yields a new mask where the substructures
      (clumps) are indicated.
 
@@ -1155,6 +1156,7 @@ def mask_gas_clumps(shell_mask, gas_density, fcut=3.5, mode='zhuravleva13'):
 
 def mask_gas_filaments(shell_mask, gas_density, gas_vr, fcut_low=1, fcut_high=3.5, mode='lau15'):
     """
+    DEPRECATED: WILL BE REMOVED SOON
     Given a radial shell mask, a gas density field and a gas radial (clustercentric) velocity field,
     this routine yields a new mask where the filamentary substructures are indicated.
 
@@ -1188,8 +1190,9 @@ def mask_gas_filaments(shell_mask, gas_density, gas_vr, fcut_low=1, fcut_high=3.
     return mask_substructures
 
 
-def remove_gas_substructures(gas_density, mask_substructures, shell_mask, refill='median'):
+def old_remove_gas_substructures(gas_density, mask_substructures, shell_mask, refill='median'):
     """
+    DEPRECATED: WILL BE REMOVED SOON
     Given a radial shell mask and the gas density field, this routine yields the density where the substructures
         (clumps or filaments) have been substracted and replaced by some value.
 
@@ -1216,3 +1219,69 @@ def remove_gas_substructures(gas_density, mask_substructures, shell_mask, refill
         gas_density[ipatch][mask_substructures[ipatch]] = refill_value
 
     return gas_density
+
+def remove_gas_substructres(density, cr0amr, solapst, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz, rmin, rmax,
+                            nbins,mean_dens_l,fcut,mode='zhuravleva13', verbose=False):
+    """
+    Removes gas substructures using the density field and returns a "cleaned" density field
+
+    :param density: gas density field (normalisation should be unimportant), UNCLEANED
+    :param cr0amr: field containing the refinements of the grid (1: not refined; 0: refined)
+    :param solapst: field containing the overlaps (1: keep; 0: not keep)
+    :param clusrx, clusry, clusrz: cluster center
+    :param cellsrx, cellsry, cellsrz: position fields
+    :param rmin, rmax: minimum and maximum radii for the removal
+    :param nbins: number of bins for the removal
+    :param mean_dens_l: max level at which the density is computed
+    :param fcut: number of stds from the mean that will be kept
+    :param mode: for now, only 'zhuravleva13' implemented
+    :return: substructure excised (and refilled) density field
+    """
+    if mode=='zhuravleva13':
+
+        def weighted_median(data, weights):
+            """
+            Args:
+              data (list or numpy.array): data
+              weights (list or numpy.array): weights
+            """
+            data, weights = np.array(data).squeeze(), np.array(weights).squeeze()
+            s_data, s_weights = map(np.array, zip(*sorted(zip(data, weights))))
+            midpoint = 0.5 * sum(s_weights)
+            if any(weights > midpoint):
+                w_median = (data[weights == np.max(weights)])[0]
+            else:
+                cs_weights = np.cumsum(s_weights)
+                idx = np.where(cs_weights <= midpoint)[0][-1]
+                if cs_weights[idx] == midpoint:
+                    w_median = np.mean(s_data[idx:idx + 2])
+                else:
+                    w_median = s_data[idx + 1]
+            return w_median
+
+        rlist = [0] + list(np.logspace(np.log10(rmin), np.log10(rmax), nbins))
+        cellsr = [np.sqrt((rx - crx) ** 2 + (ry - cry) ** 2 + (rz - crz) ** 2) for rx, ry, rz in
+                  zip(cellsrx, cellsry, cellsrz)]
+        for i in range(len(rlist) - 1):
+            rmin = rlist[i]
+            rmax = rlist[i + 1]
+            inside = [(rmin < r) * (r < rmax) for r in cellsr]
+            these = np.log10(np.concatenate(
+                [d[insi].flatten() for d, insi in zip(density,
+                                                      masclet.tools.clean_field(inside,cr0amr, solapst, npatch,
+                                                                                up_to_level=mean_dens_l))]))
+
+            mulogdensity = weighted_median(these, 1 / 10 ** these) # median weighted to the inverse density (see Zhuravleva et al. 2013)
+            sigmalogdensity = np.std(these)
+            upper_bound = 10 ** (mulogdensity + fcut * sigmalogdensity)
+
+            if verbose:
+                if i == 0:
+                    print('Bin \t rmin \t rmax \t Ncells \t logmedian \t logstd \t upperbound \t Nexceed')
+                print('{}\t{:.3f}\t{:.3f}\t{}\t{:.3f}\t{:.3f}\t{}\t{}'.format(i, rmin, rmax, these.size, mulogdensity,
+                                                                              sigmalogdensity, upper_bound,
+                                                                              (these > np.log10(upper_bound)).sum()))
+
+            for ipatch in range(len(density)):
+                density[ipatch][density[ipatch] * inside[ipatch] > upper_bound] = upper_bound
+    return density
