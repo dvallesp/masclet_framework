@@ -972,7 +972,7 @@ def uniform_grid_zoom_several(fields, box_limits, up_to_level, npatch, patchnx, 
         for ifield in range(numfields):
             projectedpatch = np.kron(fields[ifield][ipatch][int(Imin):Imax + 1, int(Jmin):Jmax + 1, int(Kmin):Kmax + 1],
                                      np.ones((reduction, reduction, reduction)))[0:imax - imin, 0:jmax - jmin,
-                                                                                0:kmax - kmin]
+                             0:kmax - kmin]
             uniforms[ifield][imin:imax, jmin:jmax, kmin:kmax] += projectedpatch
 
     return tuple(uniforms)
@@ -1220,8 +1220,9 @@ def old_remove_gas_substructures(gas_density, mask_substructures, shell_mask, re
 
     return gas_density
 
+
 def remove_gas_substructres(density, cr0amr, solapst, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz, rmin, rmax,
-                            nbins,mean_dens_l,fcut,mode='zhuravleva13', verbose=False):
+                            nbins, mean_dens_l, fcut, npatch, mode='zhuravleva13', verbose=False):
     """
     Removes gas substructures using the density field and returns a "cleaned" density field
 
@@ -1237,7 +1238,7 @@ def remove_gas_substructres(density, cr0amr, solapst, clusrx, clusry, clusrz, ce
     :param mode: for now, only 'zhuravleva13' implemented
     :return: substructure excised (and refilled) density field
     """
-    if mode=='zhuravleva13':
+    if mode == 'zhuravleva13':
 
         def weighted_median(data, weights):
             """
@@ -1260,18 +1261,18 @@ def remove_gas_substructres(density, cr0amr, solapst, clusrx, clusry, clusrz, ce
             return w_median
 
         rlist = [0] + list(np.logspace(np.log10(rmin), np.log10(rmax), nbins))
-        cellsr = [np.sqrt((rx - crx) ** 2 + (ry - cry) ** 2 + (rz - crz) ** 2) for rx, ry, rz in
+        cellsr = [np.sqrt((rx - clusrx) ** 2 + (ry - clusry) ** 2 + (rz - clusrz) ** 2) for rx, ry, rz in
                   zip(cellsrx, cellsry, cellsrz)]
         for i in range(len(rlist) - 1):
             rmin = rlist[i]
             rmax = rlist[i + 1]
             inside = [(rmin < r) * (r < rmax) for r in cellsr]
             these = np.log10(np.concatenate(
-                [d[insi].flatten() for d, insi in zip(density,
-                                                      masclet.tools.clean_field(inside,cr0amr, solapst, npatch,
-                                                                                up_to_level=mean_dens_l))]))
+                [d[insi].flatten() for d, insi in zip(density, clean_field(inside, cr0amr, solapst, npatch,
+                                                                           up_to_level=mean_dens_l))]))
 
-            mulogdensity = weighted_median(these, 1 / 10 ** these) # median weighted to the inverse density (see Zhuravleva et al. 2013)
+            mulogdensity = weighted_median(these,
+                                           1 / 10 ** these)  # median weighted to the inverse density (see Zhuravleva et al. 2013)
             sigmalogdensity = np.std(these)
             upper_bound = 10 ** (mulogdensity + fcut * sigmalogdensity)
 
