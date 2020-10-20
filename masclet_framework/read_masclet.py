@@ -41,14 +41,14 @@ def filename(it, filetype, digits=5):
     Returns: filename (str)
 
     """
-    names = {'g': "grids", 'b': 'clus', 'd': 'cldm', 's': 'clst', 'v': 'velocity'}
+    names = {'g': "grids", 'b': 'clus', 'd': 'cldm', 's': 'clst', 'v': 'velocity', 'm': 'MachNum_'}
     try:
         if np.floor(np.log10(it)) < digits:
             return names[filetype] + str(it).zfill(digits)
         else:
             raise ValueError("Digits should be greater to handle that iteration number")
     except KeyError:
-        print('Insert a correct type: g, b, d, s or v')
+        print('Insert a correct type: g, b, d, s, v or m')
 
 
 def read_grids(it, path='', parameters_path='', digits=5, read_general=True, read_patchnum=True, read_dmpartnum=True,
@@ -716,7 +716,6 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
             for l in range(1, nlevels + 1):
                 for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
                     div.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-                    # for some arbitrary reason, we have not written these files in fortran order...
 
             # rotational
             if verbose:
@@ -806,3 +805,23 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
                     returnvariables.extend([vx, vy, vz, velcompx, velcompy, velcompz, velrotx, velroty, velrotz])
 
     return tuple(returnvariables)
+
+
+def read_mach(it, path='', grids_path='', parameters_path='', digits=5, verbose=False):
+    nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
+                                                           load_namr=False, load_size=False, path=parameters_path)
+    npatch, patchnx, patchny, patchnz = read_grids(it, path=grids_path, parameters_path=parameters_path,
+                                                   read_general=False,
+                                                   read_patchnum=True, read_dmpartnum=False,
+                                                   read_patchcellextension=True, read_patchcellposition=False,
+                                                   read_patchposition=False, read_patchparent=False)
+
+    with FF(os.path.join(path, filename(it, 'm', digits))) as f:
+        if verbose:
+            print('Reading mach number...')
+        M = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+        for l in range(1, nlevels + 1):
+            for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                M.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+
+    return tuple([M])
