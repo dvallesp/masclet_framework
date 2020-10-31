@@ -116,7 +116,7 @@ def read_grids(it, path='', parameters_path='', digits=5, read_general=True, rea
     nl = int(nl)
     zeta = float(grids.readline().split()[0])
     # l=0
-    _, ndxyz, _ = tuple(float(i) for i in grids.readline().split())
+    _, ndxyz, _ = tuple(float(i) for i in grids.readline().split())[0:3]
     ndxyz = int(ndxyz)
 
     # vectors where the data will be stored
@@ -134,7 +134,7 @@ def read_grids(it, path='', parameters_path='', digits=5, read_general=True, rea
     pare = [0]
 
     for ir in range(1, nl + 1):
-        level, npatchtemp, nparttemp, _ = tuple(int(i) for i in grids.readline().split())
+        level, npatchtemp, nparttemp = tuple(int(i) for i in grids.readline().split())[0:3]
         npatch.append(npatchtemp)
         npart.append(nparttemp)
 
@@ -197,7 +197,7 @@ def read_grids(it, path='', parameters_path='', digits=5, read_general=True, rea
 
 def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_delta=True, output_v=True,
               output_pres=True, output_pot=True, output_opot=False, output_temp=True, output_metalicity=True,
-              output_cr0amr=True, output_solapst=True, verbose=False):
+              output_cr0amr=True, output_solapst=True, is_mascletB=False, output_B=False, verbose=False):
     """
     Reads the gas (baryonic, clus) file
 
@@ -216,6 +216,8 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         output_metalicity: whether metalicity is returned (bool)
         output_cr0amr: whether "refined variable" (1 if not refined, 0 if refined) is returned (bool)
         output_solapst: whether "solapst variable" (1 if the cell is kept, 0 otherwise) is returned (bool)
+        is_mascletB: whether the outputs correspond to masclet-B (contains magnetic fields) (bool)
+        output_B: whether magnetic field is returned; only if is_mascletB = True (bool)
         verbose: whether a message is printed when each refinement level is started (bool)
         fullverbose: whether a message is printed for each patch (recommended for debugging issues) (bool)
 
@@ -223,6 +225,11 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         Chosen quantities, as a list of arrays (one for each patch, starting with l=0 and subsequently);
         in the order specified by the order of the parameters in this definition.
     """
+
+    if output_B and (not is_mascletB):
+        print('Error: cannot output magnetic field if the simulation has not.')
+        print('Terminating')
+        return
 
     nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
                                                            load_namr=False, load_size=False, path=parameters_path)
@@ -284,6 +291,15 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
 
         if output_solapst:
             solapst = [0]
+
+        if is_mascletB:
+            if output_B:
+                Bx = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                By = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+                Bz = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+            else:
+                f.skip(3)
+
 
         # refinement levels
         for l in range(1, min(nlevels + 1, max_refined_level + 1)):
@@ -348,6 +364,17 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                 else:
                     f.skip()
 
+                if is_mascletB:
+                    if output_B:
+                        Bx.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                             'F'))
+                        By.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                             'F'))
+                        Bz.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                             'F'))
+                    else:
+                        f.skip(3)
+
     returnvariables = []
     if output_delta:
         returnvariables.append(delta)
@@ -367,6 +394,8 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         returnvariables.append(cr0amr)
     if output_solapst:
         returnvariables.append(solapst)
+    if output_B:
+        returnvariables.extend([Bx,By,Bz])
 
     return tuple(returnvariables)
 
