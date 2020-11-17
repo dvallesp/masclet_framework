@@ -565,17 +565,18 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
     # uniform = np.zeros((uniform_size_x, uniform_size_y, uniform_size_z))
 
     reduction = 2 ** up_to_level
+    round_digits = max(int(np.log10(reduction)) + 1, 2)
 
-    starting_x = (bxmin + size / 2) * nmax / size
+    starting_x = round((bxmin + size / 2) * nmax / size, round_digits)
     starting_xrefined = int(starting_x * 2 ** up_to_level + .5)
-    starting_y = (bymin + size / 2) * nmax / size
+    starting_y = round((bymin + size / 2) * nmax / size, round_digits)
     starting_yrefined = int(starting_y * 2 ** up_to_level + .5)
-    starting_z = (bzmin + size / 2) * nmax / size
+    starting_z = round((bzmin + size / 2) * nmax / size, round_digits)
     starting_zrefined = int(starting_z * 2 ** up_to_level + .5)
 
-    ending_x = (bxmax + size / 2) * nmax / size
-    ending_y = (bymax + size / 2) * nmax / size
-    ending_z = (bzmax + size / 2) * nmax / size
+    ending_x = round((bxmax + size / 2) * nmax / size, round_digits)
+    ending_y = round((bymax + size / 2) * nmax / size, round_digits)
+    ending_z = round((bzmax + size / 2) * nmax / size, round_digits)
 
     minx = starting_xrefined - int(starting_x) * reduction
     miny = starting_yrefined - int(starting_y) * reduction
@@ -602,7 +603,7 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
 
         reduction = 2 ** (up_to_level - levels[ipatch])
         ipatch_cellsize = uniform_cellsize * reduction
-        round_digits = max(int(np.log10(reduction)) + 1, 3)  # avoids tiny numerical errors which generated void regions
+        round_digits = max(int(np.log10(reduction)) + 1, 2)  # avoids tiny numerical errors which generated void regions
 
         vertices = patch_vertices(levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnz[ipatch], patchrx[ipatch],
                                   patchry[ipatch], patchrz[ipatch], size, nmax)
@@ -613,49 +614,79 @@ def uniform_grid_zoom(field, box_limits, up_to_level, npatch, patchnx, patchny, 
         pymax = vertices[-1][1]
         pzmax = vertices[-1][2]
 
+        #print('left x')
         # fix left corners
         if pxmin <= bxmin:
+            #print('patch < box')
             imin = 0
             Imin = round((bxmin - pxmin) / ipatch_cellsize, round_digits)
+            #print('Imin: ', (bxmin - pxmin) / ipatch_cellsize, '-->', Imin)
         else:
+            #print('box < patch')
             imin = int(round((pxmin - bxmin) / uniform_cellsize))
             Imin = 0
+            #print('imin: ', (pxmin - bxmin) / uniform_cellsize, '-->', imin)
 
+        #print('left y')
         if pymin <= bymin:
+            #print('patch < box')
             jmin = 0
             Jmin = round((bymin - pymin) / ipatch_cellsize, round_digits)
+            #print('Jmin: ', (bymin - pymin) / ipatch_cellsize, '-->', Jmin)
         else:
+            #print('box < patch')
             jmin = int(round((pymin - bymin) / uniform_cellsize))
             Jmin = 0
+            #print('jmin: ', (pymin - bymin) / uniform_cellsize, '-->', jmin)
 
+        #print('left z')
         if pzmin <= bzmin:
+            #print('patch < box')
             kmin = 0
             Kmin = round((bzmin - pzmin) / ipatch_cellsize, round_digits)
+            #print('Kmin: ', (bzmin - pzmin) / ipatch_cellsize, '-->', Kmin)
         else:
+            #print('box < patch')
             kmin = int(round((pzmin - bzmin) / uniform_cellsize))
             Kmin = 0
+            #print('kmin: ', (pzmin - bzmin) / uniform_cellsize, '-->', kmin)
 
         # fix right corners
+        #print('right x')
         if bxmax <= pxmax:
+            #print('box < patch')
             imax = uniform_size_x
-            Imax = int(Imin + (imax - imin) / reduction)
+            Imax = int(round(Imin + (imax - imin) / reduction, round_digits))
+            #print('Imax: ', Imin + (imax - imin) / reduction, '-->', Imax)
         else:
+            #print('patch < box')
             Imax = patchnx[ipatch] - 1
             imax = int(round(imin + (Imax - Imin + 1) * reduction))
+            #print('imax: ', imin + (Imax - Imin + 1) * reduction, '-->', imax)
 
+        #print('right y')
         if bymax <= pymax:
+            #print('box < patch')
             jmax = uniform_size_y
-            Jmax = int(Jmin + (jmax - jmin) / reduction)
+            Jmax = int(round(Jmin + (jmax - jmin) / reduction, round_digits))
+            #print('Jmax: ', Jmin + (jmax - jmin) / reduction, '-->', Jmax)
         else:
+            #print('patch < box')
             Jmax = patchny[ipatch] - 1
             jmax = int(round(jmin + (Jmax - Jmin + 1) * reduction))
+            #print('jmax: ', jmin + (Jmax - Jmin + 1) * reduction, '-->', jmax)
 
+        #print('right z')
         if bzmax <= pzmax:
+            #print('box < patch')
             kmax = uniform_size_z
-            Kmax = int(Kmin + (kmax - kmin) / reduction)
+            Kmax = int(round(Kmin + (kmax - kmin) / reduction, round_digits))
+            #print('Kmax: ', Kmin + (kmax - kmin) / reduction, '-->', Kmax)
         else:
+            #print('patch < box')
             Kmax = patchnz[ipatch] - 1
             kmax = int(round(kmin + (Kmax - Kmin + 1) * reduction))
+            #print('kmax: ', kmin + (Kmax - Kmin + 1) * reduction, '-->', kmax)
 
         if imin == imax or jmin == jmax or kmin == kmax:
             continue
