@@ -15,6 +15,7 @@ Created by David Vallés
 
 # numpy
 import numpy as np
+from tqdm import tqdm
 
 # from multiprocessing import Pool
 
@@ -28,7 +29,7 @@ from scipy import optimize
 
 
 # SECTION: manipulate MASCLET data
-def correct_positive_oripa(oripa, mass):
+def correct_positive_oripa(oripa, mass, use_tqdm=True):
     """
     Corrects a bug in the simulation's ouput, which caused all oripa to be positive.
     The expected behaviour was that particles which were originally at l=0 retain negative oripa.
@@ -41,8 +42,12 @@ def correct_positive_oripa(oripa, mass):
 
     """
     dups = collections.defaultdict(list)
-    for i, e in enumerate(oripa):
-        dups[e].append(i)
+    if use_tqdm:
+        for i, e in tqdm(enumerate(oripa), total=oripa.size):
+            dups[e].append(i)
+    else:
+        for i, e in enumerate(oripa):
+            dups[e].append(i)
 
     for thisoripa, v in dups.items():
         if len(v) >= 2:
