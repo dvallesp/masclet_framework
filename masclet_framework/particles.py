@@ -58,6 +58,24 @@ def correct_positive_oripa(oripa, mass, use_tqdm=True):
 
     return oripa
 
+def oripa_heavier_get_negative(oripa, mass, tol=[0.5,2]):
+    """
+    We redefine the oripas to be unique and constant without ambiguities.
+
+    Args:
+        oripa: np array contaning the directly read (incorrect) oripa for each particle
+        mass: np array containing the mass of each particle
+        tol: bounds to check the if a particle belongs to the most massive species
+
+    Returns:
+        corrected oripa array, with all the most massive particles have negative oripas
+
+    """
+    maxmass = mass.max()
+    oripa[(tol[0] * maxmass < mass) * (mass < tol[1] * maxmass)] = -abs(
+        oripa[(tol[0] * mass < mdm_it1) * (mass < tol[1] * maxmass)])
+
+
 
 # SECTION: compare particles by IDs
 def shared_particles(x1, y1, z1, oripa1, rx1, ry1, rz1, r1, x2, y2, z2, oripa2, rx2, ry2, rz2, r2):
