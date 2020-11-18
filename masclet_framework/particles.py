@@ -73,7 +73,9 @@ def oripa_heavier_get_negative(oripa, mass, tol=[0.5,2]):
     """
     maxmass = mass.max()
     oripa[(tol[0] * maxmass < mass) * (mass < tol[1] * maxmass)] = -abs(
-        oripa[(tol[0] * mass < mdm_it1) * (mass < tol[1] * maxmass)])
+        oripa[(tol[0] * maxmass < mass) * (mass < tol[1] * maxmass)])
+
+    return oripa
 
 
 
