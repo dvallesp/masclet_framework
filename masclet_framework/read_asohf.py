@@ -23,14 +23,15 @@ def filename(it, filetype, digits=5):
 
     Args:
         it: iteration number (int)
-        filetype: 'f' for families file; 'm' for the merger tree; 'v' for void finder families (str)
+        filetype: 'f' for families file; 'm' for the merger tree; 'v' for void finder families; 'i' for inertia
+                   tensor of voids (str)
         digits: number of digits the filename is written with (int)
 
     Returns:
         filename (str)
 
     """
-    names = {'f': "families", 'm': 'merger_t', 'v': 'voids'}
+    names = {'f': "families", 'm': 'merger_t', 'v': 'voids', 'i': 'inertia'}
     if np.floor(np.log10(it)) < digits:
         return names[filetype] + str(it).zfill(digits)
     else:
@@ -226,7 +227,7 @@ def read_merger_tree_reduced(it, path='', digits=5, direction='b'):
     return reduced
 
 
-def read_voids(it, nl_voids, path='', digits=5, exclude_subvoids=False, min_ref=0):
+def read_voids(it, nl_voids, path='', digits=5, exclude_subvoids=False, min_ref=0, shape=False):
     """
     Reads the void finder voidsXXXXX files, containing the information about each void
 
@@ -284,5 +285,36 @@ def read_voids(it, nl_voids, path='', digits=5, exclude_subvoids=False, min_ref=
 
                 if ((not exclude_subvoids) or (void["pare"] is None)) and void["r_eq"] > min_ref:
                     voids_catalogue.append(void)
+
+    if shape:
+        with open(os.path.join(path, filename(it, 'i', digits)), 'r') as f:
+            ids = [void['id'] for void in voids_catalogue]
+            for line0 in f:
+                line = line0.split()
+                if 'NaN' in line:
+                    continue
+                vid = int(line[0])
+                if vid in ids:
+                    idx = ids.index(vid)
+                    inertia = np.reshape([float(v) for v in line[1:10]], (3, 3))
+
+                    eigenvalues, eigenvectors = np.linalg.eig(inertia)
+
+                    semiaxes2 = np.dot(2.5 * np.array([[-1, 1, 1], [1, -1, 1], [1, 1, -1]]), eigenvalues)
+
+                    if (semiaxes2.min() < 0):
+                        voids_catalogue[idx]['shape'] = None
+                        continue
+
+                    semiaxes = np.sqrt(semiaxes2)
+
+                    sort_idcs = semiaxes.argsort()[::-1]
+                    semiaxes = semiaxes[sort_idcs]
+                    eigenvectors = eigenvectors[:, sort_idcs]
+
+                    voids_catalogue[idx]['shape'] = {
+                        'semiaxes': {'major': semiaxes[0], 'intermediate': semiaxes[1], 'minor': semiaxes[2]},
+                        'semiaxes_vectors': {'major': eigenvectors[:, 0], 'intermediate': eigenvectors[:, 1],
+                                             'minor': eigenvectors[:, 2]}}
 
     return voids_catalogue
