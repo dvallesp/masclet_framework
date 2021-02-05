@@ -23,14 +23,14 @@ def filename(it, filetype, digits=5):
 
     Args:
         it: iteration number (int)
-        filetype: 'f' for families file; 'm' for the merger tree (str)
+        filetype: 'f' for families file; 'm' for the merger tree; 'v' for void finder families (str)
         digits: number of digits the filename is written with (int)
 
     Returns:
         filename (str)
 
     """
-    names = {'f': "families", 'm': 'merger_t'}
+    names = {'f': "families", 'm': 'merger_t', 'v': 'voids'}
     if np.floor(np.log10(it)) < digits:
         return names[filetype] + str(it).zfill(digits)
     else:
@@ -224,3 +224,65 @@ def read_merger_tree_reduced(it, path='', digits=5, direction='b'):
         reduced[clusterid] = {'parent': parent, 'ratio': ratio, 'givenmass': givenmass[whichparent_pos]}
 
     return reduced
+
+
+def read_voids(it, nl_voids, path='', digits=5, exclude_subvoids=False, min_ref=0):
+    """
+    Reads the void finder voidsXXXXX files, containing the information about each void
+
+    Args:
+        it: iteration number (int)
+        nl_voids: number of levels the void finder has used
+        path: path of the families file in the system (str)
+        digits: number of digits the filename is written with (int)
+        exclude_subvoids: if True, will only output voids which are not subvoids of any larger one. Defaults to False.
+        min_ref: if specified (in Mpc), only voids of effective radius > min_ref will be read
+
+    Returns:
+        List of dictionaries, each one containing the information of one void.
+    """
+    voids_catalogue = []
+    with open(os.path.join(path, filename(it, 'v', digits))) as f:
+        for l in range(nl_voids):
+            ir, _, nvoidt, _, _, _, _ = tuple(f.readline().split())
+            ir = int(ir)
+            nvoidt = int(nvoidt)
+
+            for i in range(nvoidt):
+                void_id, xc, yc, zc, volm, req, umean, eps, \
+                ip, parent, req_parent, mtot = tuple(f.readline().split())
+                void_id = int(void_id)
+                xc = float(xc)
+                yc = float(yc)
+                zc = float(zc)
+                volm = float(volm)
+                req = float(req)
+                umean = float(umean)
+                eps = float(eps)
+                ip = float(ip)
+                parent = int(parent)
+                req_parent = float(req_parent)
+                mtot = float(mtot)
+
+                void = {'id': int(void_id),
+                        'x': float(xc),
+                        'y': float(yc),
+                        'z': float(zc),
+                        'vol': float(volm),
+                        'r_eq': float(req),
+                        'mean_density': float(umean),
+                        'elipticity': float(eps),
+                        'IP': float(ip),
+                        'pare': int(parent),
+                        'pare_r_eq': float(req_parent),
+                        'mtot': float(mtot),
+                        'level': int(ir)}
+
+                if void['pare'] == 0:
+                    void['pare'] = None
+                    void['pare_r_eq'] = None
+
+                if ((not exclude_subvoids) or (void["pare"] is None)) and void["r_eq"] > min_ref:
+                    voids_catalogue.append(void)
+
+    return voids_catalogue
