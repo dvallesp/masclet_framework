@@ -77,14 +77,26 @@ def compute_position_fields(patchnx, patchny, patchnz, patchrx, patchry, patchrz
         3 fields as described above
     """
     levels = tools.create_vector_levels(npatch)
-    with Pool(ncores) as p:
-        positions = p.map(compute_position_field_onepatch,
-                          [(patchnx[ipatch], patchny[ipatch], patchnz[ipatch], patchrx[ipatch], patchry[ipatch],
-                            patchrz[ipatch], levels[ipatch], size, nmax) for ipatch in range(len(patchnx))])
+    if ncores == 1 or ncores == 0 or ncores is None:
+        cellsrx = []
+        cellsry = []
+        cellsrz = []
+        for ipatch in range(npatch.sum()+1):
+            patches = compute_position_field_onepatch((patchnx[ipatch], patchny[ipatch], patchnz[ipatch],
+                                                       patchrx[ipatch], patchry[ipatch], patchrz[ipatch],
+                                                       levels[ipatch], size, nmax))
+            cellsrx.append(patches[0])
+            cellsry.append(patches[1])
+            cellsrz.append(patches[2])
+    else:
+        with Pool(ncores) as p:
+            positions = p.map(compute_position_field_onepatch,
+                              [(patchnx[ipatch], patchny[ipatch], patchnz[ipatch], patchrx[ipatch], patchry[ipatch],
+                                patchrz[ipatch], levels[ipatch], size, nmax) for ipatch in range(len(patchnx))])
 
-    cellsrx = [p[0] for p in positions]
-    cellsry = [p[1] for p in positions]
-    cellsrz = [p[2] for p in positions]
+        cellsrx = [p[0] for p in positions]
+        cellsry = [p[1] for p in positions]
+        cellsrz = [p[2] for p in positions]
 
     return cellsrx, cellsry, cellsrz
 
