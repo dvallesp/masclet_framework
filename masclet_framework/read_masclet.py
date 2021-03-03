@@ -199,7 +199,8 @@ def read_grids(it, path='', parameters_path='', digits=5, read_general=True, rea
 
 def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_delta=True, output_v=True,
               output_pres=True, output_pot=True, output_opot=False, output_temp=True, output_metalicity=True,
-              output_cr0amr=True, output_solapst=True, is_mascletB=False, output_B=False, verbose=False):
+              output_cr0amr=True, output_solapst=True, is_mascletB=False, output_B=False, is_cooling=True,
+              verbose=False):
     """
     Reads the gas (baryonic, clus) file
 
@@ -220,6 +221,7 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         output_solapst: whether "solapst variable" (1 if the cell is kept, 0 otherwise) is returned (bool)
         is_mascletB: whether the outputs correspond to masclet-B (contains magnetic fields) (bool)
         output_B: whether magnetic field is returned; only if is_mascletB = True (bool)
+        is_cooling: whether there is cooling (an thus T and metalicity are written) or not (bool)
         verbose: whether a message is printed when each refinement level is started (bool)
         fullverbose: whether a message is printed for each patch (recommended for debugging issues) (bool)
 
@@ -276,15 +278,16 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         else:
             f.skip()
 
-        if output_temp:
-            temp = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
-        else:
-            f.skip()
+        if is_cooling:
+            if output_temp:
+                temp = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+            else:
+                f.skip()
 
-        if output_metalicity:
-            metalicity = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
-        else:
-            f.skip()
+            if output_metalicity:
+                metalicity = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+            else:
+                f.skip()
 
         if output_cr0amr:
             cr0amr = [np.reshape(f.read_vector('i'), (nmax, nmay, nmaz), 'F').astype('bool')]
@@ -342,17 +345,18 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                 else:
                     f.skip()
 
-                if output_temp:
-                    temp.append(
-                        np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-                else:
-                    f.skip()
+                if is_cooling:
+                    if output_temp:
+                        temp.append(
+                            np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    else:
+                        f.skip()
 
-                if output_metalicity:
-                    metalicity.append(
-                        np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-                else:
-                    f.skip()
+                    if output_metalicity:
+                        metalicity.append(
+                            np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    else:
+                        f.skip()
 
                 if output_cr0amr:
                     cr0amr.append(np.reshape(f.read_vector('i'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
