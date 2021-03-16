@@ -189,7 +189,7 @@ def mass_inside(R, clusrx, clusry, clusrz, density, cellsrx, cellsry, cellsrz, n
 
 
 def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins, cellsrx, cellsry,
-                      cellsrz, cr0amr, solapst, npatch, size, nmax, verbose=False):
+                      cellsrz, cr0amr, solapst, npatch, size, nmax, up_to_level=1000, verbose=False):
     """
     Computes a (volume-weighted) radial profile of the quantity given in the "field" argument, taking center in
     (clusrx, clusry, clusrz).
@@ -208,6 +208,7 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
         npatch: number of patches in each level, starting in l=0
         size: comoving size of the simulation box
         nmax: cells at base level
+        up_to_level: maximum AMR level to be considered for the profile
         verbose: if True, prints the patch being opened at a time
 
     Returns:
@@ -254,7 +255,7 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
         cells_inner = cells_outer
         cells_outer = mask_sphere(r_out, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz)
         shell_mask = [inner ^ outer for inner, outer in zip(cells_inner, cells_outer)]
-        shell_mask = tools.clean_field(shell_mask, cr0amr, solapst, npatch)
+        shell_mask = tools.clean_field(shell_mask, cr0amr, solapst, npatch, up_to_level=up_to_level)
 
         sum_field_vw = sum([(fvw * sm).sum() for fvw, sm in zip(field_vw, shell_mask)])
         sum_vw = sum([(sm * cv).sum() for sm, cv in zip(shell_mask, cell_volume)])
@@ -265,7 +266,7 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
 
 
 def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins, cellsrx, cellsry,
-                               cellsrz, cr0amr, solapst, npatch, size, nmax, verbose=False):
+                               cellsrz, cr0amr, solapst, npatch, size, nmax, up_to_level=1000, verbose=False):
     """
     Computes a (volume-weighted) radial profile of the quantity given in the "field" argument, taking center in
     (clusrx, clusry, clusrz).
@@ -284,6 +285,7 @@ def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins
         npatch: number of patches in each level, starting in l=0
         size: comoving size of the simulation box
         nmax: cells at base level
+        up_to_level: maximum AMR level to be considered for the profile
         verbose: if True, prints the patch being opened at a time
 
     Returns:
@@ -329,7 +331,7 @@ def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins
         cells_inner = cells_outer
         cells_outer = mask_sphere(r_out, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz)
         shell_mask = [inner ^ outer for inner, outer in zip(cells_inner, cells_outer)]
-        shell_mask = tools.clean_field(shell_mask, cr0amr, solapst, npatch)
+        shell_mask = tools.clean_field(shell_mask, cr0amr, solapst, npatch, up_to_level=up_to_level)
         sum_vw = sum([(sm * cv).sum() for sm, cv in zip(shell_mask, cell_volume)])
 
         profile_thisr = [(sum([(fvw * sm).sum() for fvw, sm in zip(field_vw, shell_mask)]) / sum_vw) for field_vw in
