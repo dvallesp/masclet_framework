@@ -227,7 +227,8 @@ def read_merger_tree_reduced(it, path='', digits=5, direction='b'):
     return reduced
 
 
-def read_voids(it, nl_voids, path='', digits=5, exclude_subvoids=False, min_ref=0, shape=False):
+def read_voids(it, nl_voids, path='', digits=5, contains_mtree=False,
+               exclude_subvoids=False, min_ref=0, shape=False):
     """
     Reads the void finder voidsXXXXX files, containing the information about each void
 
@@ -236,8 +237,10 @@ def read_voids(it, nl_voids, path='', digits=5, exclude_subvoids=False, min_ref=
         nl_voids: number of levels the void finder has used
         path: path of the families file in the system (str)
         digits: number of digits the filename is written with (int)
+        contains_mtree: if True, the information about the merger tree is also expected to be in the voidsXXXXX file
         exclude_subvoids: if True, will only output voids which are not subvoids of any larger one. Defaults to False.
         min_ref: if specified (in Mpc), only voids of effective radius > min_ref will be read
+        shape: if True, inertiaXXXXX files, containing the inertia tensor of each void, are read
 
     Returns:
         List of dictionaries, each one containing the information of one void.
@@ -245,13 +248,21 @@ def read_voids(it, nl_voids, path='', digits=5, exclude_subvoids=False, min_ref=
     voids_catalogue = []
     with open(os.path.join(path, filename(it, 'v', digits))) as f:
         for l in range(nl_voids):
-            ir, _, nvoidt, _, _, _, _ = tuple(f.readline().split())
+            if contains_mtree:
+                ir, _, nvoidt, _, _, _ = tuple(f.readline().split())
+            else:
+                ir, _, nvoidt, _, _, _, _ = tuple(f.readline().split())
             ir = int(ir)
             nvoidt = int(nvoidt)
 
             for i in range(nvoidt):
-                void_id, xc, yc, zc, volm, req, umean, eps, \
-                ip, parent, req_parent, mtot = tuple(f.readline().split())
+                if not contains_mtree:
+                    void_id, xc, yc, zc, volm, req, umean, eps, \
+                    ip, parent, req_parent, mtot = tuple(f.readline().split())
+                else:
+                    void_id, xc, yc, zc, volm, req, umean, eps, \
+                    ip, parent, req_parent, mtot, lev0, levm, ncellv, \
+                    progenitor, vol_shared_progenitor = tuple(f.readline().split())
                 void_id = int(void_id)
                 xc = float(xc)
                 yc = float(yc)
@@ -282,6 +293,18 @@ def read_voids(it, nl_voids, path='', digits=5, exclude_subvoids=False, min_ref=
                 if void['pare'] == 0:
                     void['pare'] = None
                     void['pare_r_eq'] = None
+
+                if contains_mtree:
+                    lev0, levm, ncellv, progenitor = int(lev0), int(levm), int(ncellv), int(progenitor)
+                    vol_shared_progenitor = float(vol_shared_progenitor)
+                    void['lev0'] = lev0
+                    void['levm'] = levm
+                    void['ncellv'] = ncellv
+                    if progenitor == 0:
+                        progenitor = None
+                        vol_shared_progenitor = None
+                    void['progenitor'] = progenitor
+                    void['vol_shared_progenitor'] = vol_shared_progenitor
 
                 if ((not exclude_subvoids) or (void["pare"] is None)) and void["r_eq"] > min_ref:
                     voids_catalogue.append(void)
