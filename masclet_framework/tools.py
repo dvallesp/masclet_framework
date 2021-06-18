@@ -872,6 +872,136 @@ def uniform_grid_zoom_several(fields, box_limits, up_to_level, npatch, patchnx, 
     return tuple(uniforms)
 
 
+def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry,
+                                  patchrz, size, nmax, verbose=False):
+    """
+    Builds a uniform grid, zooming on a box specified by box_limits, at level up_to_level, containing the most refined
+    data at each region, and interpolating from coarser patches
+    Args:
+        field: field to be computed at the uniform grid. Must be uncleaned!!
+        box_limits: a tuple in the form (imin, imax, jmin, jmax, kmin, kmax). Limits should correspond to l=0 cell
+                    boundaries
+        up_to_level: level up to which the fine grid wants to be obtained
+        cr0amr: XXXXXXXXXXX
+        solapst: XXXXXXXXXXX
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+                                   (and Y and Z)
+        size: comoving side of the simulation box
+        nmax: cells at base level
+        verbose: if True, prints the patch being opened at a time
+    Returns:
+        Uniform grid as described
+    """
+
+    def intt(x):
+        if x >= 0:
+            return int(x)
+        else:
+            return int(x) - 1
+
+    coarse_cellsize = size / nmax
+    uniform_cellsize = size / nmax / 2 ** up_to_level
+
+    bimin = box_limits[0]
+    bimax = box_limits[1]
+    bjmin = box_limits[2]
+    bjmax = box_limits[3]
+    bkmin = box_limits[4]
+    bkmax = box_limits[5]
+
+    bxmin = -size / 2 + bimin * coarse_cellsize
+    bxmax = -size / 2 + (bimax + 1) * coarse_cellsize
+    bymin = -size / 2 + bjmin * coarse_cellsize
+    bymax = -size / 2 + (bjmax + 1) * coarse_cellsize
+    bzmin = -size / 2 + bkmin * coarse_cellsize
+    bzmax = -size / 2 + (bkmax + 1) * coarse_cellsize
+
+    # BASE GRID
+    reduction = 2 ** up_to_level
+    uniform_size_x = (bimax - bimin + 1) * reduction
+    uniform_size_y = (bjmax - bjmin + 1) * reduction
+    uniform_size_z = (bkmax - bkmin + 1) * reduction
+    uniform = np.zeros((uniform_size_x, uniform_size_y, uniform_size_z))
+
+    fine_coordinates = [np.linspace(bxmin + uniform_cellsize / 2, bxmax - uniform_cellsize / 2, uniform_size_x),
+                        np.linspace(bymin + uniform_cellsize / 2, bymax - uniform_cellsize / 2, uniform_size_y),
+                        np.linspace(bzmin + uniform_cellsize / 2, bzmax - uniform_cellsize / 2, uniform_size_z)]
+
+    vertices_patches = np.zeros((npatch[0:up_to_level + 1].sum() + 1, 6))
+    vertices_patches[0, :] = [-size / 2, size / 2, -size / 2, size / 2, -size / 2, size / 2]
+    for l in range(1, up_to_level + 1):
+        dx = coarse_cellsize / 2 ** l
+        for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+            vertices_patches[ipatch, 0] = patchrx[ipatch] - dx
+            vertices_patches[ipatch, 2] = patchry[ipatch] - dx
+            vertices_patches[ipatch, 4] = patchrz[ipatch] - dx
+            vertices_patches[ipatch, 1] = vertices_patches[ipatch, 0] + patchnx[ipatch] * dx
+            vertices_patches[ipatch, 3] = vertices_patches[ipatch, 2] + patchny[ipatch] * dx
+            vertices_patches[ipatch, 5] = vertices_patches[ipatch, 4] + patchnz[ipatch] * dx
+
+    levels = create_vector_levels(npatch)
+
+    cell_patch = uniform.copy().astype('int')
+    for l in range(1, up_to_level + 1, 1):
+        reduction = 2 ** (up_to_level - l)
+        dx = uniform_cellsize * reduction
+        for ipatch in range(npatch[0:l + 1].sum(), npatch[0:l].sum(), -1):
+            i1 = intt(((vertices_patches[ipatch, 0] + dx) - bxmin) / uniform_cellsize + 0.5)
+            j1 = intt(((vertices_patches[ipatch, 2] + dx) - bymin) / uniform_cellsize + 0.5)
+            k1 = intt(((vertices_patches[ipatch, 4] + dx) - bzmin) / uniform_cellsize + 0.5)
+            i2 = i1 + reduction * (patchnx[ipatch] - 2)
+            j2 = j1 + reduction * (patchny[ipatch] - 2)
+            k2 = k1 + reduction * (patchnz[ipatch] - 2)
+            if i2 > -1 and i1 < uniform_size_x and \
+                    j2 > -1 and j1 < uniform_size_y and \
+                    k2 > -1 and k1 < uniform_size_z:
+                i1 = max([i1, 0])
+                j1 = max([j1, 0])
+                k1 = max([k1, 0])
+                i2 = min([i2, uniform_size_x - 1])
+                j2 = min([j2, uniform_size_y - 1])
+                k2 = min([k2, uniform_size_z - 1])
+                cell_patch[i1:i2 + 1, j1:j2 + 1, k1:k2 + 1] = ipatch
+
+    for i in range(uniform_size_x):
+        if verbose:
+            print('ix={:}/{:}'.format(i,uniform_size_x))
+        for j in range(uniform_size_y):
+            for k in range(uniform_size_z):
+                x, y, z = fine_coordinates[0][i], fine_coordinates[1][j], fine_coordinates[2][k]
+
+                ipatch = cell_patch[i, j, k]
+                l = levels[ipatch]
+                dx = coarse_cellsize / 2 ** l
+
+                if l == up_to_level:
+                    xx, yy, zz = vertices_patches[ipatch, 0], vertices_patches[ipatch, 2], vertices_patches[ipatch, 4]
+                    ii, jj, kk = int((x - xx) / dx), int((y - yy) / dx), int((z - zz) / dx)
+                    uniform[i, j, k] = field[ipatch][ii, jj, kk]
+                else:
+                    xx, yy, zz = vertices_patches[ipatch, 0], vertices_patches[ipatch, 2], vertices_patches[ipatch, 4]
+                    ii, jj, kk = int((x - xx) / dx - 0.5), int((y - yy) / dx - 0.5), int((z - zz) / dx - 0.5)
+                    xbas, ybas, zbas = xx + (ii + 0.5) * dx, yy + (jj + 0.5) * dx, zz + (kk + 0.5) * dx
+                    xbas, ybas, zbas = (x - xbas) / dx, (y - ybas) / dx, (z - zbas) / dx
+
+                    ubas = field[ipatch][ii:ii + 2, jj:jj + 2, kk:kk + 2]
+
+                    c00 = ubas[0, 0, 0] * (1 - xbas) + ubas[1, 0, 0] * xbas
+                    c01 = ubas[0, 0, 1] * (1 - xbas) + ubas[1, 0, 1] * xbas
+                    c10 = ubas[0, 1, 0] * (1 - xbas) + ubas[1, 1, 0] * xbas
+                    c11 = ubas[0, 1, 1] * (1 - xbas) + ubas[1, 1, 1] * xbas
+
+                    c0 = c00 * (1 - ybas) + c10 * ybas
+                    c1 = c01 * (1 - ybas) + c11 * ybas
+
+                    uniform[i, j, k] = c0 * (1 - zbas) + c1 * zbas
+
+    return uniform
+
+
+
 def mask_gas_clumps(shell_mask, gas_density, fcut=3.5, mode='zhuravleva13'):
     """
     DEPRECATED: WILL BE REMOVED SOON
