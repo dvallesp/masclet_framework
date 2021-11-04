@@ -68,9 +68,16 @@ def colormap2d(z, x=np.array([]), y=np.array([]), xlabel='', ylabel='', cbarlabe
     if are_meshgrid:
         xmesh = x
         ymesh = y
+        if xmesh.shape[0] != z.shape[0]+1 or xmesh.shape[1] != z.shape[1]+1:
+            print('Error, x and y mesh dimensions should be 1 greater than z dimensions')
     else:
         if are_xy_given:
-            assert (x.shape[0] == z.shape[0] and y.shape[0] == z.shape[1])
+            if x.shape[0] == z.shape[0] and y.shape[0] == z.shape[1]:
+                x = np.linspace(x[0], x[x.shape[0]-1], x.shape[0]+1)
+                y = np.linspace(y[0], y[y.shape[0]-1], y.shape[0]+1)
+            elif x.shape[0] != z.shape[0]+1 and y.shape[0] != z.shape[1]+1:
+                print('Error: x and y are badly specified')
+                raise ValueError()
             xmesh, ymesh = np.meshgrid(x, y)
         else:
             zsize = z.shape
@@ -90,9 +97,10 @@ def colormap2d(z, x=np.array([]), y=np.array([]), xlabel='', ylabel='', cbarlabe
         ymax = ymesh.max()
 
     if logz:
-        pcm = ax.pcolor(xmesh, ymesh, np.transpose(z), norm=colors.LogNorm(vmin=cbarmin, vmax=cbarmax), cmap=cmap)
+        pcm = ax.pcolormesh(xmesh, ymesh, np.transpose(z), norm=colors.LogNorm(vmin=cbarmin, vmax=cbarmax), cmap=cmap)
     else:
-        pcm = ax.pcolor(xmesh, ymesh, np.transpose(z), norm=colors.Normalize(vmin=cbarmin, vmax=cbarmax), cmap=cmap)
+        pcm = ax.pcolormesh(xmesh, ymesh, np.transpose(z), norm=colors.Normalize(vmin=cbarmin, vmax=cbarmax),
+                            cmap=cmap)
 
     ax.set(xlim=(xmin, xmax), ylim=(ymin, ymax))
 
