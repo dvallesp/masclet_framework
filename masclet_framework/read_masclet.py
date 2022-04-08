@@ -15,13 +15,20 @@ Created by David Vallés
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 
-import os
+import os,sys
 # numpy
 import numpy as np
 # scipy (will be removed)
 from scipy.io import FortranFile
 # cython_fortran_file
 from cython_fortran_file import FortranFile as FF
+
+# tqdm
+import importlib.util
+if importlib.util.find_spec('tqdm') is None:
+    def tqdm(x): return x
+else:
+    from tqdm import tqdm
 
 # masclet_framework
 from masclet_framework import parameters
@@ -229,6 +236,8 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         Chosen quantities, as a list of arrays (one for each patch, starting with l=0 and subsequently);
         in the order specified by the order of the parameters in this definition.
     """
+    #if not verbose:
+    #    def tqdm(x): return x
 
     if output_B and (not is_mascletB):
         print('Error: cannot output magnetic field if the simulation has not.')
@@ -311,9 +320,9 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
             if verbose:
                 print('Reading level {}.'.format(l))
                 print('{} patches.'.format(npatch[l]))
-            for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
-                if verbose:
-                    print('Reading patch {}'.format(ipatch))
+            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1)):
+                #if verbose:
+                #    print('Reading patch {}'.format(ipatch))
 
                 if output_delta:
                     delta.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
@@ -432,6 +441,8 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
 
 
     """
+    #if not verbose:
+    #    def tqdm(x): return x
     nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
                                                            load_namr=False, load_size=False, path=parameters_path)
     npatch, npart, patchnx, patchny, patchnz = read_grids(it, path=path, read_general=False, read_patchnum=True,
@@ -483,7 +494,7 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
             if verbose:
                 print('Reading level {}.'.format(l))
                 print('{} patches. {} particles.'.format(npatch[l], npart[l]))
-            for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1)):
                 if output_deltadm:
                     delta_dm.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
                                                'F'))
