@@ -47,9 +47,9 @@ def compute_position_field_onepatch(args):
     first_x = rx - cellsize / 2
     first_y = ry - cellsize / 2
     first_z = rz - cellsize / 2
-    patch_x = np.zeros((nx, ny, nz))
-    patch_y = np.zeros((nx, ny, nz))
-    patch_z = np.zeros((nx, ny, nz))
+    patch_x = np.zeros((nx, ny, nz), dtype='f4')
+    patch_y = np.zeros((nx, ny, nz), dtype='f4')
+    patch_z = np.zeros((nx, ny, nz), dtype='f4')
 
     for i in range(nx):
         patch_x[i, :, :] = first_x + i * cellsize
