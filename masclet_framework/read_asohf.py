@@ -1,7 +1,8 @@
 import os, sys, numpy as np
 from cython_fortran_file import FortranFile as FF
 
-def read_families(it, path='', output_format='dictionaries', output_redshift=False):
+def read_families(it, path='', output_format='dictionaries', output_redshift=False,
+                  min_mass=None, exclude_subhaloes=False):
     '''
     Reads the families files, containing the halo catalogue.
     Can be outputted as a list of dictionaries, one per halo
@@ -75,6 +76,11 @@ def read_families(it, path='', output_format='dictionaries', output_redshift=Fal
             halo['Nsubs']=int(l[50])
 
             haloes.append(halo)
+    
+    if exclude_subhaloes:
+        haloes=[halo for halo in haloes if halo['substructureOf']==-1]
+    if min_mass is not None:
+        haloes=[halo for halo in haloes if halo['M']>min_mass]
 
     if output_format=='dictionaries':
         if output_redshift:

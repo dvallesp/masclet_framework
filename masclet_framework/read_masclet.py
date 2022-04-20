@@ -542,7 +542,7 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
 
 def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltastar=True, verbose=False,
               output_position=False, output_velocity=False, output_mass=False, output_temp=False,
-              output_metalicity=False, output_id=False):
+              output_metalicity=False, output_id=False, are_BH=True):
     """
     Reads the stellar (clst) file.
     For now, it only reads the delta.
@@ -561,6 +561,7 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         output_metalicity: whether particles' metalicities are returned (bool)
         output_id: whether particles' ids are returned (bool)
         verbose: whether a message is printed when each refinement level is started (bool)
+        are_BH: if True, it is assumed that BH data is appended at the end of the stellar data. For now, they do not get output.
 
     Returns:
         Chosen quantities, in the order specified by the order of the parameters in this definition.
@@ -673,6 +674,10 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                 stpart_id = np.append(stpart_id, f.read_vector('i'))
             else:
                 f.skip()
+
+            if are_BH:
+                f.skip(9)
+                # for now, we just ignore BH data
 
     returnvariables = []
 
