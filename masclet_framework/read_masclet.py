@@ -26,7 +26,7 @@ from cython_fortran_file import FortranFile as FF
 # tqdm
 import importlib.util
 if importlib.util.find_spec('tqdm') is None:
-    def tqdm(x): return x
+    def tqdm(x, desc=None): return x
 else:
     from tqdm import tqdm
 
@@ -320,7 +320,7 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
             if verbose:
                 print('Reading level {}.'.format(l))
                 print('{} patches.'.format(npatch[l]))
-            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1)):
+            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l)):
                 #if verbose:
                 #    print('Reading patch {}'.format(ipatch))
 
@@ -487,14 +487,14 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
             f.skip()
 
         if output_mass:
-            dmpart_mass = mdmpart * np.ones(npart[0])
+            dmpart_mass = (mdmpart * np.ones(npart[0])).astype('f4')
 
         # refinement levels
         for l in range(1, min(nlevels + 1, max_refined_level + 1)):
             if verbose:
                 print('Reading level {}.'.format(l))
                 print('{} patches. {} particles.'.format(npatch[l], npart[l]))
-            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1)):
+            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l)):
                 if output_deltadm:
                     delta_dm.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
                                                'F'))
