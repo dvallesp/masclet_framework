@@ -20,3 +20,4 @@ import masclet_framework.read_asohf
 import masclet_framework.read_old_asohf
 import masclet_framework.particles
 import masclet_framework.tools_xyz
+import masclet_framework.spectral
