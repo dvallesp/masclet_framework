@@ -72,3 +72,9 @@ density_to_cgs = 1/cgs_to_density
 G_isu = 6.67430e-11
 G_cgs = 6.67430e-8
 G_masclet = G_cgs * cm_to_length**3 / g_to_mass / s_to_time**2
+
+### MAGNETIC FIELD
+magneticfield_to_gauss = 1/13.75
+magneticfield_to_microgauss = 1e6 * magneticfield_to_gauss
+gauss_to_magneticfield = 1/magneticfield_to_gauss
+microgauss_to_magneticfield = 1 / magneticfield_to_microgauss
