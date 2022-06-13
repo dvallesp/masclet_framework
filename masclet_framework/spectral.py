@@ -14,7 +14,7 @@ import numpy as np
 from scipy import fft, stats
 
 
-def power_spectrum_scalar_field(data, dx=1., ncores=1):
+def power_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False):
     '''
     This function computes the power spectrum, P(k), of a 3D cubic scalar field.
 
@@ -22,6 +22,7 @@ def power_spectrum_scalar_field(data, dx=1., ncores=1):
         - data: the 3D array containing the input field
         - dx: uniform spacing of the grid in the desired input units
         - ncores: number of workers for parallel computation of the FFT
+        - do_zero_pad: if True, the FFTs are computed using 0-padding, doubling the domain
 
     Returns:
         - kvals: the spatial frequencies on which the power spectra has been
@@ -32,19 +33,35 @@ def power_spectrum_scalar_field(data, dx=1., ncores=1):
 
     # Step 1. Compute the FFT, its amplitude square, and normalise it
     #fft_data = np.fft.fftn(data, s=data.shape)#.shape
-    fft_data = fft.fftn(data, s=data.shape, workers=ncores)
+    
+    ### SPECIAL TREATMENT OF ZERO-PADDING
+    if not do_zero_pad:
+        shape = data.shape
+    else:
+        shape = [2*s for s in data.shape]
+    ### END SPECIAL TREATMENT OF ZERO-PADDING
+        
+    fft_data = fft.fftn(data, s=shape, workers=ncores)
     fourier_amplitudes = (np.abs(fft_data)**2).flatten() / data.size**2 * (data.shape[0]*dx)**3
     nx,ny,nz = data.shape
 
     # Step 2. Obtain the frequencies
-    frequencies_x = np.fft.fftfreq(data.shape[0], d=dx)
-    frequencies_y = np.fft.fftfreq(data.shape[1], d=dx)
-    frequencies_z = np.fft.fftfreq(data.shape[2], d=dx)
+    frequencies_x = np.fft.fftfreq(shape[0], d=dx)
+    frequencies_y = np.fft.fftfreq(shape[1], d=dx)
+    frequencies_z = np.fft.fftfreq(shape[2], d=dx)
     a,b,c=np.meshgrid(frequencies_x, frequencies_y, frequencies_z, indexing='ij')
     knrm=np.sqrt(a**2+b**2+c**2).flatten()
 
     # Step 3. Assuming isotropy, obtain the P(k) (1-dimensional power spectrum)
-    kbins = np.arange(frequencies_x[1]/2, np.abs(frequencies_x).max(), frequencies_x[1])
+    
+    ### SPECIAL TREATMENT OF ZERO-PADDING
+    if not do_zero_pad:
+        delta_f = frequencies_x[1]
+    else:
+        delta_f = 2.0*frequencies_x[1]
+    ### END SPECIAL TREATMENT OF ZERO-PADDING
+    
+    kbins = np.arange(frequencies_x[1]/2, np.abs(frequencies_x).max(), delta_f)
     kvals = 0.5 * (kbins[1:] + kbins[:-1])
     Pk, _, _ = stats.binned_statistic(knrm, fourier_amplitudes,
                                          statistic = "mean",
@@ -53,7 +70,7 @@ def power_spectrum_scalar_field(data, dx=1., ncores=1):
     return kvals, Pk
 
 
-def power_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1):
+def power_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1, do_zero_pad=False):
     '''
     This function computes the power spectrum, P(k), of a 3D cubic vector field.
 
@@ -61,6 +78,7 @@ def power_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1):
         - data_x, data_y, data_z: the 3D arrays containing the 3 components of the vector field
         - dx: uniform spacing of the grid in the desired input units
         - ncores: number of workers for parallel computation of the FFT
+        - do_zero_pad: if True, the FFTs are computed using 0-padding, doubling the domain
 
     Returns:
         - kvals: the spatial frequencies on which the power spectra has been
@@ -69,16 +87,16 @@ def power_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1):
 
     '''
 
-    kvals, Pk_x = power_spectrum_scalar_field(data_x, dx=dx, ncores=ncores)
-    kvals, Pk_y = power_spectrum_scalar_field(data_y, dx=dx, ncores=ncores)
-    kvals, Pk_z = power_spectrum_scalar_field(data_z, dx=dx, ncores=ncores)
+    kvals, Pk_x = power_spectrum_scalar_field(data_x, dx=dx, ncores=ncores, do_zero_pad=do_zero_pad)
+    kvals, Pk_y = power_spectrum_scalar_field(data_y, dx=dx, ncores=ncores, do_zero_pad=do_zero_pad)
+    kvals, Pk_z = power_spectrum_scalar_field(data_z, dx=dx, ncores=ncores, do_zero_pad=do_zero_pad)
 
     Pk = Pk_x+Pk_y+Pk_z
 
     return kvals, Pk
 
 
-def energy_spectrum_scalar_field(data, dx=1., ncores=1):
+def energy_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False):
     '''
     This function computes the energy power spectrum, E(k), of a 3D cubic scalar field.
 
@@ -92,6 +110,7 @@ def energy_spectrum_scalar_field(data, dx=1., ncores=1):
         - data: the 3D array containing the input field
         - dx: uniform spacing of the grid in the desired input units
         - ncores: number of workers for parallel computation of the FFT
+        - do_zero_pad: if True, the FFTs are computed using 0-padding, doubling the domain
 
     Returns:
         - kvals: the spatial frequencies on which the power spectra has been
@@ -100,13 +119,13 @@ def energy_spectrum_scalar_field(data, dx=1., ncores=1):
 
     '''
 
-    kvals, pk = power_spectrum_scalar_field(data, dx=dx, ncores=ncores)
+    kvals, pk = power_spectrum_scalar_field(data, dx=dx, ncores=ncores, do_zero_pad=do_zero_pad)
     Ek = pk * (2*np.pi*kvals**2)
 
     return kvals, Ek
 
 
-def energy_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1):
+def energy_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1, do_zero_pad=False):
     '''
     This function computes the energy power spectrum, E(k), of a 3D cubic vector field.
 
@@ -120,6 +139,7 @@ def energy_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1):
         - data_x, data_y, data_z: the 3D arrays containing the 3 components of the vector field
         - dx: uniform spacing of the grid in the desired input units
         - ncores: number of workers for parallel computation of the FFT
+        - do_zero_pad: if True, the FFTs are computed using 0-padding, doubling the domain
 
     Returns:
         - kvals: the spatial frequencies on which the power spectra has been
@@ -127,11 +147,11 @@ def energy_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1):
         - Ek: the energy power spectrum at the kvals spatial frequency points
 
     '''
-    kvals, pk = power_spectrum_vector_field(data_x, data_y, data_z, dx=dx, ncores=ncores)
+    kvals, pk = power_spectrum_vector_field(data_x, data_y, data_z, dx=dx, ncores=ncores, do_zero_pad=do_zero_pad)
     Ek = pk * (2*np.pi*kvals**2)
     return kvals, Ek
 
-def power_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=1):
+def power_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=1, do_zero_pad=False):
     '''
     This function computes the power spectrum, P(k), of a 3D cubic vector field,
      returning separately the compressive and the solenoidal one.
@@ -140,6 +160,7 @@ def power_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=
         - data: the 3D array containing the input field
         - dx: uniform spacing of the grid in the desired input units
         - ncores: number of workers for parallel computation of the FFT
+        - do_zero_pad: if True, the FFTs are computed using 0-padding, doubling the domain
 
     Returns:
         - kvals: the spatial frequencies on which the power spectra has been
@@ -153,16 +174,24 @@ def power_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=
 
     # Step 1. Compute the FFT, its amplitude square, and normalise it
     #fft_data = np.fft.fftn(data, s=data.shape)#.shape
+    
+    ### SPECIAL TREATMENT OF ZERO-PADDING
+    if do_zero_pad is False:
+        shape = data.shape
+    else:
+        shape = [2*s for s in data.shape]
+    ### END SPECIAL TREATMENT OF ZERO-PADDING
+    
     nx,ny,nz = data_x.shape
     
-    ft_x = fft.fftn(data_x, s=data_x.shape, workers=ncores)
-    ft_y = fft.fftn(data_y, s=data_y.shape, workers=ncores)
-    ft_z = fft.fftn(data_z, s=data_z.shape, workers=ncores)
+    ft_x = fft.fftn(data_x, s=shape, workers=ncores)
+    ft_y = fft.fftn(data_y, s=shape, workers=ncores)
+    ft_z = fft.fftn(data_z, s=shape, workers=ncores)
 
     # Step 2. Obtain the frequencies
-    frequencies_x = np.fft.fftfreq(data_x.shape[0], d=dx)
-    frequencies_y = np.fft.fftfreq(data_x.shape[1], d=dx)
-    frequencies_z = np.fft.fftfreq(data_x.shape[2], d=dx)
+    frequencies_x = np.fft.fftfreq(shape[0], d=dx)
+    frequencies_y = np.fft.fftfreq(shape[1], d=dx)
+    frequencies_z = np.fft.fftfreq(shape[2], d=dx)
     kx,ky,kz=np.meshgrid(frequencies_x, frequencies_y, frequencies_z, indexing='ij')
     knrm=np.sqrt(kx**2 + ky**2 + kz**2)#.flatten()
     identity=np.ones(knrm.shape)
@@ -195,7 +224,15 @@ def power_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=
     knrm = knrm.flatten()
 
     # Step 5. Assuming isotropy, obtain the P(k) (1-dimensional power spectrum)
-    kbins = np.arange(frequencies_x[1]/2, np.abs(frequencies_x).max(), frequencies_x[1])
+    
+    ### SPECIAL TREATMENT OF ZERO-PADDING
+    if not do_zero_pad:
+        delta_f = frequencies_x[1]
+    else:
+        delta_f = 2.0*frequencies_x[1]
+    ### END SPECIAL TREATMENT OF ZERO-PADDING
+    
+    kbins = np.arange(frequencies_x[1]/2, np.abs(frequencies_x).max(), delta_f)
     kvals = 0.5 * (kbins[1:] + kbins[:-1])
     
     Pk, _, _ = stats.binned_statistic(knrm, fourier_amplitudes,
@@ -213,7 +250,7 @@ def power_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=
     return kvals, Pk, Pkcomp, Pksol
 
 
-def energy_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=1):
+def energy_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=1, do_zero_pad=False):
     '''
     This function computes the energy power spectrum, E(k), of a 3D cubic vector field,
      returning separately the total, the compressive and the solenoidal one.
@@ -228,6 +265,7 @@ def energy_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores
         - data: the 3D array containing the input field
         - dx: uniform spacing of the grid in the desired input units
         - ncores: number of workers for parallel computation of the FFT
+        - do_zero_pad: if True, the FFTs are computed using 0-padding, doubling the domain
 
     Returns:
         - kvals: the spatial frequencies on which the power spectra has been
@@ -239,7 +277,7 @@ def energy_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores
 
     '''
     kvals, pk, pkcomp, pksol = power_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, 
-                                                                     dx=dx, ncores=ncores)
+                                                                     dx=dx, ncores=ncores, do_zero_pad=do_zero_pad)
     Ek = pk * (2*np.pi*kvals**2)
     Ekcomp = pkcomp * (2*np.pi*kvals**2)
     Eksol = pksol * (2*np.pi*kvals**2)
