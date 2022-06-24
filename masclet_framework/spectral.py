@@ -14,7 +14,8 @@ import numpy as np
 from scipy import fft, stats
 
 
-def power_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False):
+def power_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False,
+                                zero_pad_factor=1.):
     '''
     This function computes the power spectrum, P(k), of a 3D cubic scalar field.
 
@@ -23,6 +24,9 @@ def power_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False):
         - dx: uniform spacing of the grid in the desired input units
         - ncores: number of workers for parallel computation of the FFT
         - do_zero_pad: if True, the FFTs are computed using 0-padding, doubling the domain
+        - zero_pad_factor: if do_zero_pad is True, this is the factor by which the domain is 
+                increased. For example, if zero_pad_factor=2, the domain is doubled. Should
+                be a power of 2.
 
     Returns:
         - kvals: the spatial frequencies on which the power spectra has been
@@ -38,7 +42,8 @@ def power_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False):
     if not do_zero_pad:
         shape = data.shape
     else:
-        shape = [2*s for s in data.shape]
+        zero_pad_factor = int(zero_pad_factor)
+        shape = [zero_pad_factor*s for s in data.shape]
     ### END SPECIAL TREATMENT OF ZERO-PADDING
         
     fft_data = fft.fftn(data, s=shape, workers=ncores)
@@ -58,7 +63,7 @@ def power_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False):
     if not do_zero_pad:
         delta_f = frequencies_x[1]
     else:
-        delta_f = 2.0*frequencies_x[1]
+        delta_f = float(zero_pad_factor)*frequencies_x[1]
     ### END SPECIAL TREATMENT OF ZERO-PADDING
     
     kbins = np.arange(frequencies_x[1]/2, np.abs(frequencies_x).max(), delta_f)
@@ -70,7 +75,8 @@ def power_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False):
     return kvals, Pk
 
 
-def power_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1, do_zero_pad=False):
+def power_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1, do_zero_pad=False,
+                                zero_pad_factor=1.):
     '''
     This function computes the power spectrum, P(k), of a 3D cubic vector field.
 
@@ -79,6 +85,9 @@ def power_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1, do_zero
         - dx: uniform spacing of the grid in the desired input units
         - ncores: number of workers for parallel computation of the FFT
         - do_zero_pad: if True, the FFTs are computed using 0-padding, doubling the domain
+        - zero_pad_factor: if do_zero_pad is True, this is the factor by which the domain is
+                increased. For example, if zero_pad_factor=2, the domain is doubled. Should
+                be a power of 2.
 
     Returns:
         - kvals: the spatial frequencies on which the power spectra has been
@@ -87,16 +96,19 @@ def power_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1, do_zero
 
     '''
 
-    kvals, Pk_x = power_spectrum_scalar_field(data_x, dx=dx, ncores=ncores, do_zero_pad=do_zero_pad)
-    kvals, Pk_y = power_spectrum_scalar_field(data_y, dx=dx, ncores=ncores, do_zero_pad=do_zero_pad)
-    kvals, Pk_z = power_spectrum_scalar_field(data_z, dx=dx, ncores=ncores, do_zero_pad=do_zero_pad)
+    kvals, Pk_x = power_spectrum_scalar_field(data_x, dx=dx, ncores=ncores, do_zero_pad=do_zero_pad,
+                                              zero_pad_factor=zero_pad_factor)
+    kvals, Pk_y = power_spectrum_scalar_field(data_y, dx=dx, ncores=ncores, do_zero_pad=do_zero_pad,
+                                              zero_pad_factor=zero_pad_factor)
+    kvals, Pk_z = power_spectrum_scalar_field(data_z, dx=dx, ncores=ncores, do_zero_pad=do_zero_pad,
+                                              zero_pad_factor=zero_pad_factor)
 
     Pk = Pk_x+Pk_y+Pk_z
 
     return kvals, Pk
 
 
-def energy_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False):
+def energy_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False, zero_pad_factor=1.):
     '''
     This function computes the energy power spectrum, E(k), of a 3D cubic scalar field.
 
@@ -111,6 +123,9 @@ def energy_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False):
         - dx: uniform spacing of the grid in the desired input units
         - ncores: number of workers for parallel computation of the FFT
         - do_zero_pad: if True, the FFTs are computed using 0-padding, doubling the domain
+        - zero_pad_factor: if do_zero_pad is True, this is the factor by which the domain is
+                increased. For example, if zero_pad_factor=2, the domain is doubled. Should
+                be a power of 2.
 
     Returns:
         - kvals: the spatial frequencies on which the power spectra has been
@@ -119,13 +134,15 @@ def energy_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False):
 
     '''
 
-    kvals, pk = power_spectrum_scalar_field(data, dx=dx, ncores=ncores, do_zero_pad=do_zero_pad)
+    kvals, pk = power_spectrum_scalar_field(data, dx=dx, ncores=ncores, do_zero_pad=do_zero_pad,
+                                            zero_pad_factor=zero_pad_factor)
     Ek = pk * (2*np.pi*kvals**2)
 
     return kvals, Ek
 
 
-def energy_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1, do_zero_pad=False):
+def energy_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1, do_zero_pad=False,
+                                zero_pad_factor=1.):
     '''
     This function computes the energy power spectrum, E(k), of a 3D cubic vector field.
 
@@ -140,6 +157,9 @@ def energy_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1, do_zer
         - dx: uniform spacing of the grid in the desired input units
         - ncores: number of workers for parallel computation of the FFT
         - do_zero_pad: if True, the FFTs are computed using 0-padding, doubling the domain
+        - zero_pad_factor: if do_zero_pad is True, this is the factor by which the domain is
+                increased. For example, if zero_pad_factor=2, the domain is doubled. Should
+                be a power of 2.
 
     Returns:
         - kvals: the spatial frequencies on which the power spectra has been
@@ -147,11 +167,13 @@ def energy_spectrum_vector_field(data_x, data_y, data_z, dx=1., ncores=1, do_zer
         - Ek: the energy power spectrum at the kvals spatial frequency points
 
     '''
-    kvals, pk = power_spectrum_vector_field(data_x, data_y, data_z, dx=dx, ncores=ncores, do_zero_pad=do_zero_pad)
+    kvals, pk = power_spectrum_vector_field(data_x, data_y, data_z, dx=dx, ncores=ncores, 
+                                            do_zero_pad=do_zero_pad, zero_pad_factor=zero_pad_factor)
     Ek = pk * (2*np.pi*kvals**2)
     return kvals, Ek
 
-def power_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=1, do_zero_pad=False):
+def power_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=1, do_zero_pad=False,
+                                          zero_pad_factor=1.):
     '''
     This function computes the power spectrum, P(k), of a 3D cubic vector field,
      returning separately the compressive and the solenoidal one.
@@ -161,6 +183,9 @@ def power_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=
         - dx: uniform spacing of the grid in the desired input units
         - ncores: number of workers for parallel computation of the FFT
         - do_zero_pad: if True, the FFTs are computed using 0-padding, doubling the domain
+        - zero_pad_factor: if do_zero_pad is True, this is the factor by which the domain is
+                increased. For example, if zero_pad_factor=2, the domain is doubled. Should
+                be a power of 2.
 
     Returns:
         - kvals: the spatial frequencies on which the power spectra has been
@@ -177,9 +202,10 @@ def power_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=
     
     ### SPECIAL TREATMENT OF ZERO-PADDING
     if do_zero_pad is False:
-        shape = data.shape
+        shape = data_x.shape
     else:
-        shape = [2*s for s in data.shape]
+        zero_pad_factor = int(zero_pad_factor)
+        shape = [zero_pad_factor*s for s in data_x.shape]
     ### END SPECIAL TREATMENT OF ZERO-PADDING
     
     nx,ny,nz = data_x.shape
@@ -229,7 +255,7 @@ def power_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=
     if not do_zero_pad:
         delta_f = frequencies_x[1]
     else:
-        delta_f = 2.0*frequencies_x[1]
+        delta_f = float(zero_pad_factor)*frequencies_x[1]
     ### END SPECIAL TREATMENT OF ZERO-PADDING
     
     kbins = np.arange(frequencies_x[1]/2, np.abs(frequencies_x).max(), delta_f)
@@ -250,7 +276,8 @@ def power_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=
     return kvals, Pk, Pkcomp, Pksol
 
 
-def energy_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=1, do_zero_pad=False):
+def energy_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores=1, do_zero_pad=False,
+                                           zero_pad_factor=1.):
     '''
     This function computes the energy power spectrum, E(k), of a 3D cubic vector field,
      returning separately the total, the compressive and the solenoidal one.
@@ -266,6 +293,9 @@ def energy_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores
         - dx: uniform spacing of the grid in the desired input units
         - ncores: number of workers for parallel computation of the FFT
         - do_zero_pad: if True, the FFTs are computed using 0-padding, doubling the domain
+        - zero_pad_factor: if do_zero_pad is True, this is the factor by which the domain is
+                increased. For example, if zero_pad_factor=2, the domain is doubled. Should
+                be a power of 2.
 
     Returns:
         - kvals: the spatial frequencies on which the power spectra has been
@@ -277,7 +307,8 @@ def energy_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, dx=1., ncores
 
     '''
     kvals, pk, pkcomp, pksol = power_spectrum_vector_field_Helmholtz(data_x, data_y, data_z, 
-                                                                     dx=dx, ncores=ncores, do_zero_pad=do_zero_pad)
+                                                                     dx=dx, ncores=ncores, do_zero_pad=do_zero_pad,
+                                                                     zero_pad_factor=zero_pad_factor)
     Ek = pk * (2*np.pi*kvals**2)
     Ekcomp = pkcomp * (2*np.pi*kvals**2)
     Eksol = pksol * (2*np.pi*kvals**2)
