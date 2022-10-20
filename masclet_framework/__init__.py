@@ -23,3 +23,4 @@ import masclet_framework.tools_xyz
 import masclet_framework.spectral
 import masclet_framework.thermal
 import masclet_framework.stats
+import masclet_framework.simulator_tools
