@@ -1,64 +1,40 @@
+"""
+MASCLET framework
+
+Provides several functions to read MASCLET outputs and perform basic operations.
+Also, serves as a bridge between MASCLET data and the yt package (v 3.5.1).
+
+read_masclet module
+Provides a function to read the HALMA stellar halo catologue and a function to read
+the particle data of each halo in each iteration
+
+Created by David Vallés
+"""
+
+#  Last update on 03/11/22 10:14
+
+# GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
 import os, sys, numpy as np
 from cython_fortran_file import FortranFile as FF
 
 
-"""""""""""""""""""""""""""""""""""""""""""""
-"""" TOTAL ITERATION DATA ORDERING """""
-"""""""""""""""""""""""""""""""""""""""""""""
-""" 
-N HALOS,      N PARTICULAS,     ITERACIÓN,     ITERACIÓN DE MASCLET,      TIEMPO,     REDSHIFT
-"""""""""""""""""""""""""""""""""""""""""""""
 
-"""""""""""""""""""""""""""""""""""""""""""""
-"""" TOTAL HALO DATA ORDERING """""
-"""""""""""""""""""""""""""""""""""""""""""""
-"""""""""""""""""""""""""""""""""""""""""""""
-*---------------------------------------------------------------------------
-*     FICHERO 21 , formato:
-*     col 1: halo
-*     col 2: numero de particulas 
-*     col 3: masa estelar del halo
-*     col 4: masa estelar visible del halo
-*     col 5: masa gas del halo
-*     col 6: fraccion de la masa de gas de halo en gas frio < 5.e4 K
-*     col 7: masa de gas caliente  NO ligado en el halo
-*     col 8: masa de gas frio NO ligado en el halo
-*     col 9: masa de estrellas formadas desde el output previo
-*     col 10: radio(kpc) estimado como la particula ligada mas lejana
-*     col 11: radio(kpc) de mitad masa
-*     col 12: radio(kpc) de mitad masa visible proyectado 1D promedio
-*     col 13,14,15: radio(kpc) de mitad masa visible proyectado en los tres ejes
-*     col 16: dispersion vel.(km/s) dentro de el radio de mitad masa 
-*     col 17: dispersion vel.(km/s) proyectada dentro de el radio de mitad masa visible 1D promedio
-*     col 18,19,20: dispersion vel.(km/s) proyectada dentro de el radio de mitad masa visible 1D en cada eje
-*     col 21: momento angular especifico en unidades de kpc km/s
-*     col 22, 23, 24: coor. centro de massas (x,y,z)
-*     col 25, 26, 27: velocidad. centro de massas (x,y,z) en km/s
-*     col 28,29: halo del instante anterior que fue el principal progenitor,segundo halo
-*     col 30: numero de mergers, sufridos
-*     col 31: tipo de merger *     TIPOMER = 0 no merger
-                             *             = 1 major merger 1 < m1/m2 < 3
-                             *             = 2 minor merger 3 < m1/m2 < 10
-                             *             = 3 super minor merger "acreation" 10 < m1/m2 < inf
-                             *             = -1 the halo breaks apart
-*     col 32: edad media pesada en masa
-*     col 33: edad media
-*     col 34: metalicidad media pesada en masa
-*     col 35: metalicidad media
-*--------------------------------------------------------------------------
-"""""""""""""""""""""""""""""""""""""""""""""
-
-
+# FUNCTIONS DEFINED IN THIS MODULE
 
 def read_stellar_catalogue(path='', name='', old = False):
-    '''
+    """
     Reads halma_halo_stars_rp.res containing the stellar halo catalogue.
-    It returns number of iterations (num_iter), 
-    total_halo_data[iteration][halo, data] (list of arrays 2d),
-    and total_iteration_data[iteration, data] (array 2d)
-    If old, it assumes halma in 2017 version, which requires old_catalog_with_SFR_merger.npy file, 
-    created with SFR_mergertype_old_catalog.py
-    '''
+
+    Args:
+        path: path of "halma_halo_stars_rp.res"
+        name: name of the catalogue file, typically "halma_halo_stars_rp.res"
+        old: If old (bool), it assumes halma in 2017 version, which requires old_catalog_with_SFR_merger.npy file, 
+            created with SFR_mergertype_old_catalog.py. Default is False, assuming halma27 (2022 version)
+
+    Returns: num_iter: number of iterations (int)
+             total_halo_data[iteration][halo, data]: list of 2D-arrays  containing the halo data
+             total_iteration_data[iteration, data]: 2D-array containing the iteration data
+    """
     halma_catalogue = open(path+name, 'r')
 
     # Total number of iterations
@@ -101,7 +77,7 @@ def read_stellar_catalogue(path='', name='', old = False):
 
             total_iteration_data[i,:] = iteration_data[:]
 
-        total_halo_data = np.load('old_catalog_with_SFR_merger.npy', allow_pickle=True)
+        total_halo_data = np.load(path+'old_catalog_with_SFR_merger.npy', allow_pickle=True)
 
     halma_catalogue.close()
 
@@ -109,11 +85,21 @@ def read_stellar_catalogue(path='', name='', old = False):
 
 def read_halo_particles(it, path, total_halo_data, total_iteration_data, halo):
     """
-    Reads the halma binary catalogue. Information of every halo particle, give HALMA catalogue.
-    Be careful! If we want info about halo 3 in HALMA, 
-    halo = 2 should be given (from 0 to n-1 in Python, instead of 1 to n)
-    The same aplies to "it", iterations go from 0 to halma_final_iteration-1.
+    Reads the halma binary catalogue containing the information of every halo particle.
+
+    Args:
+        it: iteration (iterations go from 0 to halma_final_iteration-1)
+        path: path of the binary catalogue (halotree)
+        total_halo_data: list of 2D-arrays  containing the halo data
+        total_iteration_Data: 2D-array containing the iteration data
+        halo: which halo is the one to be analyzed (If we want info about halo 3 in HALMA, 
+                                                    halo = 2 should be given, that is, from 0 
+                                                    to last_halo-1)
+
+    Returns: list of arrays of lenght the number of particles of the halo, containing the particle 
+             information
     """
+
 
     it_masclet = int(total_iteration_data[it, 3])
     string_it = str(it_masclet)
@@ -161,8 +147,8 @@ def read_halo_particles(it, path, total_halo_data, total_iteration_data, halo):
             stpart_donde[p] = line_int[9]
             stpart_id[p] = line_int[10]
 
-    return (stpart_x, stpart_y, stpart_z, stpart_vx, stpart_vy, stpart_vz, 
-            stpart_mass, stpart_age, stpart_met, stpart_donde, stpart_id)
+    return [stpart_x, stpart_y, stpart_z, stpart_vx, stpart_vy, stpart_vz, 
+            stpart_mass, stpart_age, stpart_met, stpart_donde, stpart_id]
 
 
 
