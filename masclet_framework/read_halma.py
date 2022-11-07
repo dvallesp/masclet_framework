@@ -22,7 +22,7 @@ from cython_fortran_file import FortranFile as FF
 # FUNCTIONS DEFINED IN THIS MODULE
 
 def read_stellar_catalogue(it, path='', name='halma_halo_stars_rp.res', old = False, legacy = False, 
-                    output_format = 'dictionaries', output_redshift = False, min_mass = None):
+                        output_format = 'dictionaries', output_redshift = False, min_mass = None):
     """
     Reads halma_halo_stars_rp.res containing the stellar halo catalogue.
 
@@ -164,72 +164,82 @@ def read_stellar_catalogue(it, path='', name='halma_halo_stars_rp.res', old = Fa
 
 
 
-def read_halo_particles(it, halo, old = False, path = '', name='halma_halo_stars_rp.res', path_binary = ''):
+def read_halo_particles(it, haloes, old = False, path = '', name='halma_halo_stars_rp.res', path_binary = ''):
     """
     Reads the halma binary catalogue containing the information of every halo particle.
 
     Args:
         it: MASCLET ITERATION
-        halo: which halo is the one to be analyzed (If we want info about halo 3 in HALMA, 
-                                                    halo = 2 should be given, that is, from 0 
-                                                    to last_halo-1)
+        halos: which HALMA haloes are to be analyzed (list o array)
         path: path of HALMA catalogue 
         name: name of HALMA catalogue
         path_binary: path of HALMA stellar binary catalogue (halotree)
 
-    Returns: list of arrays of lenght the number of particles of the halo, containing the particle 
-             information
+    Returns: list (lenght of haloes) of ndarrays containing the particle information -->
+             --> example: output[halo_index]['x'][particle_index]
     """
 
-    haloes = read_stellar_catalogue(it, path=path, name=name, old = old, legacy = False, 
-                    output_format = 'dictionaries', output_redshift = False, min_mass = None)
+    if type(haloes) is not list:
+        haloes = [haloes]
+    haloes = np.array(haloes) - 1 #correction of indices (0 to n-1) and numpy array
+    num_haloes = len(haloes)
 
+    haloes_dict = read_stellar_catalogue(it, path=path, name=name, old = old, legacy = False, 
+                    output_format = 'dictionaries', output_redshift = False, min_mass = None)
 
     string_it = '{:05d}'.format(it)
 
-    npart = haloes[halo]['partNum']
-    stpart_x = np.zeros((npart))
-    stpart_y = np.zeros((npart))
-    stpart_z = np.zeros((npart))
-    stpart_vx = np.zeros((npart))
-    stpart_vy = np.zeros((npart))
-    stpart_vz = np.zeros((npart))
-    stpart_mass = np.zeros((npart))
-    stpart_age = np.zeros((npart))
-    stpart_met = np.zeros((npart))
-    stpart_donde = np.zeros((npart))
-    stpart_id = np.zeros((npart))
-
-    low = 0
-    for h in range(halo):
-        low += haloes[h]['partNum']
+    output = [[] for halo in range(num_haloes)]
 
     f_float = FF(path_binary+'halotree'+string_it)
     f_int = FF(path_binary+'halotree'+string_it)
-       
     f_int.skip(1) # read header
     f_float.skip(1) 
-    f_int.skip(low) #nos saltamos las particulas que no pertenecen a este halo
-    f_float.skip(low)
-    f_int.skip(halo) #saltamos la linea correspondiente a MERGER para los halos anteriores
-    f_float.skip(halo) #saltamos la linea correspondiente a MERGER para los halos anteriores
-    for p in range(npart):        
-            line_int = f_int.read_vector('i4')
-            line_float = f_float.read_vector('f')
-            stpart_x[p] = line_float[0]
-            stpart_y[p] = line_float[1]
-            stpart_z[p] = line_float[2]
-            stpart_vx[p] = line_float[3]
-            stpart_vy[p] = line_float[4]
-            stpart_vz[p] = line_float[5]
-            stpart_mass[p] = line_float[6]
-            stpart_age[p] = line_float[7]
-            stpart_met[p] = line_float[8]
-            stpart_donde[p] = line_int[9]
-            stpart_id[p] = line_int[10]
+    low_old = 0
+    halo_old = 0
+    npart_old = 0
+    for halo in haloes:
 
-    return [stpart_x, stpart_y, stpart_z, stpart_vx, stpart_vy, stpart_vz, 
-            stpart_mass, stpart_age, stpart_met, stpart_donde, stpart_id]
+        npart = int(haloes_dict[halo]['partNum'])
+        particles = np.zeros(npart, dtype={'names':('x', 'y', 'z', 'vx', 'vy', 'vz', 'mass', 'age', 'met', 'donde', 'id'),
+                          'formats':('f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'f8', 'i4', 'i4')})
+
+        low = 0
+        for h in range(halo):
+            low += int(haloes_dict[h]['partNum'])
+
+        jump_particle = low - (low_old+npart_old) #number of particles lines to jump
+        jump_merger = halo - halo_old #number of merger lines to jump
+
+        f_int.skip(jump_particle) #nos saltamos las particulas que no pertenecen a este halo
+        f_float.skip(jump_particle)
+        f_int.skip(jump_merger) #saltamos la linea correspondiente a MERGER para los halos anteriores
+        f_float.skip(jump_merger) #saltamos la linea correspondiente a MERGER para los halos anteriores
+        for p in range(npart):        
+                line_int = f_int.read_vector('i4')
+                line_float = f_float.read_vector('f')
+                particles['x'][p] = line_float[0]
+                particles['y'][p] = line_float[1]
+                particles['z'][p] = line_float[2]
+                particles['vx'][p] = line_float[3]
+                particles['vy'][p] = line_float[4]
+                particles['vz'][p] = line_float[5]
+                particles['mass'][p] = line_float[6]
+                particles['age'][p] = line_float[7]
+                particles['met'][p] = line_float[8]
+                particles['donde'][p] = line_int[9]
+                particles['id'][p] = line_int[10]
+
+        output[halo] = particles
+
+        low_old = low
+        halo_old = halo
+        npart_old = npart
+    
+    f_float.close()
+    f_int.close()
+
+    return output
 
 
 
