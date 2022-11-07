@@ -21,14 +21,14 @@ from cython_fortran_file import FortranFile as FF
 
 # FUNCTIONS DEFINED IN THIS MODULE
 
-def read_stellar_catalogue(path, name, old, legacy, it, 
-                    output_format, output_redshift, min_mass):
+def read_stellar_catalogue(it, path='', name='halma_halo_stars_rp.res', old = False, legacy = False, 
+                    output_format = 'dictionaries', output_redshift = False, min_mass = None):
     """
     Reads halma_halo_stars_rp.res containing the stellar halo catalogue.
 
     Args:
         path: path of "halma_halo_stars_rp.res"
-        name: name of the catalogue file, typically "halma_halo_stars_rp.res"
+        name: name of the catalogue file, default is "halma_halo_stars_rp.res"
         old: If old (bool), it assumes halma in 2017 version, which requires old_catalog_with_SFR_merger.npy file, 
             created with SFR_mergertype_old_catalog.py. Default is False, assuming halma27 (2022 version)
         legacy: if legacy (bool), returns return1, else returns return2
@@ -164,31 +164,30 @@ def read_stellar_catalogue(path, name, old, legacy, it,
 
 
 
-def read_halo_particles(it, path, total_halo_data, total_iteration_data, halo):
+def read_halo_particles(it, halo, old = False, path = '', name='halma_halo_stars_rp.res', path_binary = ''):
     """
     Reads the halma binary catalogue containing the information of every halo particle.
 
     Args:
         it: MASCLET ITERATION
-        path: path of the binary catalogue (halotree)
-        total_halo_data: list of 2D-arrays  containing the halo data
-        total_iteration_Data: 2D-array containing the iteration data
         halo: which halo is the one to be analyzed (If we want info about halo 3 in HALMA, 
                                                     halo = 2 should be given, that is, from 0 
                                                     to last_halo-1)
+        path: path of HALMA catalogue 
+        name: name of HALMA catalogue
+        path_binary: path of HALMA stellar binary catalogue (halotree)
 
     Returns: list of arrays of lenght the number of particles of the halo, containing the particle 
              information
     """
-    #finding it HALMA index
-    num_iter = len(total_halo_data)
-    for it_halma in range(num_iter):
-        if total_iteration_data[it_halma, 3] == it:
-            break
+
+    haloes = read_stellar_catalogue(it, path=path, name=name, old = old, legacy = False, 
+                    output_format = 'dictionaries', output_redshift = False, min_mass = None)
+
 
     string_it = '{:05d}'.format(it)
 
-    npart = int(total_halo_data[it_halma][halo, 1])
+    npart = haloes[halo]['partNum']
     stpart_x = np.zeros((npart))
     stpart_y = np.zeros((npart))
     stpart_z = np.zeros((npart))
@@ -202,11 +201,11 @@ def read_halo_particles(it, path, total_halo_data, total_iteration_data, halo):
     stpart_id = np.zeros((npart))
 
     low = 0
-    for h in range(0, halo):
-        low += int(total_halo_data[it_halma][h, 1])
+    for h in range(halo):
+        low += haloes[h]['partNum']
 
-    f_float = FF(path+'halotree'+string_it)
-    f_int = FF(path+'halotree'+string_it)
+    f_float = FF(path_binary+'halotree'+string_it)
+    f_int = FF(path_binary+'halotree'+string_it)
        
     f_int.skip(1) # read header
     f_float.skip(1) 
