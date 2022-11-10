@@ -198,6 +198,7 @@ def read_halo_particles(it, haloes, old = False, path = '', name='halma_halo_sta
     low_old = 0
     halo_old = 0
     npart_old = 0
+    ih = 0 #index in haloes
     for halo in haloes:
 
         npart = int(haloes_dict[halo]['partNum'])
@@ -230,11 +231,12 @@ def read_halo_particles(it, haloes, old = False, path = '', name='halma_halo_sta
                 particles['donde'][p] = line_int[9]
                 particles['id'][p] = line_int[10]
 
-        output[halo] = particles
+        output[ih] = particles
 
         low_old = low
         halo_old = halo
         npart_old = npart
+        ih += 1
     
     f_float.close()
     f_int.close()
