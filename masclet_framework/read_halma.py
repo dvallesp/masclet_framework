@@ -56,7 +56,7 @@ def read_stellar_catalogue(it, path='', name='halma_halo_stars_rp.res', old = Fa
     total_iteration_data = []
     total_halo_data = []
     if not old:# HALMA 2022
-        for it in range(num_iter):
+        for it_halma in range(num_iter):
             halma_catalogue.readline()
             iteration_data = {}
             data_line = np.array(halma_catalogue.readline().split()).astype(np.float64())
@@ -119,7 +119,7 @@ def read_stellar_catalogue(it, path='', name='halma_halo_stars_rp.res', old = Fa
     else:# HALMA 2017
 
         data_with_SFR = np.load(path+'old_catalog_with_SFR_merger.npy', allow_pickle=True)
-        for it in range(num_iter):
+        for it_halma in range(num_iter):
             halma_catalogue.readline()
             iteration_data = {}
             data_line = np.array(halma_catalogue.readline().split()).astype(np.float64())
@@ -138,41 +138,41 @@ def read_stellar_catalogue(it, path='', name='halma_halo_stars_rp.res', old = Fa
             for ih in range(num_halos):
                 halo = {}
                 data_line = np.array(halma_catalogue.readline().split()).astype(np.float64())
-                halo['id'] = int(data_with_SFR[it][ih, 0])
-                halo['partNum'] = int(data_with_SFR[it][ih, 1])
-                halo['M'] = data_with_SFR[it][ih, 2]
-                halo['Mv'] = data_with_SFR[it][ih, 3]
-                halo['Mgas'] = data_with_SFR[it][ih, 4]
-                halo['fcold'] = data_with_SFR[it][ih, 5]
-                halo['Mhotgas'] = data_with_SFR[it][ih, 6]
-                halo['Mcoldgas'] = data_with_SFR[it][ih, 7]
-                halo['Msfr'] = data_with_SFR[it][ih, 8]
-                halo['Rmax'] = data_with_SFR[it][ih, 9]
-                halo['R'] = data_with_SFR[it][ih, 10]
-                halo['R_1d'] = data_with_SFR[it][ih, 11]
-                halo['R_1dx'] = data_with_SFR[it][ih, 12]
-                halo['R_1dy'] = data_with_SFR[it][ih, 13]
-                halo['R_1dz'] = data_with_SFR[it][ih, 14]
-                halo['sigma_v'] = data_with_SFR[it][ih, 15]
-                halo['sigma_v_1d'] = data_with_SFR[it][ih, 16]
-                halo['sigma_v_1dx'] = data_with_SFR[it][ih, 17]
-                halo['sigma_v_1dy'] = data_with_SFR[it][ih, 18]
-                halo['sigma_v_1dz'] = data_with_SFR[it][ih, 19]
-                halo['L'] = data_with_SFR[it][ih, 20]
-                halo['xcm'] = data_with_SFR[it][ih, 21]
-                halo['ycm'] = data_with_SFR[it][ih, 22]
-                halo['zcm'] = data_with_SFR[it][ih, 23]
-                halo['vx'] = data_with_SFR[it][ih, 24]
-                halo['vy'] = data_with_SFR[it][ih, 25]
-                halo['vz'] = data_with_SFR[it][ih, 26]
-                halo['father1'] = int(data_with_SFR[it][ih, 27])
-                halo['father2'] = int(data_with_SFR[it][ih, 28])
-                halo['nmerg'] = int(data_with_SFR[it][ih, 29])
-                halo['mergType'] = int(data_with_SFR[it][ih, 30])
-                halo['age_m'] = data_with_SFR[it][ih, 31]
-                halo['age'] = data_with_SFR[it][ih, 32]
-                halo['Z_m'] = data_with_SFR[it][ih, 33]
-                halo['Z'] = data_with_SFR[it][ih, 34]
+                halo['id'] = int(data_with_SFR[it_halma][ih, 0])
+                halo['partNum'] = int(data_with_SFR[it_halma][ih, 1])
+                halo['M'] = data_with_SFR[it_halma][ih, 2]
+                halo['Mv'] = data_with_SFR[it_halma][ih, 3]
+                halo['Mgas'] = data_with_SFR[it_halma][ih, 4]
+                halo['fcold'] = data_with_SFR[it_halma][ih, 5]
+                halo['Mhotgas'] = data_with_SFR[it_halma][ih, 6]
+                halo['Mcoldgas'] = data_with_SFR[it_halma][ih, 7]
+                halo['Msfr'] = data_with_SFR[it_halma][ih, 8]
+                halo['Rmax'] = data_with_SFR[it_halma][ih, 9]
+                halo['R'] = data_with_SFR[it_halma][ih, 10]
+                halo['R_1d'] = data_with_SFR[it_halma][ih, 11]
+                halo['R_1dx'] = data_with_SFR[it_halma][ih, 12]
+                halo['R_1dy'] = data_with_SFR[it_halma][ih, 13]
+                halo['R_1dz'] = data_with_SFR[it_halma][ih, 14]
+                halo['sigma_v'] = data_with_SFR[it_halma][ih, 15]
+                halo['sigma_v_1d'] = data_with_SFR[it_halma][ih, 16]
+                halo['sigma_v_1dx'] = data_with_SFR[it_halma][ih, 17]
+                halo['sigma_v_1dy'] = data_with_SFR[it_halma][ih, 18]
+                halo['sigma_v_1dz'] = data_with_SFR[it_halma][ih, 19]
+                halo['L'] = data_with_SFR[it_halma][ih, 20]
+                halo['xcm'] = data_with_SFR[it_halma][ih, 21]
+                halo['ycm'] = data_with_SFR[it_halma][ih, 22]
+                halo['zcm'] = data_with_SFR[it_halma][ih, 23]
+                halo['vx'] = data_with_SFR[it_halma][ih, 24]
+                halo['vy'] = data_with_SFR[it_halma][ih, 25]
+                halo['vz'] = data_with_SFR[it_halma][ih, 26]
+                halo['father1'] = int(data_with_SFR[it_halma][ih, 27])
+                halo['father2'] = int(data_with_SFR[it_halma][ih, 28])
+                halo['nmerg'] = int(data_with_SFR[it_halma][ih, 29])
+                halo['mergType'] = int(data_with_SFR[it_halma][ih, 30])
+                halo['age_m'] = data_with_SFR[it_halma][ih, 31]
+                halo['age'] = data_with_SFR[it_halma][ih, 32]
+                halo['Z_m'] = data_with_SFR[it_halma][ih, 33]
+                halo['Z'] = data_with_SFR[it_halma][ih, 34]
                 haloes.append(halo)
             
             total_iteration_data.append(iteration_data)
@@ -191,6 +191,7 @@ def read_stellar_catalogue(it, path='', name='halma_halo_stars_rp.res', old = Fa
         for it_halma in range(num_iter):
             if total_iteration_data[it_halma]['it_masclet'] == it:
                 break
+
         
         haloes = total_halo_data[it_halma]
         zeta = total_iteration_data[it_halma]['z']
