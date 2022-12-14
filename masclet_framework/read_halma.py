@@ -4,11 +4,11 @@ MASCLET framework
 Provides several functions to read MASCLET outputs and perform basic operations.
 Also, serves as a bridge between MASCLET data and the yt package (v 3.5.1).
 
-read_masclet module
+read_halma module
 Provides a function to read the HALMA stellar halo catologue and a function to read
 the particle data of each halo in each iteration
 
-Created by David Vallés
+Created by Óscar Monllor and David Vallés
 """
 
 #  Last update on 03/11/22 10:14
@@ -212,27 +212,39 @@ def read_stellar_catalogue(it, path='', name='halma_halo_stars_rp.res', old = Fa
 
 
 
-def read_halo_particles(it, haloes, old = False, path = '', name='halma_halo_stars_rp.res', path_binary = ''):
+def read_halo_particles(it, haloes=None, old = False, path = '', name='halma_halo_stars_rp.res', 
+                        path_binary = None, output_dictionary=True):
     """
     Reads the halma binary catalogue containing the information of every halo particle.
 
     Args:
         it: MASCLET ITERATION
-        halos: which HALMA haloes are to be analyzed (list o array)
+        halos: haloes which HALMA haloes are to be analyzed (list o array).
+            If None (default), this outputs the particles of all the haloes.
         path: path of HALMA catalogue 
         name: name of HALMA catalogue
-        path_binary: path of HALMA stellar binary catalogue (halotree)
+        path_binary: path of HALMA stellar binary catalogue (halotree).
+            If None (default), it is assumed to be the same as path (above).
+        output_dictionary: if True, outputs are a dictionary whose keys are halo
+            ID. If False, outputs are a list in the same order as haloes/catalogue.
 
     Returns: list (lenght of haloes) of ndarrays containing the particle information -->
              --> example: output[halo_index]['x'][particle_index]
     """
 
-    if type(haloes) is not list:
-        haloes = [haloes]
-    haloes = np.array(haloes) - 1 #correction of indices (0 to n-1) and numpy array
-    num_haloes = len(haloes)
+    if path_binary is None:
+        path_binary=path
 
     haloes_dict = read_stellar_catalogue(it, path=path, name=name, old = old, legacy = False)
+    
+    if haloes is None:
+        haloes = np.arange(len(haloes_dict))
+    else:
+        if type(haloes) is not list:
+            haloes = [haloes]
+        haloes = np.array(haloes) - 1 #correction of indices (0 to n-1) and numpy array
+        
+    num_haloes = len(haloes)
 
     string_it = '{:05d}'.format(it)
 
@@ -288,7 +300,14 @@ def read_halo_particles(it, haloes, old = False, path = '', name='halma_halo_sta
     f_float.close()
     f_int.close()
 
-    return output
+    if output_dictionary:
+        output2={}
+        for ih in range(len(haloes)):
+            haloid = haloes_dict[ih]['id']
+            output2[haloid] = output[ih]
+        return output2
+    else:
+        return output
 
 
 
