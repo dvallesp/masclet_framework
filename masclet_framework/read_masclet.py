@@ -561,8 +561,8 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         output_metalicity: whether particles' metalicities are returned (bool)
         output_id: whether particles' ids are returned (bool)
         verbose: whether a message is printed when each refinement level is started (bool)
-        output_BH: if True, it is assumed that BH data is appended at the end of the stellar data and the whole data is returned,
-                    x, y, z, vx, vy, vz, mass, birth time, id
+        are_BH: if True, it is assumed that BH data is appended at the end of the stellar data
+        output_BH: All BH data is returned --> x, y, z, vx, vy, vz, mass, birth time, id
 
 
     Returns:
@@ -831,7 +831,7 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
         # vector
         if verbose:
             print('Reading vector potential...')
-            
+
         if are_potentials:
             vecpotx = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
             vecpoty = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
