@@ -48,7 +48,7 @@ def filename(it, filetype, digits=5):
     Returns: filename (str)
 
     """
-    names = {'g': "grids", 'b': 'clus', 'd': 'cldm', 's': 'clst', 'v': 'velocity', 'm': 'MachNum_'}
+    names = {'g': "grids", 'b': 'clus', 'd': 'cldm', 's': 'clst', 'v': 'velocity', 'm': 'MachNum_', 'f': 'filtlen_'}
     try:
         if it == 0:
             return names[filetype] + str(it).zfill(digits)
@@ -57,7 +57,7 @@ def filename(it, filetype, digits=5):
         else:
             raise ValueError("Digits should be greater to handle that iteration number")
     except KeyError:
-        print('Insert a correct type: g, b, d, s, v or m')
+        print('Insert a correct type: g, b, d, s, v, f or m')
 
 
 def read_grids(it, path='', parameters_path='', digits=5, read_general=True, read_patchnum=True, read_dmpartnum=True,
@@ -541,8 +541,8 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
 
 
 def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltastar=True, verbose=False,
-              output_position=False, output_velocity=False, output_mass=False, output_temp=False,
-              output_metalicity=False, output_id=False, are_BH=True):
+              output_position=False, output_velocity=False, output_mass=False, output_time=False,
+              output_metalicity=False, output_id=False, output_BH = False, are_BH = True):
     """
     Reads the stellar (clst) file.
     For now, it only reads the delta.
@@ -557,11 +557,13 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         output_position: whether particles' positions are returned (bool)
         output_velocity: whether particles' velocities are returned (bool)
         output_mass: whether particles' masses are returned (bool)
-        output_temp: whether particles' temperatures are returned (bool)
+        output_time: whether particles' birth times are returned (bool)
         output_metalicity: whether particles' metalicities are returned (bool)
         output_id: whether particles' ids are returned (bool)
         verbose: whether a message is printed when each refinement level is started (bool)
-        are_BH: if True, it is assumed that BH data is appended at the end of the stellar data. For now, they do not get output.
+        output_BH: if True, it is assumed that BH data is appended at the end of the stellar data and the whole data is returned,
+                    x, y, z, vx, vy, vz, mass, birth time, id
+
 
     Returns:
         Chosen quantities, in the order specified by the order of the parameters in this definition.
@@ -615,8 +617,8 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         else:
             f.skip()
 
-        if output_temp:
-            stpart_temp = f.read_vector('f')
+        if output_time:
+            stpart_time = f.read_vector('f')
         else:
             f.skip()
 
@@ -627,6 +629,18 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
 
         if output_id:
             stpart_id = np.zeros(stpart_x.size)
+        
+        if are_BH and output_BH:
+            bhpart_x = np.zeros(stpart_x.size)
+            bhpart_y = np.zeros(stpart_x.size)
+            bhpart_z = np.zeros(stpart_x.size)
+            bhpart_vx = np.zeros(stpart_x.size)
+            bhpart_vy = np.zeros(stpart_x.size)
+            bhpart_vz = np.zeros(stpart_x.size)
+            bhpart_mass = np.zeros(stpart_x.size)
+            bhpart_time = np.zeros(stpart_x.size)
+            bhpart_id = np.zeros(stpart_x.size).astype(np.int32)
+
 
         # refinement levels
         for l in range(1, min(nlevels + 1, max_refined_level + 1)):
@@ -660,8 +674,8 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
             else:
                 f.skip()
 
-            if output_temp:
-                stpart_temp = np.append(stpart_temp, f.read_vector('f'))
+            if output_time:
+                stpart_time = np.append(stpart_time, f.read_vector('f'))
             else:
                 f.skip()
 
@@ -674,10 +688,20 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                 stpart_id = np.append(stpart_id, f.read_vector('i'))
             else:
                 f.skip()
-
+            
             if are_BH:
-                f.skip(9)
-                # for now, we just ignore BH data
+                if output_BH:
+                    bhpart_x = np.append(bhpart_x, f.read_vector('f'))
+                    bhpart_y = np.append(bhpart_y, f.read_vector('f'))
+                    bhpart_z = np.append(bhpart_z, f.read_vector('f'))
+                    bhpart_vx = np.append(bhpart_vx, f.read_vector('f'))
+                    bhpart_vy = np.append(bhpart_vy, f.read_vector('f'))
+                    bhpart_vz = np.append(bhpart_vz, f.read_vector('f'))
+                    bhpart_mass = np.append(bhpart_mass, f.read_vector('f'))
+                    bhpart_time = np.append(bhpart_time, f.read_vector('f'))
+                    bhpart_id = np.append(bhpart_id, f.read_vector('i'))
+                else:
+                    f.skip(9)
 
     returnvariables = []
 
@@ -689,12 +713,14 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         returnvariables.extend([stpart_vx, stpart_vy, stpart_vz])
     if output_mass:
         returnvariables.append(stpart_mass)
-    if output_temp:
-        returnvariables.append(stpart_temp)
+    if output_time:
+        returnvariables.append(stpart_time)
     if output_metalicity:
         returnvariables.append(stpart_metalicity)
     if output_id:
         returnvariables.append(stpart_id)
+    if are_BH and output_BH:
+        returnvariables.extend([bhpart_x, bhpart_y, bhpart_z, bhpart_vx, bhpart_vy, bhpart_vz, bhpart_mass, bhpart_time, bhpart_id])
 
     return tuple(returnvariables)
 
@@ -723,10 +749,12 @@ def read_npz_field(filename, path=''):
     return field
 
 
+
 def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_divrot=True, are_potentials=True,
-                are_velocities=True, is_total_velocity=False, is_header=True, verbose=False):
+                are_velocities=True, is_filtered=False, is_header=True, verbose=False):
+    
     """
-    Reads the vortex (Helmholtz-Hodge decomposition) files
+    Reads the vortex (Helmholtz-Hodge decomposition) files, velocity##### and filten#####
 
     Args:
         it: iteration number (int)
@@ -737,7 +765,7 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
         are_divrot: whehther velocity divergences and rotationals are written in the file
         are_potentials: whether (scalar and vector) potentials are written in the file
         are_velocities: whether ([total], compressional and rotational) velocities are written in the file
-        is_total_velocity: whether the total velocity is written (only relevant when are_velocities=True)
+        is_filtered: whether the multiscale filtering file (filtlen) is written and the scale lenght and turbulent velocity field are to be read
         is_solapst: whether the overlap variable computed using the error estimate is written in the file
 
     Returns:
@@ -747,10 +775,13 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
 
     nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
                                                            load_namr=False, load_size=False, path=parameters_path)
+
     npatch, patchnx, patchny, patchnz = read_grids(it, path=grids_path, parameters_path=parameters_path, read_general=False,
                                                    read_patchnum=True, read_dmpartnum=False,
                                                    read_patchcellextension=True, read_patchcellposition=False,
                                                    read_patchposition=False, read_patchparent=False)
+
+    returnvariables = []
     with FF(os.path.join(path, filename(it, 'v', digits))) as f:
         # read header
         if is_header:
@@ -759,7 +790,9 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
             f.seek(0)  # this is a little bit ugly but whatever
             time, z = tuple(f.read_vector('f')[1:3])
 
-        returnvariables = []
+        else:
+            f.skip()
+        
 
         if are_divrot:
             # divergence
@@ -784,49 +817,37 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
 
             returnvariables.extend([div, rotx, roty, rotz])
 
+        
+        # scalar
+        if verbose:
+            print('Reading scalar potential...')
         if are_potentials:
-            # scalar
-            if verbose:
-                print('Reading scalar potential...')
             scalarpot = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
             for l in range(1, nlevels + 1):
                 for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
-                    scalarpot.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch],
-                                                                     patchnz[ipatch]), 'F'))
+                        scalarpot.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch],
+                                                                        patchnz[ipatch]), 'F'))
 
-            # vector
-            if verbose:
-                print('Reading vector potential...')
+        # vector
+        if verbose:
+            print('Reading vector potential...')
+            
+        if are_potentials:
             vecpotx = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
             vecpoty = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
             vecpotz = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
             for l in range(1, nlevels + 1):
                 for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
-                    vecpotx.append(
-                        np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-                    vecpoty.append(
-                        np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-                    vecpotz.append(
-                        np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-            returnvariables.extend([scalarpot, vecpotx, vecpoty, vecpotz])
+                        vecpotx.append(
+                            np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        vecpoty.append(
+                            np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        vecpotz.append(
+                            np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                returnvariables.extend([scalarpot, vecpotx, vecpoty, vecpotz])
+
 
         if are_velocities:
-            # total
-            if is_total_velocity:
-                if verbose:
-                    print('Reading total velocity...')
-                vx = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
-                vy = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
-                vz = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
-                for l in range(1, nlevels + 1):
-                    for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
-                        vx.append(
-                            np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-                        vy.append(
-                            np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-                        vz.append(
-                            np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-
             # compressive
             if verbose:
                 print('Reading compressive velocity...')
@@ -856,10 +877,29 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
                     velrotz.append(np.reshape(f.read_vector('f'),
                                               (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
 
-            if is_total_velocity:        
-                returnvariables.extend([vx, vy, vz, velcompx, velcompy, velcompz, velrotx, velroty, velrotz])
-            else:
-                returnvariables.extend([velcompx, velcompy, velcompz, velrotx, velroty, velrotz])
+            returnvariables.extend([velcompx, velcompy, velcompz, velrotx, velroty, velrotz])
+
+    with FF(os.path.join(path, filename(it, 'f', digits))) as f:
+        # filtlen files
+        if is_filtered:
+            if verbose:
+                print('Reading filter lenght and turbulent velocity...')
+            L = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+            vx = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+            vy = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+            vz = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
+            for l in range(1, nlevels + 1):
+                for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                    L.append(
+                        np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    vx.append(
+                        np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    vy.append(
+                        np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    vz.append(
+                        np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+
+            returnvariables.extend([L, vx, vy, vz])
 
     return tuple(returnvariables)
 
