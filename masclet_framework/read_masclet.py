@@ -790,10 +790,6 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
             f.seek(0)  # this is a little bit ugly but whatever
             time, z = tuple(f.read_vector('f')[1:3])
 
-        else:
-            f.skip()
-        
-
         if are_divrot:
             # divergence
             if verbose:
@@ -844,7 +840,8 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
                             np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
                         vecpotz.append(
                             np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
-                returnvariables.extend([scalarpot, vecpotx, vecpoty, vecpotz])
+                        
+            returnvariables.extend([scalarpot, vecpotx, vecpoty, vecpotz])
 
 
         if are_velocities:
@@ -879,11 +876,14 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
 
             returnvariables.extend([velcompx, velcompy, velcompz, velrotx, velroty, velrotz])
 
-    with FF(os.path.join(path, filename(it, 'f', digits))) as f:
+    if is_filtered:
+
+        with FF(os.path.join(path, filename(it, 'f', digits))) as f:
         # filtlen files
-        if is_filtered:
+        
             if verbose:
                 print('Reading filter lenght and turbulent velocity...')
+                
             L = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
             vx = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
             vy = [np.reshape(f.read_vector('f'), (nmax, nmay, nmaz), 'F')]
