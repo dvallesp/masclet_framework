@@ -23,6 +23,7 @@ from cython_fortran_file import FortranFile as FF
 
 def read_stellar_catalogue(it, path='', name='halma_halo_stars_rp.res', old = False, legacy = False, 
                         output_format = 'dictionaries', output_redshift = False, min_mass = None):
+                        
     """
     Reads halma_halo_stars_rp.res containing the stellar halo catalogue.
 
@@ -116,7 +117,7 @@ def read_stellar_catalogue(it, path='', name='halma_halo_stars_rp.res', old = Fa
             total_iteration_data.append(iteration_data)
             total_halo_data.append(haloes)
 
-    else:# HALMA 2017
+    else: # HALMA 2017
 
         data_with_SFR = np.load(path+'old_catalog_with_SFR_merger.npy', allow_pickle=True)
         for it_halma in range(num_iter):
@@ -311,3 +312,41 @@ def read_halo_particles(it, haloes=None, old = False, path = '', name='halma_hal
 
 
 
+def read_particles_npy(it, old = False, path = '', name='halma_halo_stars_rp.res', path_binary = None):
+    """
+    Reads the halma/masclet_pyfof npy binary catalogue containing which particles are in haloes
+
+    Args:
+        it: MASCLET ITERATION
+        path: path of HALMA/pyfof catalogue 
+        name: name of HALMA/pyfof catalogue
+        path_binary: path of HALMA stellar binary catalogue (halotree).
+            If None (default), it is assumed to be the same as path (above).
+
+    Returns: list (lenght number of haloes) of 1d numpy arrays (of lenght number of particles of each halo) 
+            containing particle indices for fast read_masclet numpy arrays indexing
+
+    """
+
+    #catalogue data
+    haloes_dict = read_stellar_catalogue(it, path=path, name=name, old = old, legacy = False)
+    nhal = len(haloes_dict)
+    
+    #particle indices of each halo
+    string_it = f'{it:05d}'
+    array_groups = np.load(path_binary+'/halotree'+string_it+'.npy')
+
+    ##number of particles per halo
+    npart = np.zeros(nhal, dtype=np.int32)
+    for ih in range(nhal):
+        npart[ih] = haloes_dict[ih]['partNum']
+
+    npart_sum = np.zeros(nhal, dtype=np.int32)
+    ## acumulate npart:
+    for ih in range(nhal):  
+        npart_sum[ih] = np.sum(npart[:ih+1])
+
+    #split the all_particles_in_haloes array into nhal arrays, one for each halo
+    groups = np.split(array_groups, npart_sum)
+
+    return groups
