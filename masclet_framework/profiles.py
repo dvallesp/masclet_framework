@@ -202,4 +202,50 @@ def dir_profile(field, cx,cy,cz,
     return dir_profiles, rrr, vec_costheta, vec_phi
 
 
+def radial_profile(field,cx,cy,cz,
+                   npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,
+                   binsr=None,dex_rbins=None,delta_rbins=None,rmin=None,rmax=None,
+                   interpolate=True, average="mean", Ncostheta=20, Nphi=20):
+    """
+    Computes the radially-average profile of a field around a given center (cx,cy,cz).
+    The bins can be specified in three ways:
+        - binsr: numpy vector specifying the radial bin edges
+        - rmin, rmax, dex_rbins: minimum and maximum radius, and logarithmic bin size
+        - rmin, rmax, delta_rbins: minimum and maximum radius, and linear bin size
+    The profile can be computed by nearest neighbour interpolation (interpolate=False) or by averaging the values of the cells in each bin (interpolate=True).
+    In order to compute the radially-averaged profile, directional profiles are computed and then combined using arithmetic average, geometric average or median.
+
+    Parameters:
+        - field: field to compute the profile of
+        - cx,cy,cz: center of the profile
+        - npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax: patch information
+        One and only one of these sets of arguments must be specified:
+            - binsr: numpy vector specifying the radial bins
+            - rmin, rmax, dex_rbins: minimum and maximum radius, and logarithmic bin size
+            - rmin, rmax, delta_rbins: minimum and maximum radius, and linear bin size
+        - interpolate: whether to interpolate the field values or not
+        - average: type of average to use to combine the directional profiles. Can be "mean", "median" or "geometric"
+        - Ncostheta: number of bins in the cos(theta) direction
+        - Nphi: number of bins in the phi direction
+    Returns:
+        - profile: radially-averaged profile
+        - rrr: radial bins
+    """
+
+    dir_profiles, rrr, vec_costheta, vec_phi = dir_profile(field,cx,cy,cz,
+                                                           npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,
+                                                           binsr=binsr,dex_rbins=dex_rbins,delta_rbins=delta_rbins,rmin=rmin,rmax=rmax,
+                                                           interpolate=interpolate, binscostheta=Ncostheta, binsphi=Nphi)
+
+    # Combine directional profiles
+    if average=="mean":
+        profile=np.mean(dir_profiles,axis=(0,1))
+    elif average=="median":
+        profile=np.median(dir_profiles,axis=(0,1))
+    elif average=="geometric":
+        profile=np.exp(np.mean(np.log(dir_profiles),axis=(0,1)))
+    else:
+        raise ValueError('Wrong specification of average')
+
+    return profile, rrr
 
