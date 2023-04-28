@@ -628,7 +628,7 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
             f.skip()
 
         if output_id:
-            stpart_id = np.zeros(stpart_x.size)
+            stpart_id = np.zeros(stpart_x.size, dtype='i4')
         
         if are_BH and output_BH:
             bhpart_x = np.zeros(stpart_x.size)
