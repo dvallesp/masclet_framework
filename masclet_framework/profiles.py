@@ -232,6 +232,9 @@ def radial_profile(field,cx,cy,cz,
         - rrr: radial bins
     """
 
+    if average not in ["mean", "median", "geometric"]:
+        raise ValueError('Wrong specification of average')
+
     dir_profiles, rrr, vec_costheta, vec_phi = dir_profile(field,cx,cy,cz,
                                                            npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,
                                                            binsr=binsr,dex_rbins=dex_rbins,delta_rbins=delta_rbins,rmin=rmin,rmax=rmax,
