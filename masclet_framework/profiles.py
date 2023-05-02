@@ -83,7 +83,8 @@ def locate_point(x,y,z,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,si
 def dir_profile(field, cx,cy,cz,
                 npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,
                 binsphi=None, binscostheta=None, binsr=None, rmin=None, rmax=None, dex_rbins=None, delta_rbins=None,
-                interpolate=False):
+                interpolate=False,
+                use_tqdm=False):
     """
     Computes a directional profile of a given field, centered in a given point (cx,cy,cz).
     There are several ways to specify the directions along which the profile is computed:
@@ -111,6 +112,7 @@ def dir_profile(field, cx,cy,cz,
             - rmin, rmax, dex_rbins: minimum and maximum radius, and logarithmic bin size
             - rmin, rmax, delta_rbins: minimum and maximum radius, and linear bin size
         - interpolate: if True, the profile is computed by averaging the values of the cells in each bin. If False, the profile is computed by nearest neighbour interpolation.
+        - use_tqdm (default: False): whether a tqdm progressbar should be displayed.
 
     Returns:
         - dirprof: directional profile of the field
@@ -118,6 +120,9 @@ def dir_profile(field, cx,cy,cz,
         - vec_costheta: cos(theta) bins
         - vec_phi: phi bins
     """
+
+    if not use_tqdm:
+        tqdm=lambda x,total=1: x
     
     # Check phi bins are properly specified
     if type(binsphi) is np.ndarray or type(binsphi) is list:
