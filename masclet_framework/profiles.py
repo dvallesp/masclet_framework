@@ -196,9 +196,15 @@ def dir_profile(field, cx,cy,cz,
                     #assert 0 <= dxx <= 1
                     #assert 0 <= dyy <= 1
                     #assert 0 <= dzz <= 1
-                    if ip==0:
-                        if i==0 or j==0 or k==0 or i==nmax-1 or j==nmax-1 or k==nmax-1:
-                            dir_profiles[itheta,jphi,kbin]=field[ip][i,j,k] 
+                    if ip==0 and (i==0 or j==0 or k==0 or i==nmax-1 or j==nmax-1 or k==nmax-1):
+                        dir_profiles[itheta,jphi,kbin]=field[ip][(i  )%nmax,(j  )%nmax,(k  )%nmax] *(1-dxx)*(1-dyy)*(1-dzz) \
+                                                     + field[ip][(i  )%nmax,(j  )%nmax,(k+1)%nmax] *(1-dxx)*(1-dyy)*  dzz   \
+                                                     + field[ip][(i  )%nmax,(j+1)%nmax,(k  )%nmax] *(1-dxx)*  dyy  *(1-dzz) \
+                                                     + field[ip][(i  )%nmax,(j+1)%nmax,(k+1)%nmax] *(1-dxx)*  dyy  *  dzz   \
+                                                     + field[ip][(i+1)%nmax,(j  )%nmax,(k  )%nmax] *  dxx  *(1-dyy)*(1-dzz) \
+                                                     + field[ip][(i+1)%nmax,(j  )%nmax,(k+1)%nmax] *  dxx  *(1-dyy)*  dzz   \
+                                                     + field[ip][(i+1)%nmax,(j+1)%nmax,(k  )%nmax] *  dxx  *  dyy  *(1-dzz) \
+                                                     + field[ip][(i+1)%nmax,(j+1)%nmax,(k+1)%nmax] *  dxx  *  dyy  *  dzz  
                     else:
                         dir_profiles[itheta,jphi,kbin]=field[ip][i,j,k]      *(1-dxx)*(1-dyy)*(1-dzz) \
                                                     + field[ip][i,j,k+1]    *(1-dxx)*(1-dyy)*  dzz   \
