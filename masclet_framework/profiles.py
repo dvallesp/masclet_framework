@@ -169,12 +169,23 @@ def dir_profile(field, cx,cy,cz,
     
     dir_profiles = np.zeros((Ncostheta,Nphi,num_bins))
 
+    halfsize=size/2
+    mhalfsize=-halfsize
+
     if interpolate:
         for itheta,costheta in tqdm(enumerate(vec_costheta),total=len(vec_costheta)):
             for jphi,phi in enumerate(vec_phi):
                 xxx=cx+rrr*np.sqrt(1-costheta**2)*np.cos(phi)
                 yyy=cy+rrr*np.sqrt(1-costheta**2)*np.sin(phi)
                 zzz=cz+rrr*costheta
+
+                # Periodic boundary conditions
+                xxx[xxx>halfsize]=xxx[xxx>halfsize]-size
+                xxx[xxx<mhalfsize]=xxx[xxx<mhalfsize]+size
+                yyy[yyy>halfsize]=yyy[yyy>halfsize]-size
+                yyy[yyy<mhalfsize]=yyy[yyy<mhalfsize]+size
+                zzz[zzz>halfsize]=zzz[zzz>halfsize]-size
+                zzz[zzz<mhalfsize]=zzz[zzz<mhalfsize]+size
 
                 for kbin,(xi,yi,zi,li) in enumerate(zip(xxx,yyy,zzz,lev_integral)):
                     ip,i,j,k=locate_point(xi,yi,zi,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,li)
@@ -185,14 +196,18 @@ def dir_profile(field, cx,cy,cz,
                     #assert 0 <= dxx <= 1
                     #assert 0 <= dyy <= 1
                     #assert 0 <= dzz <= 1
-                    dir_profiles[itheta,jphi,kbin]=field[ip][i,j,k]      *(1-dxx)*(1-dyy)*(1-dzz) \
-                                                 + field[ip][i,j,k+1]    *(1-dxx)*(1-dyy)*  dzz   \
-                                                 + field[ip][i,j+1,k]    *(1-dxx)*  dyy  *(1-dzz) \
-                                                 + field[ip][i,j+1,k+1]  *(1-dxx)*  dyy  *  dzz   \
-                                                 + field[ip][i+1,j,k]    *  dxx  *(1-dyy)*(1-dzz) \
-                                                 + field[ip][i+1,j,k+1]  *  dxx  *(1-dyy)*  dzz   \
-                                                 + field[ip][i+1,j+1,k]  *  dxx  *  dyy  *(1-dzz) \
-                                                 + field[ip][i+1,j+1,k+1]*  dxx  *  dyy  *  dzz  
+                    if ip==0:
+                        if i==0 or j==0 or k==0 or i==nmax-1 or j==nmax-1 or k==nmax-1:
+                            dir_profiles[itheta,jphi,kbin]=field[ip][i,j,k] 
+                    else:
+                        dir_profiles[itheta,jphi,kbin]=field[ip][i,j,k]      *(1-dxx)*(1-dyy)*(1-dzz) \
+                                                    + field[ip][i,j,k+1]    *(1-dxx)*(1-dyy)*  dzz   \
+                                                    + field[ip][i,j+1,k]    *(1-dxx)*  dyy  *(1-dzz) \
+                                                    + field[ip][i,j+1,k+1]  *(1-dxx)*  dyy  *  dzz   \
+                                                    + field[ip][i+1,j,k]    *  dxx  *(1-dyy)*(1-dzz) \
+                                                    + field[ip][i+1,j,k+1]  *  dxx  *(1-dyy)*  dzz   \
+                                                    + field[ip][i+1,j+1,k]  *  dxx  *  dyy  *(1-dzz) \
+                                                    + field[ip][i+1,j+1,k+1]*  dxx  *  dyy  *  dzz  
     else:
         for itheta,costheta in tqdm(enumerate(vec_costheta),total=len(vec_costheta)):
             for jphi,phi in enumerate(vec_phi):
