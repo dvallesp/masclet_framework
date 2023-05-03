@@ -292,7 +292,7 @@ def build_kdtree_displaced(xpart,ypart,zpart, size):
         - tree: KDTree object
     """
 
-    data=np.array([xdm,ydm,zdm]).T+size/2
+    data=np.array([xpart,ypart,zpart]).T+size/2
     data[data>=size]=data[data>=size]-size
 
     tree=KDTree(data,boxsize=np.array([size,size,size]))
