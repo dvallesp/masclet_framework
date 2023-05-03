@@ -12,7 +12,11 @@ Created by David Vallés
 from numba import jit
 import numpy as np
 from masclet_framework import tools
-from tqdm import tqdm
+try:
+    from tqdm import tqdm
+except ImportError:
+    def tqdm(iterator, *args, **kwargs):
+        return iterator
 from scipy.spatial import KDTree
 
 @jit(nopython=True, fastmath=True)
@@ -121,10 +125,6 @@ def dir_profile(field, cx,cy,cz,
         - vec_costheta: cos(theta) bins
         - vec_phi: phi bins
     """
-
-    if not use_tqdm:
-        tqdm=lambda x,total=1: x
-    
     # Check phi bins are properly specified
     if type(binsphi) is np.ndarray or type(binsphi) is list:
         Nphi=len(binsphi)
@@ -174,7 +174,7 @@ def dir_profile(field, cx,cy,cz,
     mhalfsize=-halfsize
 
     if interpolate:
-        for itheta,costheta in tqdm(enumerate(vec_costheta),total=len(vec_costheta)):
+        for itheta,costheta in tqdm(enumerate(vec_costheta),total=len(vec_costheta),disable=not use_tqdm):
             for jphi,phi in enumerate(vec_phi):
                 xxx=cx+rrr*np.sqrt(1-costheta**2)*np.cos(phi)
                 yyy=cy+rrr*np.sqrt(1-costheta**2)*np.sin(phi)
@@ -216,7 +216,7 @@ def dir_profile(field, cx,cy,cz,
                                                     + field[ip][i+1,j+1,k]  *  dxx  *  dyy  *(1-dzz) \
                                                     + field[ip][i+1,j+1,k+1]*  dxx  *  dyy  *  dzz  
     else:
-        for itheta,costheta in tqdm(enumerate(vec_costheta),total=len(vec_costheta)):
+        for itheta,costheta in tqdm(enumerate(vec_costheta),total=len(vec_costheta),disable=not use_tqdm):
             for jphi,phi in enumerate(vec_phi):
                 xxx=cx+rrr*np.sqrt(1-costheta**2)*np.cos(phi)
                 yyy=cy+rrr*np.sqrt(1-costheta**2)*np.sin(phi)
@@ -346,9 +346,6 @@ def dir_profile_particles(particles_field, cx,cy,cz,size, tree=None,
         - vec_costheta: cos(theta) bins
         - vec_phi: phi bins
     """
-    if not use_tqdm:
-        tqdm=lambda x,total=1: x
-    
     # Check phi bins are properly specified
     if type(binsphi) is np.ndarray or type(binsphi) is list:
         Nphi=len(binsphi)
@@ -402,7 +399,7 @@ def dir_profile_particles(particles_field, cx,cy,cz,size, tree=None,
     mhalfsize=-halfsize
 
     # Compute profile
-    for itheta,costheta in tqdm(enumerate(vec_costheta),total=len(vec_costheta)):
+    for itheta,costheta in tqdm(enumerate(vec_costheta),total=len(vec_costheta),disable=not use_tqdm):
         for jphi,phi in enumerate(vec_phi):
             xxx=cx+rrr*np.sqrt(1-costheta**2)*np.cos(phi)
             yyy=cy+rrr*np.sqrt(1-costheta**2)*np.sin(phi)
