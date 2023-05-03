@@ -232,7 +232,7 @@ def dir_profile(field, cx,cy,cz,
 def radial_profile(field,cx,cy,cz,
                    npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,
                    binsr=None,dex_rbins=None,delta_rbins=None,rmin=None,rmax=None,
-                   interpolate=True, average="mean", Ncostheta=20, Nphi=20):
+                   interpolate=True, average="mean", Ncostheta=20, Nphi=20, use_tqdm=False):
     """
     Computes the radially-average profile of a field around a given center (cx,cy,cz).
     The bins can be specified in three ways:
@@ -254,6 +254,7 @@ def radial_profile(field,cx,cy,cz,
         - average: type of average to use to combine the directional profiles. Can be "mean", "median" or "geometric"
         - Ncostheta: number of bins in the cos(theta) direction
         - Nphi: number of bins in the phi direction
+        - use_tqdm: whether to use tqdm to display a progress bar or not
     Returns:
         - profile: radially-averaged profile
         - rrr: radial bins
@@ -265,7 +266,7 @@ def radial_profile(field,cx,cy,cz,
     dir_profiles, rrr, vec_costheta, vec_phi = dir_profile(field,cx,cy,cz,
                                                            npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,
                                                            binsr=binsr,dex_rbins=dex_rbins,delta_rbins=delta_rbins,rmin=rmin,rmax=rmax,
-                                                           interpolate=interpolate, binscostheta=Ncostheta, binsphi=Nphi)
+                                                           interpolate=interpolate, binscostheta=Ncostheta, binsphi=Nphi, use_tqdm=use_tqdm)
 
     # Combine directional profiles
     if average=="mean":
