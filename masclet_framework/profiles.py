@@ -13,6 +13,7 @@ from numba import jit
 import numpy as np
 from masclet_framework import tools
 from tqdm import tqdm
+from scipy.spatial import KDTree
 
 @jit(nopython=True, fastmath=True)
 def locate_point(x,y,z,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,nl,buf=1):
@@ -277,4 +278,159 @@ def radial_profile(field,cx,cy,cz,
         raise ValueError('Wrong specification of average')
 
     return profile, rrr
+
+def build_kdtree_displaced(xpart,ypart,zpart, size):
+    """ 
+    Returns a KDTree object for the particle distribution, displaced by size/2 in each direction,
+    so that the periodic boundary conditions are taken into account.
+
+    Pararameters:
+        - xpart,ypart,zpart: particle positions
+        - size: size of the simulation box
+    
+    Returns:
+        - tree: KDTree object
+    """
+
+    data=np.array([xdm,ydm,zdm]).T+size/2
+    data[data>=size]=data[data>=size]-size
+
+    tree=KDTree(data,boxsize=np.array([size,size,size]))
+
+    return tree
+
+def dir_profile_particles(particles_field, cx,cy,cz,size, tree=None,
+                binsphi=None, binscostheta=None, binsr=None, rmin=None, rmax=None, dex_rbins=None, delta_rbins=None,
+                num_neigh=64, force_resol=None, normalize='volume', weight=None,
+                use_tqdm=False):
+    """
+    Computes the directional profile of a given field defined by a set of particles around a given center (cx,cy,cz). 
+    To produce smooth profiles, around each point we use the largest of the following kernels:
+        - The radius of the sphere enclosing at least, num_neigh particles. 
+        - Force resolution, if specified. 
+        - Bin spacing.
+    There are several ways to specify the directions along which the profile is computed:
+        - binsphi, binscostheta: numpy vectors specifying the direcitons in the spherical angles phi, cos(theta).
+        - Nphi, Ncostheta: number of bins in phi and cos(theta), equally spaced between -pi and pi, and -1 and 1, respectively.
+    Likewise, there are several ways to specify the radial bins:
+        - binsr: numpy vector specifying the radial bin edges
+        - rmin, rmax, dex_rbins: minimum and maximum radius, and logarithmic bin size
+        - rmin, rmax, delta_rbins: minimum and maximum radius, and linear bin size
+
+    Parameters:
+        - particles_field: particle field to compute the profile of. Must be a one-dimensional numpy array.
+            Warning! Particles ought to be sorted as the particles positions used to build the tree with build_kdtree_displaced.
+        - cx,cy,cz: center of the profile
+        - size: size of the simulation box
+        - tree: KDTree object for the particle distribution. If None, it is built using build_kdtree_displaced.
+        One and only one of these pairs of arguments must be specified:
+            - binsphi, binscostheta: numpy vectors specifying the direcitons in the spherical angles phi, cos(theta).
+            - Nphi, Ncostheta: number of bins in phi and cos(theta), equally spaced between -pi and pi, and -1 and 1, respectively.
+        One and only one of these sets of arguments must be specified:
+            - binsr: numpy vector specifying the radial bins
+            - rmin, rmax, dex_rbins: minimum and maximum radius, and logarithmic bin size
+            - rmin, rmax, delta_rbins: minimum and maximum radius, and linear bin size
+        - num_neigh: the value of profile around any point uses, at least, num_neigh particles.
+        - force_resol: force resolution. If specified, the value of profile around any point uses, at least, the particles within a 
+            sphere of radius force_resol.
+        - normalize: whether to normalize the profile by the volume of the bins ("volume") by the number of particles ("number") or
+            by a weighting field ("weight"). If "weight" is specified, the argument "weight" must be specified as well.
+        - weight: weighting field to use to normalize the profile. Must be a one-dimensional numpy array, the same size as particles_field.
+            Only used if normalize="weight".
+        - use_tqdm: whether to use tqdm to show a progress bar or not. Default: False.
+
+    Returns:
+        - dir_profiles: directional profiles
+        - rrr: radial bins
+        - vec_costheta: cos(theta) bins
+        - vec_phi: phi bins
+    """
+    if not use_tqdm:
+        tqdm=lambda x,total=1: x
+    
+    # Check phi bins are properly specified
+    if type(binsphi) is np.ndarray or type(binsphi) is list:
+        Nphi=len(binsphi)
+        vec_phi=binsphi
+    elif type(binsphi) is int:
+        Nphi=binsphi
+        vec_phi=np.linspace(-np.pi + np.pi/Nphi,np.pi -np.pi/Nphi,Nphi)
+    else:
+        raise ValueError('Wrong specification of binsphi')
+        
+    # Check theta bins are properly specified
+    if type(binscostheta) is np.ndarray or type(binscostheta) is list:
+        Ncostheta=len(binscostheta)
+        vec_costheta=binscostheta
+    elif type(binscostheta) is int:
+        Ncostheta=binscostheta
+        vec_costheta=np.linspace(-1+1/Ncostheta,1-1/Ncostheta,Ncostheta)
+    else:
+        raise ValueError('Wrong specification of binscostheta')  
+        
+    # Check r bins are properly specified
+    if type(binsr) is np.ndarray or type(binsr) is list:
+        num_bins=len(binsr)
+        rrr=binsr
+    elif (rmin is not None) and (rmax is not None) and ((dex_rbins is not None) or (delta_rbins is not None)) and ((dex_rbins is None) or (delta_rbins is None)):
+        if dex_rbins is not None:
+            num_bins=int(np.log10(rmax/rmin)/dex_rbins/2)*2+1 # guarantee it is odd
+            rrr = np.logspace(np.log10(rmin),np.log10(rmax),num_bins)
+        else:
+            num_bins=int((rmax-rmin)/delta_rbins/2)*2+1 # guarantee it is odd
+            rrr = np.linspace(rmin,rmax,num_bins)
+    else:
+        raise ValueError('Wrong specification of binsr') 
+
+    # Check normalization is properly specified
+    if normalize not in ['volume','number','weight']:
+        raise ValueError('Wrong specification of normalize')
+    elif normalize is 'weight' and (type(weight) is not np.ndarray or weight.size != particles_field.size):
+        raise ValueError('Wrong specification of weight')
+
+    # Check tree is properly specified
+    if type(tree) is not KDTree:
+        raise ValueError('Wrong specification of tree')
+
+    # Initialize profile
+    dir_profiles = np.zeros((Ncostheta,Nphi,num_bins))
+    norma = np.zeros((Ncostheta,Nphi,num_bins))
+
+    drrr=np.concatenate([[rrr[1]-rrr[0]], np.diff(rrr)])
+    halfsize=size/2
+    mhalfsize=-halfsize
+
+    # Compute profile
+    for itheta,costheta in tqdm(enumerate(vec_costheta),total=len(vec_costheta)):
+        for jphi,phi in enumerate(vec_phi):
+            xxx=cx+rrr*np.sqrt(1-costheta**2)*np.cos(phi)
+            yyy=cy+rrr*np.sqrt(1-costheta**2)*np.sin(phi)
+            zzz=cz+rrr*costheta
+
+            # Periodic boundary conditions
+            xxx[xxx>halfsize]=xxx[xxx>halfsize]-size
+            xxx[xxx<mhalfsize]=xxx[xxx<mhalfsize]+size
+            yyy[yyy>halfsize]=yyy[yyy>halfsize]-size
+            yyy[yyy<mhalfsize]=yyy[yyy<mhalfsize]+size
+            zzz[zzz>halfsize]=zzz[zzz>halfsize]-size
+            zzz[zzz<mhalfsize]=zzz[zzz<mhalfsize]+size
+            
+            for kbin,(x,y,z) in enumerate(zip(xxx,yyy,zzz)):
+                radius=max([drrr[kbin], force_resol])
+                particles=tree_displaced.query_ball_point((x+halfsize,y+halfsize,z+halfsize),radius)
+                if len(particles)<num_neigh:
+                    particles=tree_displaced.query((x+halfsize,y+halfsize,z+halfsize),num_neigh)
+                    radius=particles[0][num_neigh-1]
+                    particles=particles[1]
+                dir_profiles[itheta,jphi,kbin]=particles_field[particles].sum()
+                if normalize=='volume':
+                    norma[itheta,jphi,kbin]=4*np.pi/3*radius**3
+                elif normalize=='number':
+                    norma[itheta,jphi,kbin]=len(particles)
+                elif normalize=='weight':
+                    norma[itheta,jphi,kbin]=weight[particles].sum()
+    
+    dir_profiles /= norma 
+
+    return dir_profiles, rrr, vec_costheta, vec_phi
 
