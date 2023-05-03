@@ -415,9 +415,9 @@ def dir_profile_particles(particles_field, cx,cy,cz,size, tree=None,
             
             for kbin,(x,y,z) in enumerate(zip(xxx,yyy,zzz)):
                 radius=max([drrr[kbin], force_resol])
-                particles=tree_displaced.query_ball_point((x+halfsize,y+halfsize,z+halfsize),radius)
+                particles=tree.query_ball_point((x+halfsize,y+halfsize,z+halfsize),radius)
                 if len(particles)<num_neigh:
-                    particles=tree_displaced.query((x+halfsize,y+halfsize,z+halfsize),num_neigh)
+                    particles=tree.query((x+halfsize,y+halfsize,z+halfsize),num_neigh)
                     radius=particles[0][num_neigh-1]
                     particles=particles[1]
                 dir_profiles[itheta,jphi,kbin]=particles_field[particles].sum()
