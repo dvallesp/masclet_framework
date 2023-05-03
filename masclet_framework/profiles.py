@@ -434,3 +434,60 @@ def dir_profile_particles(particles_field, cx,cy,cz,size, tree=None,
 
     return dir_profiles, rrr, vec_costheta, vec_phi
 
+def radial_profile_particles(particles_field, cx,cy,cz,size, tree=None,
+                binsr=None, rmin=None, rmax=None, dex_rbins=None, delta_rbins=None,
+                num_neigh=64, force_resol=None, normalize='volume', weight=None,
+                use_tqdm=False, average="mean", Ncostheta=20, Nphi=20):
+    """
+    Computes the radially-average profile of a field defined by a set of particles around a given center (cx,cy,cz). 
+    The bins can be specified in three ways:
+        - binsr: numpy vector specifying the radial bin edges
+        - rmin, rmax, dex_rbins: minimum and maximum radius, and logarithmic bin size
+        - rmin, rmax, delta_rbins: minimum and maximum radius, and linear bin size
+    The profile can be computed by nearest neighbour interpolation (interpolate=False) or by averaging the values of the cells in each bin (interpolate=True).
+    In order to compute the radially-averaged profile, directional profiles are computed and then combined using arithmetic average, geometric average or median.
+
+    Parameters:
+        - particles_field: particle field to compute the profile of. Must be a one-dimensional numpy array.
+            Warning! Particles ought to be sorted as the particles positions used to build the tree with build_kdtree_displaced.
+        - cx,cy,cz: center of the profile
+        - size: size of the simulation box
+        - tree: KDTree object for the particle distribution. If None, it is built using build_kdtree_displaced.
+        One and only one of these sets of arguments must be specified:
+            - binsr: numpy vector specifying the radial bins
+            - rmin, rmax, dex_rbins: minimum and maximum radius, and logarithmic bin size
+            - rmin, rmax, delta_rbins: minimum and maximum radius, and linear bin size
+        - num_neigh: the value of profile around any point uses, at least, num_neigh particles.
+        - force_resol: force resolution. If specified, the value of profile around any point uses, at least, the particles within a 
+            sphere of radius force_resol.
+        - normalize: whether to normalize the profile by the volume of the bins ("volume") by the number of particles ("number") or
+            by a weighting field ("weight"). If "weight" is specified, the argument "weight" must be specified as well.
+        - weight: weighting field to use to normalize the profile. Must be a one-dimensional numpy array, the same size as particles_field.
+            Only used if normalize="weight".
+        - use_tqdm: whether to use tqdm to show a progress bar or not. Default: False.
+        - average: type of average to use to combine the directional profiles. Must be "mean", "median" or "geometric".
+        - Ncostheta: number of bins in the cos(theta) direction.
+        - Nphi: number of bins in the phi direction.
+    Returns:
+        - profile: radially-averaged profile
+        - rrr: radial bins
+    """
+    if average not in ["mean", "median", "geometric"]:
+        raise ValueError('Wrong specification of average')
+
+    dir_profiles, rrr, vec_costheta, vec_phi = dir_profile_particles(particles_field, cx, cy, cz, size, tree=tree,
+                binsr=binsr, rmin=rmin, rmax=rmax, dex_rbins=dex_rbins, delta_rbins=delta_rbins,
+                num_neigh=num_neigh, force_resol=force_resol, normalize=normalize, weight=weight,
+                use_tqdm=use_tqdm, binsphi=Nphi, binscostheta=Ncostheta)
+
+    # Combine directional profiles
+    if average=="mean":
+        profile=np.mean(dir_profiles,axis=(0,1))
+    elif average=="median":
+        profile=np.median(dir_profiles,axis=(0,1))
+    elif average=="geometric":
+        profile=np.exp(np.mean(np.log(dir_profiles),axis=(0,1)))
+    else:
+        raise ValueError('Wrong specification of average')
+
+    return profile, rrr
