@@ -420,12 +420,15 @@ def dir_profile_particles(particles_field, cx,cy,cz,size, tree=None,
                     particles=tree.query((x+halfsize,y+halfsize,z+halfsize),num_neigh)
                     radius=particles[0][num_neigh-1]
                     particles=particles[1]
-                dir_profiles[itheta,jphi,kbin]=particles_field[particles].sum()
+                
                 if normalize=='volume':
+                    dir_profiles[itheta,jphi,kbin]=particles_field[particles].sum()
                     norma[itheta,jphi,kbin]=4*np.pi/3*radius**3
                 elif normalize=='number':
+                    dir_profiles[itheta,jphi,kbin]=particles_field[particles].sum()
                     norma[itheta,jphi,kbin]=len(particles)
                 elif normalize=='weight':
+                    dir_profiles[itheta,jphi,kbin]=(weight[particles]*particles_field[particles]).sum()
                     norma[itheta,jphi,kbin]=weight[particles].sum()
     
     dir_profiles /= norma 
