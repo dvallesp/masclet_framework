@@ -26,3 +26,4 @@ import masclet_framework.thermal
 import masclet_framework.stats
 import masclet_framework.simulator_tools
 import masclet_framework.profiles
+import masclet_framework.selfsimilar

@@ -88,6 +88,8 @@ mp_masclet = mp_isu * kg_to_mass
 c_masclet = 1.
 c_MpcMyr = 0.306594745
 
+e_isu = 1.60218e-19
+
 ### MAGNETIC FIELD
 magneticfield_to_gauss = 1/13.75
 magneticfield_to_microgauss = 1e6 * magneticfield_to_gauss
