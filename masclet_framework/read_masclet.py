@@ -577,7 +577,7 @@ def read_record(f, dtype='f4'):
             print('Unknown data type!!!!')
             raise ValueError
         dtype2='{:}'.format(len(the_bytes)//len_data)+dtype2
-        print(dtype2)
+        #print(dtype2)
         
         data=struct.unpack(dtype2,the_bytes)
     
@@ -624,12 +624,10 @@ def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_le
     with open(os.path.join(path, filename(it, 'd', digits)), 'rb') as f:
         header=read_record(f, dtype='i4')
         it_cldm=header[0]
-        print(it_cldm)
     
     with open(os.path.join(path, filename(it, 'd', digits)), 'rb') as f:
         header=read_record(f, dtype='f4')
         time, mdmpart, z = header[1:4]
-        print(time, mdmpart, z)
 
         # l=0
         if verbose:
@@ -673,9 +671,7 @@ def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_le
                 if output_deltadm:
                     delta_dm.append(np.reshape(record, (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
             
-            print('NPARTICLES',npart[l])
             if output_position:
-                print('pos')
                 dmpart_x = np.append(dmpart_x, read_record(f, dtype='f4'))
                 dmpart_y = np.append(dmpart_y, read_record(f, dtype='f4'))
                 dmpart_z = np.append(dmpart_z, read_record(f, dtype='f4'))
@@ -684,7 +680,6 @@ def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_le
                     record=read_record(f, dtype='f4')
 
             if output_velocity:
-                print('vel')
                 dmpart_vx = np.append(dmpart_vx, read_record(f, dtype='f4'))
                 dmpart_vy = np.append(dmpart_vy, read_record(f, dtype='f4'))
                 dmpart_vz = np.append(dmpart_vz, read_record(f, dtype='f4'))
@@ -693,13 +688,11 @@ def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_le
                     record=read_record(f, dtype='f4')
 
             if output_mass:
-                print('m')
                 dmpart_mass = np.append(dmpart_mass, read_record(f, dtype='f4'))
             else:
                 record=read_record(f, dtype='f4')
 
             if output_id:
-                print('id')
                 dmpart_id = np.append(dmpart_id, read_record(f, dtype='i4'))
             else:
                 record=read_record(f, dtype='i4')
