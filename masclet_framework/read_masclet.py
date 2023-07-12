@@ -450,6 +450,15 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                                                           read_dmpartnum=True, read_patchcellextension=True,
                                                           read_patchcellposition=False, read_patchposition=False,
                                                           read_patchparent=False, parameters_path=parameters_path)
+    
+    if npart.max()>5e8:
+        print('Warning! Fortran unformatted file contains split records')
+        print('... Resorting to the low-level reader')
+        print('... This may take a while')
+        return lowlevel_read_cldm(it, path=path, parameters_path=parameters_path, digits=digits, 
+                                  max_refined_level=max_refined_level, output_deltadm=output_deltadm,
+                                  output_position=output_position, output_velocity=output_velocity, 
+                                  output_mass=output_mass, output_id=output_id, verbose=verbose)
 
     with FF(os.path.join(path, filename(it, 'd', digits))) as f:
 
@@ -548,7 +557,7 @@ def read_record(f, dtype='f4'):
     recl=head[0]
     
     if recl>0:
-        numval=int(recl/np.dtype(dtype).itemsize)
+        numval=recl//np.dtype(dtype).itemsize
         data=np.fromfile(f,dtype=dtype,count=numval)
         endrec=struct.unpack('i',f.read(4))[0] 
         assert recl==endrec
