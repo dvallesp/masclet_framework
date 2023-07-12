@@ -22,6 +22,7 @@ import numpy as np
 from scipy.io import FortranFile
 # cython_fortran_file
 from cython_fortran_file import FortranFile as FF
+import struct
 
 # tqdm
 import importlib.util
@@ -523,6 +524,185 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                 dmpart_id = np.append(dmpart_id, f.read_vector('i'))
             else:
                 f.skip()
+
+    returnvariables = []
+
+    if output_deltadm:
+        returnvariables.append(delta_dm)
+    if output_position:
+        returnvariables.extend([dmpart_x, dmpart_y, dmpart_z])
+    if output_velocity:
+        returnvariables.extend([dmpart_vx, dmpart_vy, dmpart_vz])
+    if output_mass:
+        returnvariables.append(dmpart_mass)
+    if output_id:
+        returnvariables.append(dmpart_id)
+
+    return tuple(returnvariables)
+
+def read_record(f, dtype='f4'):
+    # Following the description of the standard, found in:
+    #  https://stackoverflow.com/questions/15608421/inconsistent-record-marker-while-reading-fortran-unformatted-file
+    # This method works always, even when there are split records (because they are longer than 2^31 bytes)!!!!
+    head=struct.unpack('i',f.read(4))
+    recl=head[0]
+    
+    if recl>0:
+        numval=int(recl/np.dtype(dtype).itemsize)
+        data=np.fromfile(f,dtype=dtype,count=numval)
+        endrec=struct.unpack('i',f.read(4))[0] 
+        assert recl==endrec
+    else:
+        the_bytes=f.read(abs(recl))
+        endrec=struct.unpack('i',f.read(4))[0] 
+        while recl<0:
+            head=struct.unpack('i',f.read(4))
+            recl=head[0]
+            the_bytes=the_bytes+f.read(abs(recl))
+            endrec=struct.unpack('i',f.read(4))[0] 
+            
+        if dtype=='f4':
+            dtype2='f'
+            len_data=4
+        elif dtype=='i4':
+            dtype2='i'
+            len_data=4
+        elif dtype=='f8':
+            dtype2='d'
+            len_data=4
+        elif dtype=='i8':
+            dtype2='q'
+            len_data=4
+        else:
+            print('Unknown data type!!!!')
+            raise ValueError
+        dtype2='{:}'.format(len(the_bytes)//len_data)+dtype2
+        print(dtype2)
+        
+        data=struct.unpack(dtype2,the_bytes)
+    
+    return data
+
+
+
+def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltadm=True,
+                       output_position=True, output_velocity=True, output_mass=True, output_id=False, verbose=False):
+    """
+    Reads the dark matter (cldm) file.
+    This is a low level implementation, useful when there are more than 2^29-1 particles at a given refinement level.
+
+    Args:
+        it: iteration number (int)
+        path: path of the output files in the system (str)
+        parameters_path: path of the json parameters file of the simulation
+        digits: number of digits the filename is written with (int)
+        max_refined_level: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
+        output_deltadm: whether deltadm (dark matter density contrast) is returned (bool)
+        output_position: whether particles' positions are returned (bool)
+        output_velocity: whether particles' velocities are returned (bool)
+        output_mass: whether particles' masses are returned (bool)
+        output_id: whether particles' ids are returned (bool)
+        verbose: whether a message is printed when each refinement level is started (bool)
+
+    Returns:
+        Chosen quantities, in the order specified by the order of the parameters in this definition.
+        delta_dm is returned as a list of numpy matrices. The 0-th element corresponds to l=0. The i-th element
+        corresponds to the i-th patch.
+        The rest of quantities are outputted as numpy vectors, the i-th element corresponding to the i-th DM particle.
+
+
+    """
+    #if not verbose:
+    #    def tqdm(x): return x
+    nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
+                                                           load_namr=False, load_size=False, path=parameters_path)
+    npatch, npart, patchnx, patchny, patchnz = read_grids(it, path=path, read_general=False, read_patchnum=True,
+                                                          read_dmpartnum=True, read_patchcellextension=True,
+                                                          read_patchcellposition=False, read_patchposition=False,
+                                                          read_patchparent=False, parameters_path=parameters_path)
+
+    with open(os.path.join(path, filename(it, 'd', digits)), 'rb') as f:
+        header=read_record(f, dtype='i4')
+        it_cldm=header[0]
+        print(it_cldm)
+    
+    with open(os.path.join(path, filename(it, 'd', digits)), 'rb') as f:
+        header=read_record(f, dtype='f4')
+        time, mdmpart, z = header[1:4]
+        print(time, mdmpart, z)
+
+        # l=0
+        if verbose:
+            print('Reading base grid...')
+
+        record=read_record(f, dtype='f4')
+        if output_deltadm:
+            delta_dm = [np.reshape(record, (nmax, nmay, nmaz), 'F')]
+
+        if output_position:
+            dmpart_x = read_record(f, dtype='f4')
+            dmpart_y = read_record(f, dtype='f4')
+            dmpart_z = read_record(f, dtype='f4')
+        else:
+            for irec in range(3):
+                record=read_record(f, dtype='f4')
+
+        if output_velocity:
+            dmpart_vx = read_record(f, dtype='f4')
+            dmpart_vy = read_record(f, dtype='f4')
+            dmpart_vz = read_record(f, dtype='f4')
+        else:
+            for irec in range(3):
+                record=read_record(f, dtype='f4')
+
+        if output_id:
+            dmpart_id = read_record(f, dtype='i4')
+        else:
+            record=read_record(f, dtype='i4')
+
+        if output_mass:
+            dmpart_mass = (mdmpart * np.ones(npart[0])).astype('f4')
+
+        # refinement levels
+        for l in range(1, min(nlevels + 1, max_refined_level + 1)):
+            if verbose:
+                print('Reading level {}.'.format(l))
+                print('{} patches. {} particles.'.format(npatch[l], npart[l]))
+            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l)):
+                record=read_record(f, dtype='f4')
+                if output_deltadm:
+                    delta_dm.append(np.reshape(record, (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+            
+            print('NPARTICLES',npart[l])
+            if output_position:
+                print('pos')
+                dmpart_x = np.append(dmpart_x, read_record(f, dtype='f4'))
+                dmpart_y = np.append(dmpart_y, read_record(f, dtype='f4'))
+                dmpart_z = np.append(dmpart_z, read_record(f, dtype='f4'))
+            else:
+                for irec in range(3):
+                    record=read_record(f, dtype='f4')
+
+            if output_velocity:
+                print('vel')
+                dmpart_vx = np.append(dmpart_vx, read_record(f, dtype='f4'))
+                dmpart_vy = np.append(dmpart_vy, read_record(f, dtype='f4'))
+                dmpart_vz = np.append(dmpart_vz, read_record(f, dtype='f4'))
+            else:
+                for irec in range(3):
+                    record=read_record(f, dtype='f4')
+
+            if output_mass:
+                print('m')
+                dmpart_mass = np.append(dmpart_mass, read_record(f, dtype='f4'))
+            else:
+                record=read_record(f, dtype='f4')
+
+            if output_id:
+                print('id')
+                dmpart_id = np.append(dmpart_id, read_record(f, dtype='i4'))
+            else:
+                record=read_record(f, dtype='i4')
 
     returnvariables = []
 
