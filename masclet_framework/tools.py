@@ -21,6 +21,8 @@ from multiprocessing import Pool
 
 import gc
 
+from numba import jit, njit, prange
+from numba.typed import List
 
 # from masclet_framework import cosmo_tools, units
 
@@ -878,7 +880,7 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
     Builds a uniform grid, zooming on a box specified by box_limits, at level up_to_level, containing the most refined
     data at each region, and interpolating from coarser patches
     Args:
-        field: field to be computed at the uniform grid. Must be uncleaned!!
+        field: field to be computed at the uniform grid. MUST BE UNCLEANED!!
         box_limits: a tuple in the form (imin, imax, jmin, jmax, kmin, kmax). Limits should correspond to l=0 cell
                     boundaries
         up_to_level: level up to which the fine grid wants to be obtained
@@ -923,11 +925,10 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
     uniform_size_x = (bimax - bimin + 1) * reduction
     uniform_size_y = (bjmax - bjmin + 1) * reduction
     uniform_size_z = (bkmax - bkmin + 1) * reduction
-    uniform = np.zeros((uniform_size_x, uniform_size_y, uniform_size_z))
 
-    fine_coordinates = [np.linspace(bxmin + uniform_cellsize / 2, bxmax - uniform_cellsize / 2, uniform_size_x),
+    fine_coordinates = List([np.linspace(bxmin + uniform_cellsize / 2, bxmax - uniform_cellsize / 2, uniform_size_x),
                         np.linspace(bymin + uniform_cellsize / 2, bymax - uniform_cellsize / 2, uniform_size_y),
-                        np.linspace(bzmin + uniform_cellsize / 2, bzmax - uniform_cellsize / 2, uniform_size_z)]
+                        np.linspace(bzmin + uniform_cellsize / 2, bzmax - uniform_cellsize / 2, uniform_size_z)])
 
     vertices_patches = np.zeros((npatch[0:up_to_level + 1].sum() + 1, 6))
     vertices_patches[0, :] = [-size / 2, size / 2, -size / 2, size / 2, -size / 2, size / 2]
@@ -943,7 +944,7 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
 
     levels = create_vector_levels(npatch)
 
-    cell_patch = uniform.copy().astype('int')
+    cell_patch = np.zeros((uniform_size_x,uniform_size_y,uniform_size_z),dtype='i4')
     for l in range(1, up_to_level + 1, 1):
         reduction = 2 ** (up_to_level - l)
         dx = uniform_cellsize * reduction
@@ -965,38 +966,46 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
                 k2 = min([k2, uniform_size_z - 1])
                 cell_patch[i1:i2 + 1, j1:j2 + 1, k1:k2 + 1] = ipatch
 
-    for i in range(uniform_size_x):
-        if verbose:
-            print('ix={:}/{:}'.format(i,uniform_size_x))
-        for j in range(uniform_size_y):
-            for k in range(uniform_size_z):
-                x, y, z = fine_coordinates[0][i], fine_coordinates[1][j], fine_coordinates[2][k]
+    @njit(parallel=True)
+    def parallelize(uniform_size_x, uniform_size_y, uniform_size_z, fine_coordinates, cell_patch, vertices_patches,
+                    field,verbose):
+        uniform = np.zeros((uniform_size_x, uniform_size_y, uniform_size_z))
+        for i in prange(uniform_size_x):
+            if verbose:
+                print('ix=',i,uniform_size_x)
+            for j in range(uniform_size_y):
+                for k in range(uniform_size_z):
+                    x, y, z = fine_coordinates[0][i], fine_coordinates[1][j], fine_coordinates[2][k]
 
-                ipatch = cell_patch[i, j, k]
-                l = levels[ipatch]
-                dx = coarse_cellsize / 2 ** l
+                    ipatch = cell_patch[i, j, k]
+                    l = levels[ipatch]
+                    dx = coarse_cellsize / 2 ** l
 
-                if l == up_to_level:
-                    xx, yy, zz = vertices_patches[ipatch, 0], vertices_patches[ipatch, 2], vertices_patches[ipatch, 4]
-                    ii, jj, kk = int((x - xx) / dx), int((y - yy) / dx), int((z - zz) / dx)
-                    uniform[i, j, k] = field[ipatch][ii, jj, kk]
-                else:
-                    xx, yy, zz = vertices_patches[ipatch, 0], vertices_patches[ipatch, 2], vertices_patches[ipatch, 4]
-                    ii, jj, kk = int((x - xx) / dx - 0.5), int((y - yy) / dx - 0.5), int((z - zz) / dx - 0.5)
-                    xbas, ybas, zbas = xx + (ii + 0.5) * dx, yy + (jj + 0.5) * dx, zz + (kk + 0.5) * dx
-                    xbas, ybas, zbas = (x - xbas) / dx, (y - ybas) / dx, (z - zbas) / dx
+                    if l == up_to_level:
+                        xx, yy, zz = vertices_patches[ipatch, 0], vertices_patches[ipatch, 2], vertices_patches[ipatch, 4]
+                        ii, jj, kk = int((x - xx) / dx), int((y - yy) / dx), int((z - zz) / dx)
+                        uniform[i, j, k] = field[ipatch][ii, jj, kk]
+                    else:
+                        xx, yy, zz = vertices_patches[ipatch, 0], vertices_patches[ipatch, 2], vertices_patches[ipatch, 4]
+                        ii, jj, kk = int((x - xx) / dx - 0.5), int((y - yy) / dx - 0.5), int((z - zz) / dx - 0.5)
+                        xbas, ybas, zbas = xx + (ii + 0.5) * dx, yy + (jj + 0.5) * dx, zz + (kk + 0.5) * dx
+                        xbas, ybas, zbas = (x - xbas) / dx, (y - ybas) / dx, (z - zbas) / dx
 
-                    ubas = field[ipatch][ii:ii + 2, jj:jj + 2, kk:kk + 2]
+                        ubas = field[ipatch][ii:ii + 2, jj:jj + 2, kk:kk + 2]
 
-                    c00 = ubas[0, 0, 0] * (1 - xbas) + ubas[1, 0, 0] * xbas
-                    c01 = ubas[0, 0, 1] * (1 - xbas) + ubas[1, 0, 1] * xbas
-                    c10 = ubas[0, 1, 0] * (1 - xbas) + ubas[1, 1, 0] * xbas
-                    c11 = ubas[0, 1, 1] * (1 - xbas) + ubas[1, 1, 1] * xbas
+                        c00 = ubas[0, 0, 0] * (1 - xbas) + ubas[1, 0, 0] * xbas
+                        c01 = ubas[0, 0, 1] * (1 - xbas) + ubas[1, 0, 1] * xbas
+                        c10 = ubas[0, 1, 0] * (1 - xbas) + ubas[1, 1, 0] * xbas
+                        c11 = ubas[0, 1, 1] * (1 - xbas) + ubas[1, 1, 1] * xbas
 
-                    c0 = c00 * (1 - ybas) + c10 * ybas
-                    c1 = c01 * (1 - ybas) + c11 * ybas
+                        c0 = c00 * (1 - ybas) + c10 * ybas
+                        c1 = c01 * (1 - ybas) + c11 * ybas
 
-                    uniform[i, j, k] = c0 * (1 - zbas) + c1 * zbas
+                        uniform[i, j, k] = c0 * (1 - zbas) + c1 * zbas
+        return uniform
+    
+    uniform=parallelize(uniform_size_x, uniform_size_y, uniform_size_z, fine_coordinates, cell_patch, vertices_patches,
+                    List(field),verbose)
 
     return uniform
 
