@@ -33,6 +33,7 @@ else:
 
 # masclet_framework
 from masclet_framework import parameters
+from masclet_framework import tools
 
 
 # FUNCTIONS DEFINED IN THIS MODULE
@@ -208,7 +209,7 @@ def read_grids(it, path='', parameters_path='', digits=5, read_general=True, rea
 def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_delta=True, output_v=True,
               output_pres=True, output_pot=True, output_opot=False, output_temp=True, output_metalicity=True,
               output_cr0amr=True, output_solapst=True, is_mascletB=False, output_B=False, is_cooling=True,
-              verbose=False):
+              verbose=False, read_region=None):
     """
     Reads the gas (baryonic, clus) file
 
@@ -231,11 +232,20 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         output_B: whether magnetic field is returned; only if is_mascletB = True (bool)
         is_cooling: whether there is cooling (an thus T and metalicity are written) or not (bool)
         verbose: whether a message is printed when each refinement level is started (bool)
-        fullverbose: whether a message is printed for each patch (recommended for debugging issues) (bool)
+        read_region: whether to select a subregion (see region specification below), or keep all the simulation data 
+                     (None). If a region wants to be selected, there are the following possibilities:
+                        - ("sphere", cx, cy, cz, R) for a sphere of radius R centered in (cx, cy, cz)
+                        - ("box", x1, x2, y1, y2, z1, z2) for a box with corners (x1, y1, z1) and (x2, y2, z2)
+                        - ("box_cw", xc, yc, zc, width) for a box centered in (xc, yc, zc) with width "width"
 
     Returns:
         Chosen quantities, as a list of arrays (one for each patch, starting with l=0 and subsequently);
         in the order specified by the order of the parameters in this definition.
+        
+        If read_region is not None, only the patches inside the region are read, and in the positions of the 
+        arrays corresponding to the patches outside the region, a single scalar value of zero is written. Also
+        in this case, after all the returned variables, a 1d array of booleans is returned, with the same length
+        as the number of patches, indicating which patches are inside the region (True) and which are not (False).
     """
     #if not verbose:
     #    def tqdm(x): return x
@@ -245,12 +255,41 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         print('Terminating')
         return
 
-    nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
-                                                           load_namr=False, load_size=False, path=parameters_path)
-    npatch, patchnx, patchny, patchnz = read_grids(it, path=path, parameters_path=parameters_path, read_general=False,
+    nmax, nmay, nmaz, nlevels, size = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
+                                                                 load_namr=False, load_size=True, path=parameters_path)
+    npatch, patchnx, patchny, patchnz, \
+            patchrx, patchry, patchrz = read_grids(it, path=path, parameters_path=parameters_path, read_general=False,
                                                    read_patchnum=True, read_dmpartnum=False,
                                                    read_patchcellextension=True, read_patchcellposition=False,
-                                                   read_patchposition=False, read_patchparent=False)
+                                                   read_patchposition=True, read_patchparent=False)
+
+    if read_region is None:
+        keep_patches = np.ones(patchnx.size, dtype='bool')
+    else:
+        keep_patches = np.zeros(patchnx.size, dtype='bool')
+        region_type = read_region[0]
+        if region_type == 'sphere':
+            cx, cy, cz, R = read_region[1:]
+            which = tools.which_patches_inside_sphere(R, cx, cy, cz, patchnx, patchny, patchnz, patchrx, patchry, 
+                                                      patchrz, npatch, size, nmax)
+            keep_patches[which] = True
+        elif region_type == 'box' or region_type == 'box_cw':
+            if region_type == 'box':
+                x1, x2, y1, y2, z1, z2 = read_region[1:]
+            else:
+                xc, yc, zc, width = read_region[1:]
+                x1 = xc - width/2
+                x2 = xc + width/2
+                y1 = yc - width/2
+                y2 = yc + width/2
+                z1 = zc - width/2
+                z2 = zc + width/2
+            which = tools.which_patches_inside_box((x1, x2, y1, y2, z1, z2), patchnx, patchny, patchnz, patchrx, patchry,
+                                                   patchrz,npatch,size,nmax)
+            keep_patches[which] = True
+        else:
+            raise ValueError('Unknown region type. Please specify one of "sphere", "box" or "box_cw"')
+
     with FF(os.path.join(path, filename(it, 'b', digits))) as f:
         # read header
         it_clus = f.read_vector('i')[0]
@@ -324,64 +363,83 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
             for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l)):
                 #if verbose:
                 #    print('Reading patch {}'.format(ipatch))
-
-                if output_delta:
+                if output_delta and keep_patches[ipatch]:
                     delta.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
                                             'F'))
                 else:
                     f.skip()
+                    if output_delta:
+                        delta.append(0)
 
-                if output_v:
+                if output_v and keep_patches[ipatch]:
                     vx.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
                     vy.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
                     vz.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
                 else:
                     f.skip(3)
+                    if output_v:
+                        vx.append(0)
+                        vy.append(0)
+                        vz.append(0)
 
-                if output_pres:
+                if output_pres and keep_patches[ipatch]:
                     pres.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
                                            'F'))
                 else:
                     f.skip()
+                    if output_pres:
+                        pres.append(0)
 
-                if output_pot:
+                if output_pot and keep_patches[ipatch]:
                     pot.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
                 else:
                     f.skip()
+                    if output_pot:
+                        pot.append(0)
 
-                if output_opot:
+                if output_opot and keep_patches[ipatch]:
                     opot.append(
                         np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
                 else:
                     f.skip()
+                    if output_opot:
+                        opot.append(0)
 
                 if is_cooling:
-                    if output_temp:
+                    if output_temp and keep_patches[ipatch]:
                         temp.append(
                             np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
                     else:
                         f.skip()
+                        if output_temp:
+                            temp.append(0)
 
-                    if output_metalicity:
+                    if output_metalicity and keep_patches[ipatch]:
                         metalicity.append(
                             np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
                     else:
                         f.skip()
+                        if output_metalicity:
+                            metalicity.append(0)
 
-                if output_cr0amr:
+                if output_cr0amr and keep_patches[ipatch]:
                     cr0amr.append(np.reshape(f.read_vector('i'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
                                              'F').astype('bool'))
                 else:
                     f.skip()
+                    if output_cr0amr:
+                        cr0amr.append(0)
 
-                if output_solapst:
+                if output_solapst and keep_patches[ipatch]:
                     solapst.append(np.reshape(f.read_vector('i'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
                                               'F').astype('bool'))
                 else:
                     f.skip()
+                    if output_solapst:
+                        solapst.append(0)
 
                 if is_mascletB:
-                    if output_B:
+                    if output_B and keep_patches[ipatch]:
                         Bx.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
                                              'F'))
                         By.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
@@ -390,6 +448,10 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                                              'F'))
                     else:
                         f.skip(3)
+                        if output_B:
+                            Bx.append(0)
+                            By.append(0)
+                            Bz.append(0)
 
     returnvariables = []
     if output_delta:
@@ -412,6 +474,325 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         returnvariables.append(solapst)
     if output_B:
         returnvariables.extend([Bx,By,Bz])
+
+    if read_region is not None:
+        returnvariables.append(keep_patches)
+
+    return tuple(returnvariables)
+
+
+def lowlevel_read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_delta=True, output_v=True,
+              output_pres=True, output_pot=True, output_opot=False, output_temp=True, output_metalicity=True,
+              output_cr0amr=True, output_solapst=True, is_mascletB=False, output_B=False, is_cooling=True,
+              verbose=False, read_region=None):
+    """
+    Reads the gas (baryonic, clus) file
+
+    Args:
+        it: iteration number (int)
+        path: path of the grids file in the system (str)
+        parameters_path: path of the json parameters file of the simulation
+        digits: number of digits the filename is written with (int)
+        max_refined_level: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
+        output_delta: whether delta (density contrast) is returned (bool)
+        output_v: whether velocities (vx, vy, vz) are returned (bool)
+        output_pres: whether pressure is returned (bool)
+        output_pot: whether gravitational potential is returned (bool)
+        output_opot: whether gravitational potential in the previous iteration is returned (bool)
+        output_temp: whether temperature is returned (bool)
+        output_metalicity: whether metalicity is returned (bool)
+        output_cr0amr: whether "refined variable" (1 if not refined, 0 if refined) is returned (bool)
+        output_solapst: whether "solapst variable" (1 if the cell is kept, 0 otherwise) is returned (bool)
+        is_mascletB: whether the outputs correspond to masclet-B (contains magnetic fields) (bool)
+        output_B: whether magnetic field is returned; only if is_mascletB = True (bool)
+        is_cooling: whether there is cooling (an thus T and metalicity are written) or not (bool)
+        verbose: whether a message is printed when each refinement level is started (bool)
+        read_region: whether to select a subregion (see region specification below), or keep all the simulation data 
+                     (None). If a region wants to be selected, there are the following possibilities:
+                        - ("sphere", cx, cy, cz, R) for a sphere of radius R centered in (cx, cy, cz)
+                        - ("box", x1, x2, y1, y2, z1, z2) for a box with corners (x1, y1, z1) and (x2, y2, z2)
+                        - ("box_cw", xc, yc, zc, width) for a box centered in (xc, yc, zc) with width "width"
+
+    Returns:
+        Chosen quantities, as a list of arrays (one for each patch, starting with l=0 and subsequently);
+        in the order specified by the order of the parameters in this definition.
+        
+        If read_region is not None, only the patches inside the region are read, and in the positions of the 
+        arrays corresponding to the patches outside the region, a single scalar value of zero is written. Also
+        in this case, after all the returned variables, a 1d array of booleans is returned, with the same length
+        as the number of patches, indicating which patches are inside the region (True) and which are not (False).
+    """
+    #if not verbose:
+    #    def tqdm(x): return x
+
+    if output_B and (not is_mascletB):
+        print('Error: cannot output magnetic field if the simulation has not.')
+        print('Terminating')
+        return
+
+    nmax, nmay, nmaz, nlevels, size = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
+                                                                 load_namr=False, load_size=True, path=parameters_path)
+    npatch, patchnx, patchny, patchnz, \
+            patchrx, patchry, patchrz = read_grids(it, path=path, parameters_path=parameters_path, read_general=False,
+                                                   read_patchnum=True, read_dmpartnum=False,
+                                                   read_patchcellextension=True, read_patchcellposition=False,
+                                                   read_patchposition=True, read_patchparent=False)
+
+    nfields=9
+    if is_cooling: 
+        nfields+=2
+    if is_mascletB: 
+        nfields+=3
+
+    if read_region is None:
+        keep_patches = np.ones(patchnx.size, dtype='bool')
+    else:
+        keep_patches = np.zeros(patchnx.size, dtype='bool')
+        region_type = read_region[0]
+        if region_type == 'sphere':
+            cx, cy, cz, R = read_region[1:]
+            which = tools.which_patches_inside_sphere(R, cx, cy, cz, patchnx, patchny, patchnz, patchrx, patchry, 
+                                                      patchrz, npatch, size, nmax)
+            keep_patches[which] = True
+        elif region_type == 'box' or region_type == 'box_cw':
+            if region_type == 'box':
+                x1, x2, y1, y2, z1, z2 = read_region[1:]
+            else:
+                xc, yc, zc, width = read_region[1:]
+                x1 = xc - width/2
+                x2 = xc + width/2
+                y1 = yc - width/2
+                y2 = yc + width/2
+                z1 = zc - width/2
+                z2 = zc + width/2
+            which = tools.which_patches_inside_box((x1, x2, y1, y2, z1, z2), patchnx, patchny, patchnz, patchrx, patchry,
+                                                   patchrz,npatch,size,nmax)
+            keep_patches[which] = True
+        else:
+            raise ValueError('Unknown region type. Please specify one of "sphere", "box" or "box_cw"')
+
+    with open(os.path.join(path, filename(it, 'b', digits)), 'rb') as f:
+        # read header
+        header=read_record(f, dtype='f4')
+        time, z = header[1:3]
+
+        # l=0
+        if verbose:
+            print('Reading base grid...')
+        if output_delta:
+            delta = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+        else:
+            skip_record(f)
+
+        if output_v:
+            vx = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            vy = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            vz = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+        else:
+            for irec in range(3):
+                skip_record(f)
+
+        if output_pres:
+            pres = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+        else:
+            skip_record(f)
+
+        if output_pot:
+            pot = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+        else:
+            skip_record(f)
+
+        if output_opot:
+            opot = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+        else:
+            skip_record(f)
+
+        if is_cooling:
+            if output_temp:
+                temp = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            else:
+                skip_record(f)
+
+            if output_metalicity:
+                metalicity = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            else:
+                skip_record(f)
+
+        if output_cr0amr:
+            cr0amr = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F').astype('bool')]
+        else:
+            skip_record(f)
+
+        if output_solapst:
+            solapst = [0]
+
+        if is_mascletB:
+            if output_B:
+                Bx = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+                By = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+                Bz = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            else:
+                for irec in range(3):
+                    skip_record(f)
+
+
+        # refinement levels
+        for l in range(1, min(nlevels + 1, max_refined_level + 1)):
+            if verbose:
+                print('Reading level {}.'.format(l))
+                print('{} patches.'.format(npatch[l]))
+            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l)):
+                #if verbose:
+                #    print('Reading patch {}'.format(ipatch))
+                if not keep_patches[ipatch]:
+                    length_field=patchnx[ipatch]*patchny[ipatch]*patchnz[ipatch]*4+8
+                    f.seek(nfields*length_field,1)
+
+                    if output_delta:
+                        delta.append(0)
+                    if output_v:
+                        vx.append(0)
+                        vy.append(0)
+                        vz.append(0)
+                    if output_pres:
+                        pres.append(0)
+                    if output_pot:
+                        pot.append(0)
+                    if output_opot:
+                        opot.append(0)
+                    if is_cooling:
+                        if output_temp:
+                            temp.append(0)
+                        if output_metalicity:
+                            metalicity.append(0)
+                    if output_cr0amr:
+                        cr0amr.append(0)
+                    if output_solapst:
+                        solapst.append(0)
+                    if is_mascletB:
+                        if output_B:
+                            Bx.append(0)
+                            By.append(0)
+                            Bz.append(0)
+
+                    continue
+
+                if output_delta and keep_patches[ipatch]:
+                    delta.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                            'F'))
+                else:
+                    skip_record(f)
+                    if output_delta:
+                        delta.append(0)
+
+                if output_v and keep_patches[ipatch]:
+                    vx.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    vy.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    vz.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                else:
+                    for irec in range(3):
+                        skip_record(f)
+                    if output_v:
+                        vx.append(0)
+                        vy.append(0)
+                        vz.append(0)
+
+                if output_pres and keep_patches[ipatch]:
+                    pres.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                           'F'))
+                else:
+                    skip_record(f)
+                    if output_pres:
+                        pres.append(0)
+
+                if output_pot and keep_patches[ipatch]:
+                    pot.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                else:
+                    skip_record(f)
+                    if output_pot:
+                        pot.append(0)
+
+                if output_opot and keep_patches[ipatch]:
+                    opot.append(
+                        np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                else:
+                    skip_record(f)
+                    if output_opot:
+                        opot.append(0)
+
+                if is_cooling:
+                    if output_temp and keep_patches[ipatch]:
+                        temp.append(
+                            np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    else:
+                        skip_record(f)
+                        if output_temp:
+                            temp.append(0)
+
+                    if output_metalicity and keep_patches[ipatch]:
+                        metalicity.append(
+                            np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    else:
+                        skip_record(f)
+                        if output_metalicity:
+                            metalicity.append(0)
+
+                if output_cr0amr and keep_patches[ipatch]:
+                    cr0amr.append(np.reshape(read_record(f, dtype='i4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                             'F').astype('bool'))
+                else:
+                    skip_record(f)
+                    if output_cr0amr:
+                        cr0amr.append(0)
+
+                if output_solapst and keep_patches[ipatch]:
+                    solapst.append(np.reshape(read_record(f, dtype='i4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                              'F').astype('bool'))
+                else:
+                    skip_record(f)
+                    if output_solapst:
+                        solapst.append(0)
+
+                if is_mascletB:
+                    if output_B and keep_patches[ipatch]:
+                        Bx.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                             'F'))
+                        By.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                             'F'))
+                        Bz.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
+                                             'F'))
+                    else:
+                        for irec in range(3):
+                            skip_record(f)
+                        if output_B:
+                            Bx.append(0)
+                            By.append(0)
+                            Bz.append(0)
+
+    returnvariables = []
+    if output_delta:
+        returnvariables.append(delta)
+    if output_v:
+        returnvariables.extend([vx, vy, vz])
+    if output_pres:
+        returnvariables.append(pres)
+    if output_pot:
+        returnvariables.append(pot)
+    if output_opot:
+        returnvariables.append(opot)
+    if output_temp:
+        returnvariables.append(temp)
+    if output_metalicity:
+        returnvariables.append(metalicity)
+    if output_cr0amr:
+        returnvariables.append(cr0amr)
+    if output_solapst:
+        returnvariables.append(solapst)
+    if output_B:
+        returnvariables.extend([Bx,By,Bz])
+
+    if read_region is not None:
+        returnvariables.append(keep_patches)
 
     return tuple(returnvariables)
 
@@ -560,7 +941,7 @@ def read_record(f, dtype='f4'):
         numval=recl//np.dtype(dtype).itemsize
         data=np.fromfile(f,dtype=dtype,count=numval)
         endrec=struct.unpack('i',f.read(4))[0] 
-        assert recl==endrec
+        #assert recl==endrec
     else:
         the_bytes=f.read(abs(recl))
         endrec=struct.unpack('i',f.read(4))[0] 
@@ -590,12 +971,34 @@ def read_record(f, dtype='f4'):
         
         data=struct.unpack(dtype2,the_bytes)
     
+    if len(data)==0:
+        return np.array([], dtype=dtype)
+
     return data
 
+def skip_record(f):
+    head=struct.unpack('i',f.read(4))
+    recl=head[0]
+
+    if recl>0:
+        f.seek(recl,1)
+        endrec=struct.unpack('i',f.read(4))[0] 
+        #assert recl==endrec
+    else:
+        f.seek(abs(recl),1)
+        endrec=struct.unpack('i',f.read(4))[0] 
+        while recl<0:
+            head=struct.unpack('i',f.read(4))
+            recl=head[0]
+            f.seek(abs(recl),1)
+            endrec=struct.unpack('i',f.read(4))[0] 
+
+    return
 
 
 def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltadm=True,
-                       output_position=True, output_velocity=True, output_mass=True, output_id=False, verbose=False):
+                       output_position=True, output_velocity=True, output_mass=True, output_id=False, verbose=False,
+                       read_region=None):
     """
     Reads the dark matter (cldm) file.
     This is a low level implementation, useful when there are more than 2^29-1 particles at a given refinement level.
@@ -612,6 +1015,11 @@ def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_le
         output_mass: whether particles' masses are returned (bool)
         output_id: whether particles' ids are returned (bool)
         verbose: whether a message is printed when each refinement level is started (bool)
+        read_region: whether to select a subregion (see region specification below), or keep all the simulation data 
+        (None). If a region wants to be selected, there are the following possibilities:
+        - ("sphere", cx, cy, cz, R) for a sphere of radius R centered in (cx, cy, cz)
+        - ("box", x1, x2, y1, y2, z1, z2) for a box with corners (x1, y1, z1) and (x2, y2, z2)
+        - ("box_cw", xc, yc, zc, width) for a box centered in (xc, yc, zc) with width "width"
 
     Returns:
         Chosen quantities, in the order specified by the order of the parameters in this definition.
@@ -619,16 +1027,56 @@ def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_le
         corresponds to the i-th patch.
         The rest of quantities are outputted as numpy vectors, the i-th element corresponding to the i-th DM particle.
 
+        If read_region is not None, only the patches inside the region are read, and in the positions of the 
+        arrays corresponding to the patches outside the region, a single scalar value of zero is written. Also
+        in this case, after all the returned variables, a 1d array of booleans is returned, with the same length
+        as the number of patches, indicating which patches are inside the region (True) and which are not (False).
+        Regarding particles, all are read, but the ones outside the region are not returned.
+
+
 
     """
     #if not verbose:
     #    def tqdm(x): return x
-    nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
-                                                           load_namr=False, load_size=False, path=parameters_path)
-    npatch, npart, patchnx, patchny, patchnz = read_grids(it, path=path, read_general=False, read_patchnum=True,
+
+    force_read_positions = False
+    if (read_region is not None) and (output_position or output_velocity or output_mass or output_id):
+        force_read_positions = True
+
+    nmax, nmay, nmaz, nlevels, size = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
+                                                                 load_namr=False, load_size=True, path=parameters_path)
+    npatch, npart, patchnx, patchny, patchnz, \
+                   patchrx, patchry, patchrz = read_grids(it, path=path, read_general=False, read_patchnum=True,
                                                           read_dmpartnum=True, read_patchcellextension=True,
-                                                          read_patchcellposition=False, read_patchposition=False,
+                                                          read_patchcellposition=False, read_patchposition=True,
                                                           read_patchparent=False, parameters_path=parameters_path)
+
+    if read_region is None:
+        keep_patches = np.ones(patchnx.size, dtype='bool')
+    else:
+        keep_patches = np.zeros(patchnx.size, dtype='bool')
+        region_type = read_region[0]
+        if region_type == 'sphere':
+            cx, cy, cz, R = read_region[1:]
+            which = tools.which_patches_inside_sphere(R, cx, cy, cz, patchnx, patchny, patchnz, patchrx, patchry, 
+                                                      patchrz, npatch, size, nmax)
+            keep_patches[which] = True
+        elif region_type == 'box' or region_type == 'box_cw':
+            if region_type == 'box':
+                x1, x2, y1, y2, z1, z2 = read_region[1:]
+            else:
+                xc, yc, zc, width = read_region[1:]
+                x1 = xc - width/2
+                x2 = xc + width/2
+                y1 = yc - width/2
+                y2 = yc + width/2
+                z1 = zc - width/2
+                z2 = zc + width/2
+            which = tools.which_patches_inside_box((x1, x2, y1, y2, z1, z2), patchnx, patchny, patchnz, patchrx, patchry,
+                                                   patchrz,npatch,size,nmax)
+            keep_patches[which] = True
+        else:
+            raise ValueError('Unknown region type. Please specify one of "sphere", "box" or "box_cw"')
 
     with open(os.path.join(path, filename(it, 'd', digits)), 'rb') as f:
         header=read_record(f, dtype='i4')
@@ -642,17 +1090,18 @@ def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_le
         if verbose:
             print('Reading base grid...')
 
-        record=read_record(f, dtype='f4')
         if output_deltadm:
-            delta_dm = [np.reshape(record, (nmax, nmay, nmaz), 'F')]
+            delta_dm = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+        else:
+            skip_record(f)
 
-        if output_position:
+        if output_position or force_read_positions:
             dmpart_x = read_record(f, dtype='f4')
             dmpart_y = read_record(f, dtype='f4')
             dmpart_z = read_record(f, dtype='f4')
         else:
             for irec in range(3):
-                record=read_record(f, dtype='f4')
+                skip_record(f)
 
         if output_velocity:
             dmpart_vx = read_record(f, dtype='f4')
@@ -660,12 +1109,12 @@ def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_le
             dmpart_vz = read_record(f, dtype='f4')
         else:
             for irec in range(3):
-                record=read_record(f, dtype='f4')
+                skip_record(f)
 
         if output_id:
             dmpart_id = read_record(f, dtype='i4')
         else:
-            record=read_record(f, dtype='i4')
+            skip_record(f)
 
         if output_mass:
             dmpart_mass = (mdmpart * np.ones(npart[0])).astype('f4')
@@ -675,18 +1124,26 @@ def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_le
             if verbose:
                 print('Reading level {}.'.format(l))
                 print('{} patches. {} particles.'.format(npatch[l], npart[l]))
-            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l)):
-                record=read_record(f, dtype='f4')
-                if output_deltadm:
-                    delta_dm.append(np.reshape(record, (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+
+            if output_deltadm:
+                for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l)):
+                    if keep_patches[ipatch]:
+                        delta_dm.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    else:
+                        skip_record(f)
+            else:
+                length_field=0
+                for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                    length_field += patchnx[ipatch]*patchny[ipatch]*patchnz[ipatch]*4+8
+                f.seek(length_field,1)
             
-            if output_position:
+            if output_position or force_read_positions:
                 dmpart_x = np.append(dmpart_x, read_record(f, dtype='f4'))
                 dmpart_y = np.append(dmpart_y, read_record(f, dtype='f4'))
                 dmpart_z = np.append(dmpart_z, read_record(f, dtype='f4'))
             else:
                 for irec in range(3):
-                    record=read_record(f, dtype='f4')
+                    skip_record(f)
 
             if output_velocity:
                 dmpart_vx = np.append(dmpart_vx, read_record(f, dtype='f4'))
@@ -694,19 +1151,38 @@ def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_le
                 dmpart_vz = np.append(dmpart_vz, read_record(f, dtype='f4'))
             else:
                 for irec in range(3):
-                    record=read_record(f, dtype='f4')
+                    skip_record(f)
 
             if output_mass:
                 dmpart_mass = np.append(dmpart_mass, read_record(f, dtype='f4'))
             else:
-                record=read_record(f, dtype='f4')
+                skip_record(f)
 
             if output_id:
                 dmpart_id = np.append(dmpart_id, read_record(f, dtype='i4'))
             else:
-                record=read_record(f, dtype='i4')
+                skip_record(f)
 
     returnvariables = []
+
+    if force_read_positions:
+        if region_type == 'sphere':
+            keep_particles = (dmpart_x-cx)**2 + (dmpart_y-cy)**2 + (dmpart_z-cz)**2 < R**2
+        elif region_type == 'box' or region_type == 'box_cw':
+            keep_particles = (dmpart_x>x1) * (dmpart_x<x2) * (dmpart_y>y1) * (dmpart_y<y2) * (dmpart_z>z1) * (dmpart_z<z2)
+        
+        if output_position:
+            dmpart_x = dmpart_x[keep_particles]
+            dmpart_y = dmpart_y[keep_particles]
+            dmpart_z = dmpart_z[keep_particles]
+        if output_velocity:
+            dmpart_vx = dmpart_vx[keep_particles]
+            dmpart_vy = dmpart_vy[keep_particles]
+            dmpart_vz = dmpart_vz[keep_particles]
+        if output_mass:
+            dmpart_mass = dmpart_mass[keep_particles]
+        if output_id:
+            dmpart_id = dmpart_id[keep_particles]
 
     if output_deltadm:
         returnvariables.append(delta_dm)
@@ -727,7 +1203,6 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
               output_metalicity=False, output_id=False, output_BH = False, are_BH = True):
     """
     Reads the stellar (clst) file.
-    For now, it only reads the delta.
 
     Args:
         it: iteration number (int)
@@ -749,7 +1224,7 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
 
     Returns:
         Chosen quantities, in the order specified by the order of the parameters in this definition.
-        delta_dm is returned as a list of numpy matrices. The 0-th element corresponds to l=0. The i-th element
+        delta_star is returned as a list of numpy matrices. The 0-th element corresponds to l=0. The i-th element
         corresponds to the i-th patch.
         The rest of quantities are outputted as numpy vectors, the i-th element corresponding to the i-th stellar
         particle.
@@ -886,6 +1361,293 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
                     f.skip(9)
 
     returnvariables = []
+
+    if output_deltastar:
+        returnvariables.append(delta_star)
+    if output_position:
+        returnvariables.extend([stpart_x, stpart_y, stpart_z])
+    if output_velocity:
+        returnvariables.extend([stpart_vx, stpart_vy, stpart_vz])
+    if output_mass:
+        returnvariables.append(stpart_mass)
+    if output_time:
+        returnvariables.append(stpart_time)
+    if output_metalicity:
+        returnvariables.append(stpart_metalicity)
+    if output_id:
+        returnvariables.append(stpart_id)
+    if are_BH and output_BH:
+        returnvariables.extend([bhpart_x, bhpart_y, bhpart_z, bhpart_vx, bhpart_vy, bhpart_vz, bhpart_mass, bhpart_time, bhpart_id])
+
+    return tuple(returnvariables)
+
+def lowlevel_read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltastar=True, 
+                       verbose=False, output_position=False, output_velocity=False, output_mass=False, 
+                       output_time=False, output_metalicity=False, output_id=False, output_BH = False, are_BH = True,
+                       read_region=None):
+    """
+    Reads the stellar (clst) file.
+
+    Args:
+        it: iteration number (int)
+        path: path of the output files in the system (str)
+        parameters_path: path of the json parameters file of the simulation
+        digits: number of digits the filename is written with (int)
+        max_refined_level: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
+        output_deltastar: whether deltadm (dark matter density contrast) is returned (bool)
+        output_position: whether particles' positions are returned (bool)
+        output_velocity: whether particles' velocities are returned (bool)
+        output_mass: whether particles' masses are returned (bool)
+        output_time: whether particles' birth times are returned (bool)
+        output_metalicity: whether particles' metalicities are returned (bool)
+        output_id: whether particles' ids are returned (bool)
+        verbose: whether a message is printed when each refinement level is started (bool)
+        are_BH: if True, it is assumed that BH data is appended at the end of the stellar data
+        output_BH: All BH data is returned --> x, y, z, vx, vy, vz, mass, birth time, id
+        read_region: whether to select a subregion (see region specification below), or keep all the simulation data
+        (None). If a region wants to be selected, there are the following possibilities:
+            - ("sphere", cx, cy, cz, R) for a sphere of radius R centered in (cx, cy, cz)
+            - ("box", x1, x2, y1, y2, z1, z2) for a box with corners (x1, y1, z1) and (x2, y2, z2)
+            - ("box_cw", xc, yc, zc, width) for a box centered in (xc, yc, zc) with width "width"
+
+
+    Returns:
+        Chosen quantities, in the order specified by the order of the parameters in this definition.
+        delta_star is returned as a list of numpy matrices. The 0-th element corresponds to l=0. The i-th element
+        corresponds to the i-th patch.
+        The rest of quantities are outputted as numpy vectors, the i-th element corresponding to the i-th stellar
+        particle.
+
+        If read_region is not None, only the patches inside the region are read, and in the positions of the 
+        arrays corresponding to the patches outside the region, a single scalar value of zero is written. Also
+        in this case, after all the returned variables, a 1d array of booleans is returned, with the same length
+        as the number of patches, indicating which patches are inside the region (True) and which are not (False).
+        Regarding particles, all are read, but the ones outside the region are not returned.
+
+
+
+    """
+    force_read_positions = False
+    if (read_region is not None) and (output_position or output_velocity or output_mass or output_id or 
+                                      output_metalicity or output_time or output_BH):
+        force_read_positions = True
+
+    nmax, nmay, nmaz, nlevels, size = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
+                                                                 load_namr=False, load_size=True, path=parameters_path)
+    npatch, npart, patchnx, patchny, patchnz, \
+                   patchrx, patchry, patchrz = read_grids(it, path=path, read_general=False, read_patchnum=True,
+                                                          read_dmpartnum=True, read_patchcellextension=True,
+                                                          read_patchcellposition=False, read_patchposition=True,
+                                                          read_patchparent=False, parameters_path=parameters_path)
+
+    if read_region is None:
+        keep_patches = np.ones(patchnx.size, dtype='bool')
+    else:
+        keep_patches = np.zeros(patchnx.size, dtype='bool')
+        region_type = read_region[0]
+        if region_type == 'sphere':
+            cx, cy, cz, R = read_region[1:]
+            which = tools.which_patches_inside_sphere(R, cx, cy, cz, patchnx, patchny, patchnz, patchrx, patchry, 
+                                                      patchrz, npatch, size, nmax)
+            keep_patches[which] = True
+        elif region_type == 'box' or region_type == 'box_cw':
+            if region_type == 'box':
+                x1, x2, y1, y2, z1, z2 = read_region[1:]
+            else:
+                xc, yc, zc, width = read_region[1:]
+                x1 = xc - width/2
+                x2 = xc + width/2
+                y1 = yc - width/2
+                y2 = yc + width/2
+                z1 = zc - width/2
+                z2 = zc + width/2
+            which = tools.which_patches_inside_box((x1, x2, y1, y2, z1, z2), patchnx, patchny, patchnz, patchrx, patchry,
+                                                   patchrz,npatch,size,nmax)
+            keep_patches[which] = True
+        else:
+            raise ValueError('Unknown region type. Please specify one of "sphere", "box" or "box_cw"')
+
+    with open(os.path.join(path, filename(it, 's', digits)), 'rb') as f:
+        # read header
+        header=read_record(f, dtype='f4')
+        time, z = header[1:3]
+
+        # l=0
+        if verbose:
+            print('Reading base grid...')
+
+        if output_deltastar:
+            delta_star = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+        else:
+            skip_record(f)
+
+        if output_position:
+            stpart_x = read_record(f, dtype='f4')
+            stpart_y = read_record(f, dtype='f4')
+            stpart_z = read_record(f, dtype='f4')
+            if len(stpart_x)==0:
+                stpart_x = np.array([], dtype='f4')
+                stpart_y = np.array([], dtype='f4')
+                stpart_z = np.array([], dtype='f4')
+        else:
+            for irec in range(3):
+                skip_record(f)
+
+        if output_velocity:
+            stpart_vx = read_record(f, dtype='f4')
+            stpart_vy = read_record(f, dtype='f4')
+            stpart_vz = read_record(f, dtype='f4')
+            if len(stpart_vx)==0:
+                stpart_vx = np.array([], dtype='f4')
+                stpart_vy = np.array([], dtype='f4')
+                stpart_vz = np.array([], dtype='f4')
+        else:
+             for irec in range(3):
+                skip_record(f)
+
+        if output_mass:
+            stpart_mass = read_record(f, dtype='f4')
+            if len(stpart_mass)==0:
+                stpart_mass = np.array([], dtype='f4')
+        else:
+            skip_record(f)
+
+        if output_time:
+            stpart_time = read_record(f, dtype='f4')
+            if len(stpart_time)==0:
+                stpart_time = np.array([], dtype='f4')
+        else:
+            skip_record(f)
+
+        if output_metalicity:
+            stpart_metalicity = read_record(f, dtype='f4')
+            if len(stpart_metalicity)==0:
+                stpart_metalicity = np.array([], dtype='f4')
+        else:
+            skip_record(f)
+
+        if output_id:
+            stpart_id = np.zeros(stpart_x.size, dtype='i4').astype('i4')
+        
+        if are_BH and output_BH:
+            bhpart_x = np.zeros(stpart_x.size)
+            bhpart_y = np.zeros(stpart_x.size)
+            bhpart_z = np.zeros(stpart_x.size)
+            bhpart_vx = np.zeros(stpart_x.size)
+            bhpart_vy = np.zeros(stpart_x.size)
+            bhpart_vz = np.zeros(stpart_x.size)
+            bhpart_mass = np.zeros(stpart_x.size)
+            bhpart_time = np.zeros(stpart_x.size)
+            bhpart_id = np.zeros(stpart_x.size).astype(np.int32)
+
+        # refinement levels
+        for l in range(1, min(nlevels + 1, max_refined_level + 1)):
+            if verbose:
+                print('Reading level {}.'.format(l))
+                print('{} patches'.format(npatch[l]))
+
+            if output_deltastar:
+                for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l)):
+                    if keep_patches[ipatch]:
+                        delta_star.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    else:
+                        skip_record(f)
+            else:
+                length_field=0
+                for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                    length_field += patchnx[ipatch]*patchny[ipatch]*patchnz[ipatch]*4+8
+                f.seek(length_field,1)
+
+
+            if output_position:
+                stpart_x = np.append(stpart_x, read_record(f, dtype='f4'))
+                stpart_y = np.append(stpart_y, read_record(f, dtype='f4'))
+                stpart_z = np.append(stpart_z, read_record(f, dtype='f4'))
+            else:
+                for irec in range(3):
+                    skip_record(f)
+
+            if output_velocity:
+                stpart_vx = np.append(stpart_vx, read_record(f, dtype='f4'))
+                stpart_vy = np.append(stpart_vy, read_record(f, dtype='f4'))
+                stpart_vz = np.append(stpart_vz, read_record(f, dtype='f4'))
+            else:
+                for irec in range(3):
+                    skip_record(f)
+
+            if output_mass:
+                stpart_mass = np.append(stpart_mass, read_record(f, dtype='f4'))
+            else:
+                skip_record(f)
+
+            if output_time:
+                stpart_time = np.append(stpart_time, read_record(f, dtype='f4'))
+            else:
+                skip_record(f)
+
+            if output_metalicity:
+                stpart_metalicity = np.append(stpart_metalicity, read_record(f, dtype='f4'))
+            else:
+                skip_record(f)
+
+            if output_id:
+                stpart_id = np.append(stpart_id, read_record(f, dtype='i4'))
+            else:
+                skip_record(f)
+            
+            if are_BH:
+                if output_BH:
+                    bhpart_x = np.append(bhpart_x, read_record(f, dtype='f4'))
+                    bhpart_y = np.append(bhpart_y, read_record(f, dtype='f4'))
+                    bhpart_z = np.append(bhpart_z, read_record(f, dtype='f4'))
+                    bhpart_vx = np.append(bhpart_vx, read_record(f, dtype='f4'))
+                    bhpart_vy = np.append(bhpart_vy, read_record(f, dtype='f4'))
+                    bhpart_vz = np.append(bhpart_vz, read_record(f, dtype='f4'))
+                    bhpart_mass = np.append(bhpart_mass, read_record(f, dtype='f4'))
+                    bhpart_time = np.append(bhpart_time, read_record(f, dtype='f4'))
+                    bhpart_id = np.append(bhpart_id, read_record(f, dtype='i4'))
+                else:
+                    for irec in range(9):
+                        skip_record(f)
+
+    returnvariables = []
+
+    if force_read_positions:
+        if region_type == 'sphere':
+            keep_particles = (stpart_x-cx)**2 + (stpart_y-cy)**2 + (stpart_z-cz)**2 < R**2
+            if output_BH:
+                keep_particles_BH = (bhpart_x-cx)**2 + (bhpart_y-cy)**2 + (bhpart_z-cz)**2 < R**2
+        elif region_type == 'box' or region_type == 'box_cw':
+            keep_particles = (stpart_x>x1) * (stpart_x<x2) * (stpart_y>y1) * (stpart_y<y2) * (stpart_z>z1) * (stpart_z<z2)
+            if output_BH:
+                keep_particles_BH = (bhpart_x>x1) * (bhpart_x<x2) * (bhpart_y>y1) * (bhpart_y<y2) * (bhpart_z>z1) * (bhpart_z<z2)
+        
+        if output_position:
+            stpart_x = stpart_x[keep_particles]
+            stpart_y = stpart_y[keep_particles]
+            stpart_z = stpart_z[keep_particles]
+        if output_velocity:
+            stpart_vx = stpart_vx[keep_particles]
+            stpart_vy = stpart_vy[keep_particles]
+            stpart_vz = stpart_vz[keep_particles]
+        if output_mass:
+            stpart_mass = stpart_mass[keep_particles]
+        if output_time:
+            stpart_time = stpart_time[keep_particles]
+        if output_metalicity:
+            stpart_metalicity = stpart_metalicity[keep_particles]
+        if output_id:
+            stpart_id = stpart_id[keep_particles]
+        if output_BH:
+            bhpart_x = bhpart_x[keep_particles_BH]
+            bhpart_y = bhpart_y[keep_particles_BH]
+            bhpart_z = bhpart_z[keep_particles_BH]
+            bhpart_vx = bhpart_vx[keep_particles_BH]
+            bhpart_vy = bhpart_vy[keep_particles_BH]
+            bhpart_vz = bhpart_vz[keep_particles_BH]
+            bhpart_mass = bhpart_mass[keep_particles_BH]
+            bhpart_time = bhpart_time[keep_particles_BH]
+            bhpart_id = bhpart_id[keep_particles_BH]
 
     if output_deltastar:
         returnvariables.append(delta_star)
