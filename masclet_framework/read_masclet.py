@@ -1692,8 +1692,6 @@ def read_npz_field(filename, path=''):
 
     return field
 
-
-
 def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_divrot=True, are_potentials=True,
                 are_velocities=True, is_total_velocity = False, is_filtered=False, is_header=True, verbose=False):
     
@@ -1867,6 +1865,254 @@ def read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_di
 
     return tuple(returnvariables)
 
+def lowlevel_read_vortex(it, path='', grids_path='', parameters_path='', digits=5, are_divrot=True, are_potentials=True,
+                are_velocities=True, is_total_velocity = False, is_filtered=False, is_header=True, verbose=False,
+                read_region=None):
+    
+    """
+    Reads the vortex (Helmholtz-Hodge decomposition) files, velocity##### and filten#####
+
+    Args:
+        it: iteration number (int)
+        path: path of the grids file in the system (str)
+        parameters_path: path of the json parameters file of the simulation
+        digits: number of digits the filename is written with (int)
+        max_refined_level: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
+        are_divrot: whehther velocity divergences and rotationals are written in the file
+        are_potentials: whether (scalar and vector) potentials are written in the file
+        are_velocities: whether ([total], compressional and rotational) velocities are written in the file
+        is_filtered: whether the multiscale filtering file (filtlen) is written and the scale lenght and turbulent velocity field are to be read
+        is_solapst: whether the overlap variable computed using the error estimate is written in the file
+        read_region: whether to select a subregion (see region specification below), or keep all the simulation data 
+                (None). If a region wants to be selected, there are the following possibilities:
+                - ("sphere", cx, cy, cz, R) for a sphere of radius R centered in (cx, cy, cz)
+                - ("box", x1, x2, y1, y2, z1, z2) for a box with corners (x1, y1, z1) and (x2, y2, z2)
+                - ("box_cw", xc, yc, zc, width) for a box centered in (xc, yc, zc) with width "width"
+
+
+    Returns:
+        Chosen quantities, as a list of arrays (one for each patch, starting with l=0 and subsequently);
+        in the order specified by the order of the parameters in this definition.
+
+        If read_region is not None, only the patches inside the region are read, and in the positions of the 
+        arrays corresponding to the patches outside the region, a single scalar value of zero is written. Also
+        in this case, after all the returned variables, a 1d array of booleans is returned, with the same length
+        as the number of patches, indicating which patches are inside the region (True) and which are not (False).
+    """
+
+    nmax, nmay, nmaz, nlevels, size = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
+                                                                 load_namr=False, load_size=True, path=parameters_path)
+    npatch, patchnx, patchny, patchnz, \
+            patchrx, patchry, patchrz = read_grids(it, path=grids_path, parameters_path=parameters_path, read_general=False,
+                                                   read_patchnum=True, read_dmpartnum=False,
+                                                   read_patchcellextension=True, read_patchcellposition=False,
+                                                   read_patchposition=True, read_patchparent=False)
+
+    if read_region is None:
+        keep_patches = np.ones(patchnx.size, dtype='bool')
+    else:
+        keep_patches = np.zeros(patchnx.size, dtype='bool')
+        region_type = read_region[0]
+        if region_type == 'sphere':
+            cx, cy, cz, R = read_region[1:]
+            which = tools.which_patches_inside_sphere(R, cx, cy, cz, patchnx, patchny, patchnz, patchrx, patchry, 
+                                                      patchrz, npatch, size, nmax)
+            keep_patches[which] = True
+        elif region_type == 'box' or region_type == 'box_cw':
+            if region_type == 'box':
+                x1, x2, y1, y2, z1, z2 = read_region[1:]
+            else:
+                xc, yc, zc, width = read_region[1:]
+                x1 = xc - width/2
+                x2 = xc + width/2
+                y1 = yc - width/2
+                y2 = yc + width/2
+                z1 = zc - width/2
+                z2 = zc + width/2
+            which = tools.which_patches_inside_box((x1, x2, y1, y2, z1, z2), patchnx, patchny, patchnz, patchrx, patchry,
+                                                   patchrz,npatch,size,nmax)
+            keep_patches[which] = True
+        else:
+            raise ValueError('Unknown region type. Please specify one of "sphere", "box" or "box_cw"')
+
+    returnvariables = []
+    with open(os.path.join(path, filename(it, 'v', digits)), 'rb') as f:
+        # read header
+        if is_header:
+            header=read_record(f, dtype='f4')
+            time, z = header[1:3]
+
+        if are_divrot:
+            # divergence
+            if verbose:
+                print('Reading divergence...')
+            div = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            for l in range(1, nlevels + 1):
+                for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                    if keep_patches[ipatch]:
+                        div.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    else:
+                        skip_record(f)
+                        div.append(0)
+
+
+            # rotational
+            if verbose:
+                print('Reading rotational...')
+            rotx = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            roty = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            rotz = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            for l in range(1, nlevels + 1):
+                for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                    if keep_patches[ipatch]:
+                        rotx.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        roty.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        rotz.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    else:
+                        length_field=patchnx[ipatch]*patchny[ipatch]*patchnz[ipatch]*4+8
+                        length_field*=3
+                        f.seek(length_field,1)
+                        rotx.append(0)
+                        roty.append(0)
+                        rotz.append(0)
+
+            returnvariables.extend([div, rotx, roty, rotz])
+
+        
+        # scalar
+        if verbose:
+            print('Reading scalar potential...')
+        if are_potentials:
+            scalarpot = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            for l in range(1, nlevels + 1):
+                for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                    if keep_patches[ipatch]:
+                        scalarpot.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    else:
+                        skip_record(f)
+                        scalarpot.append(0)
+
+        # vector
+        if verbose:
+            print('Reading vector potential...')
+
+        if are_potentials:
+            vecpotx = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            vecpoty = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            vecpotz = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            for l in range(1, nlevels + 1):
+                for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                    if keep_patches[ipatch]:
+                        vecpotx.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        vecpoty.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        vecpotz.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    else:
+                        length_field=patchnx[ipatch]*patchny[ipatch]*patchnz[ipatch]*4+8
+                        length_field*=3
+                        f.seek(length_field,1)
+                        vecpotx.append(0)
+                        vecpoty.append(0)
+                        vecpotz.append(0)
+
+            returnvariables.extend([scalarpot, vecpotx, vecpoty, vecpotz])
+
+
+        if are_velocities:
+            # total
+            if is_total_velocity:
+                if verbose:
+                    print('Reading total velocity...')
+                vx = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+                vy = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+                vz = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+                for l in range(1, nlevels + 1):
+                    for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                        if keep_patches[ipatch]:
+                            vx.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                            vy.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                            vz.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        else:
+                            length_field=patchnx[ipatch]*patchny[ipatch]*patchnz[ipatch]*4+8
+                            length_field*=3
+                            f.seek(length_field,1)
+                            vx.append(0)
+                            vy.append(0)
+                            vz.append(0)
+
+            # compressive
+            if verbose:
+                print('Reading compressive velocity...')
+            velcompx = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            velcompy = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            velcompz = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            for l in range(1, nlevels + 1):
+                for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                    if keep_patches[ipatch]:
+                        velcompx.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        velcompy.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        velcompz.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    else:
+                        length_field=patchnx[ipatch]*patchny[ipatch]*patchnz[ipatch]*4+8
+                        length_field*=3
+                        f.seek(length_field,1)
+                        velcompx.append(0)
+                        velcompy.append(0)
+                        velcompz.append(0)
+
+            # rotational
+            if verbose:
+                print('Reading rotational velocity...')
+            velrotx = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            velroty = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            velrotz = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            for l in range(1, nlevels + 1):
+                for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                    if keep_patches[ipatch]:
+                        velrotx.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        velroty.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        velrotz.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    else:
+                        length_field=patchnx[ipatch]*patchny[ipatch]*patchnz[ipatch]*4+8
+                        length_field*=3
+                        f.seek(length_field,1)
+                        velrotx.append(0)
+                        velroty.append(0)
+                        velrotz.append(0)
+
+            if is_total_velocity:        
+                returnvariables.extend([vx, vy, vz, velcompx, velcompy, velcompz, velrotx, velroty, velrotz])
+            else:
+                returnvariables.extend([velcompx, velcompy, velcompz, velrotx, velroty, velrotz])
+
+    if is_filtered:
+
+        with open(os.path.join(path, filename(it, 'f', digits)), 'rb') as f:
+        # filtlen files
+        
+            if verbose:
+                print('Reading filter lenght and turbulent velocity...')
+
+            L = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            vx = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            vy = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            vz = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+            
+            for l in range(1, nlevels + 1):
+                for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                    if keep_patches[ipatch]:
+                        L.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        vx.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        vy.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                        vz.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                    else:
+                        length_field=patchnx[ipatch]*patchny[ipatch]*patchnz[ipatch]*4+8
+                        length_field*=4
+                        f.seek(length_field,1)
+
+            returnvariables.extend([L, vx, vy, vz])
+
+    return tuple(returnvariables)
+
 
 def read_mach(it, path='', grids_path='', parameters_path='', digits=5, verbose=False):
     nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
@@ -1884,5 +2130,76 @@ def read_mach(it, path='', grids_path='', parameters_path='', digits=5, verbose=
         for l in range(1, nlevels + 1):
             for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
                 M.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+
+    return tuple([M])
+
+def lowlevel_read_mach(it, path='', grids_path='', parameters_path='', digits=5, verbose=False,
+                       max_refined_level=1000, read_region=None):
+    """
+    Reads the MachNum_XXXXX file, output by the shock finder.
+    This is the low-level implementation, and incorporates the region selector.
+
+    Args:
+        it: iteration number (int)
+        path: path of the MachNum file in the system (str)
+        grids_path: path of the grids file in the system (str)
+        parameters_path: path of the json parameters file of the simulation
+        digits: number of digits the filename is written with (int)
+        max_refined_level: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
+        read_region: whether to select a subregion (see region specification below), or keep all the simulation data
+            (None). If a region wants to be selected, there are the following possibilities:
+            - ("sphere", cx, cy, cz, R) for a sphere of radius R centered in (cx, cy, cz)
+            - ("box", x1, x2, y1, y2, z1, z2) for a box with corners (x1, y1, z1) and (x2, y2, z2)
+            - ("box_cw", xc, yc, zc, width) for a box centered in (xc, yc, zc) with width "width"
+
+    Returns:
+        The Mach number field.
+    """
+    nmax, nmay, nmaz, nlevels, size = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
+                                                           load_namr=False, load_size=True, path=parameters_path)
+    npatch, patchnx, patchny, patchnz, \
+            patchrx, patchry, patchrz = read_grids(it, path=grids_path, parameters_path=parameters_path, read_general=False,
+                                                   read_patchnum=True, read_dmpartnum=False,
+                                                   read_patchcellextension=True, read_patchcellposition=False,
+                                                   read_patchposition=True, read_patchparent=False)
+
+    if read_region is None:
+        keep_patches = np.ones(patchnx.size, dtype='bool')
+    else:
+        keep_patches = np.zeros(patchnx.size, dtype='bool')
+        region_type = read_region[0]
+        if region_type == 'sphere':
+            cx, cy, cz, R = read_region[1:]
+            which = tools.which_patches_inside_sphere(R, cx, cy, cz, patchnx, patchny, patchnz, patchrx, patchry, 
+                                                      patchrz, npatch, size, nmax)
+            keep_patches[which] = True
+        elif region_type == 'box' or region_type == 'box_cw':
+            if region_type == 'box':
+                x1, x2, y1, y2, z1, z2 = read_region[1:]
+            else:
+                xc, yc, zc, width = read_region[1:]
+                x1 = xc - width/2
+                x2 = xc + width/2
+                y1 = yc - width/2
+                y2 = yc + width/2
+                z1 = zc - width/2
+                z2 = zc + width/2
+            which = tools.which_patches_inside_box((x1, x2, y1, y2, z1, z2), patchnx, patchny, patchnz, patchrx, patchry,
+                                                   patchrz,npatch,size,nmax)
+            keep_patches[which] = True
+        else:
+            raise ValueError('Unknown region type. Please specify one of "sphere", "box" or "box_cw"')                             
+
+    with open(os.path.join(path, filename(it, 'm', digits)), 'rb') as f:
+        if verbose:
+            print('Reading mach number...')
+        M = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
+        for l in range(1, nlevels + 1):
+            for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
+                if keep_patches[ipatch]:
+                    M.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
+                else:
+                    skip_record(f)
+                    M.append([0])
 
     return tuple([M])
