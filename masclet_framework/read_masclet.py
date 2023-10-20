@@ -1094,6 +1094,7 @@ def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_le
             delta_dm = [np.reshape(read_record(f, dtype='f4'), (nmax, nmay, nmaz), 'F')]
         else:
             skip_record(f)
+            delta_dm.append(0)
 
         if output_position or force_read_positions:
             dmpart_x = read_record(f, dtype='f4')
