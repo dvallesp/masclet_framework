@@ -624,7 +624,7 @@ def lowlevel_read_clus(it, path='', parameters_path='', digits=5, max_refined_le
             skip_record(f)
 
         if output_solapst:
-            solapst = [0]
+            solapst = [1]
 
         if is_mascletB:
             if output_B:
