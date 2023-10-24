@@ -42,7 +42,11 @@ def compute_position_field_onepatch(args):
     Returns:
         Matrices as defined
     """
-    nx, ny, nz, rx, ry, rz, level, size, nmax = args
+    nx, ny, nz, rx, ry, rz, level, size, nmax, keep = args
+
+    if not keep:
+        return 0,0,0
+
     cellsize = size / nmax / 2 ** level
     first_x = rx - cellsize / 2
     first_y = ry - cellsize / 2
@@ -61,7 +65,8 @@ def compute_position_field_onepatch(args):
     return patch_x, patch_y, patch_z
 
 
-def compute_position_fields(patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size, nmax, ncores=1):
+def compute_position_fields(patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size, nmax, ncores=1,
+                            kept_patches=None):
     """
     Returns 3 fields (as usually defined) containing the x, y and z position for each of our cells centres.
     Args:
@@ -71,12 +76,16 @@ def compute_position_fields(patchnx, patchny, patchnz, patchrx, patchry, patchrz
         npatch: number of patches in each level, starting in l=0
         size: comoving size of the simulation box
         nmax: cells at base level
-        ncores:
+        ncores: number of cores to be used in the computation
+        kept_patches: 1d boolean array, True if the patch is kept, False if not. If None, all patches are kept.
 
     Returns:
         3 fields as described above
     """
     levels = tools.create_vector_levels(npatch)
+    if kept_patches is None:
+        kept_patches = np.ones(patchnx.size, dtype=bool)
+
     if ncores == 1 or ncores == 0 or ncores is None:
         cellsrx = []
         cellsry = []
@@ -84,7 +93,7 @@ def compute_position_fields(patchnx, patchny, patchnz, patchrx, patchry, patchrz
         for ipatch in range(npatch.sum()+1):
             patches = compute_position_field_onepatch((patchnx[ipatch], patchny[ipatch], patchnz[ipatch],
                                                        patchrx[ipatch], patchry[ipatch], patchrz[ipatch],
-                                                       levels[ipatch], size, nmax))
+                                                       levels[ipatch], size, nmax, kept_patches[ipatch]))
             cellsrx.append(patches[0])
             cellsry.append(patches[1])
             cellsrz.append(patches[2])
@@ -92,7 +101,8 @@ def compute_position_fields(patchnx, patchny, patchnz, patchrx, patchry, patchrz
         with Pool(ncores) as p:
             positions = p.map(compute_position_field_onepatch,
                               [(patchnx[ipatch], patchny[ipatch], patchnz[ipatch], patchrx[ipatch], patchry[ipatch],
-                                patchrz[ipatch], levels[ipatch], size, nmax) for ipatch in range(len(patchnx))])
+                                patchrz[ipatch], levels[ipatch], size, nma, kept_patches[ipatch]) 
+                                for ipatch in range(len(patchnx))])
 
         cellsrx = [p[0] for p in positions]
         cellsry = [p[1] for p in positions]
@@ -135,7 +145,7 @@ def patch_vertices(ipatch, cellsrx, cellsry, cellsrz):
     return vertices
 
 
-def mask_sphere(R, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz):
+def mask_sphere(R, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz, kept_patches=None):
     """
     Returns a "field", which contains all patches as usual. True means the cell must be considered, False otherwise.
     If a patch has all "False", an array is not ouputted, but a False is, instead.
@@ -144,12 +154,13 @@ def mask_sphere(R, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz):
         R: radius of the considered sphere
         clusrx, clusry, clusrz: comoving coordinates of the center of the sphere
         cellsrx, cellsry, cellsrz: position fields
+        kept_patches: 1d boolean array, True if the patch is kept, False if not. If None, all patches are kept.
 
     Returns:
         Field containing the mask as described.
     """
-    mask = [(cx - clusrx) ** 2 + (cy - clusry) ** 2 + (cz - clusrz) ** 2 < R ** 2 for cx, cy, cz in
-            zip(cellsrx, cellsry, cellsrz)]
+    mask = [(cx - clusrx) ** 2 + (cy - clusry) ** 2 + (cz - clusrz) ** 2 < R ** 2 if ki else False
+            for cx, cy, cz, ki in zip(cellsrx, cellsry, cellsrz, kept_patches)]
 
     return mask
 
