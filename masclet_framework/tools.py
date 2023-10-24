@@ -245,7 +245,7 @@ def patch_is_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry,
 
 
 def which_patches_inside_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch,
-                                size, nmax):
+                                size, nmax, kept_patches=None):
     """
     Finds which of the patches will contain cells within a radius r of a certain point (clusrx, clusry, clusrz) being
     its comoving coordinates.
@@ -259,6 +259,8 @@ def which_patches_inside_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, pat
         npatch: number of patches in each level, starting in l=0
         size: comoving size of the simulation box
         nmax: cells at base level
+        kept_patches: 1d boolean array, True if the patch is kept, False if not.
+                    If None, all patches are kept.
 
     Returns:
         List containing the ipatch of the patches which should contain cells inside the considered radius.
@@ -266,7 +268,13 @@ def which_patches_inside_sphere(R, clusrx, clusry, clusrz, patchnx, patchny, pat
     """
     levels = create_vector_levels(npatch)
     which_ipatch = [0]
+
+    if kept_patches is None:
+        kept_patches = np.ones(patchnx.size, dtype=bool)
+
     for ipatch in range(1, len(patchnx)):
+        if not kept_patches[ipatch]:
+            continue
         if patch_is_inside_sphere(R, clusrx, clusry, clusrz, levels[ipatch], patchnx[ipatch], patchny[ipatch],
                                   patchnz[ipatch],
                                   patchrx[ipatch], patchry[ipatch], patchrz[ipatch], size, nmax):
@@ -308,7 +316,7 @@ def patch_left_edge_natural(rx, ry, rz, level, size, nmax):
 
         Returns:
             tuple containing the x, y, z physical coordinates of the patch left corner.
-        """
+    """
     x, y, z = patch_left_edge_comoving(rx, ry, rz, level, size, nmax)
 
     xg = x * nmax / size + nmax / 2
@@ -362,7 +370,8 @@ def patch_is_inside_box(box_limits, level, nx, ny, nz, rx, ry, rz, size, nmax):
     return overlap_x and overlap_y and overlap_z
 
 
-def which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size, nmax):
+def which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, patchry, patchrz, npatch, size, nmax,
+                             kept_patches=None):
     """
     Finds which of the patches will contain cells within a box of defined vertices.
 
@@ -374,6 +383,8 @@ def which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, pat
         npatch: number of patches in each level, starting in l=0
         size: comoving size of the simulation box
         nmax: cells at base level
+        kept_patches: 1d boolean array, True if the patch is kept, False if not.
+                    If None, all patches are kept.
 
     Returns:
         List containing the ipatch of the patches which should contain cells inside the considered radius.
@@ -381,7 +392,13 @@ def which_patches_inside_box(box_limits, patchnx, patchny, patchnz, patchrx, pat
     """
     levels = create_vector_levels(npatch)
     which_ipatch = [0]
+
+    if kept_patches is None:
+        kept_patches = np.ones(patchnx.size, dtype=bool)
+
     for ipatch in range(1, len(patchnx)):
+        if not kept_patches[ipatch]:
+            continue
         if patch_is_inside_box(box_limits, levels[ipatch], patchnx[ipatch], patchny[ipatch], patchnz[ipatch],
                                patchrx[ipatch], patchry[ipatch], patchrz[ipatch], size, nmax):
             which_ipatch.append(ipatch)
@@ -873,9 +890,9 @@ def uniform_grid_zoom_several(fields, box_limits, up_to_level, npatch, patchnx, 
 
     return tuple(uniforms)
 
-
+################################### THIS IS OUR MAIN UNIGRID FUNCTION ###############################################
 def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry,
-                                  patchrz, size, nmax, verbose=False):
+                                  patchrz, size, nmax, verbose=False, kept_patches=None, return_coords=False):
     """
     Builds a uniform grid, zooming on a box specified by box_limits, at level up_to_level, containing the most refined
     data at each region, and interpolating from coarser patches
@@ -893,8 +910,11 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
         size: comoving side of the simulation box
         nmax: cells at base level
         verbose: if True, prints the patch being opened at a time
+        kept_patches: list of patches that are read. If None, all patches are assumed to be present
+        return_coords: if True, returns the coordinates of the uniform grid
+
     Returns:
-        Uniform grid as described
+        Uniform grid as described, and optionally the coordinates of the grid
     """
 
     def intt(x):
@@ -903,9 +923,19 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
         else:
             return int(x) - 1
 
+    if kept_patches is None:
+        kept_patches = np.ones(patchnx.size, dtype='bool')
+
     coarse_cellsize = size / nmax
     uniform_cellsize = size / nmax / 2 ** up_to_level
 
+    if type(box_limits[0]) in [float, np.float, np.float32, np.float64, np.float128]:
+        box_limits = [intt((box_limits[0] + size / 2) * nmax / size),
+                      intt((box_limits[1] + size / 2) * nmax / size)+1,
+                      intt((box_limits[2] + size / 2) * nmax / size),
+                      intt((box_limits[3] + size / 2) * nmax / size)+1,
+                      intt((box_limits[4] + size / 2) * nmax / size),
+                      intt((box_limits[5] + size / 2) * nmax / size)+1]
     bimin = box_limits[0]
     bimax = box_limits[1]
     bjmin = box_limits[2]
@@ -949,6 +979,8 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
         reduction = 2 ** (up_to_level - l)
         dx = uniform_cellsize * reduction
         for ipatch in range(npatch[0:l + 1].sum(), npatch[0:l].sum(), -1):
+            if not kept_patches[ipatch]:
+                continue
             i1 = intt(((vertices_patches[ipatch, 0] + dx) - bxmin) / uniform_cellsize + 0.5)
             j1 = intt(((vertices_patches[ipatch, 2] + dx) - bymin) / uniform_cellsize + 0.5)
             k1 = intt(((vertices_patches[ipatch, 4] + dx) - bzmin) / uniform_cellsize + 0.5)
@@ -1005,10 +1037,16 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
         return uniform
     
     uniform=parallelize(uniform_size_x, uniform_size_y, uniform_size_z, fine_coordinates, cell_patch, vertices_patches,
-                    List(field),verbose)
+                        List([f if ki else np.zeros((2,2,2), dtype=field[0].dtype, order='F') for f,ki in zip(field, kept_patches)]),
+                        verbose)
 
-    return uniform
-
+    if return_coords:
+        return uniform, fine_coordinates
+    else:
+        return uniform
+################################### THIS IS OUR MAIN UNIGRID FUNCTION ###############################################
+unigrid = uniform_grid_zoom_interpolate
+################################### THIS IS OUR MAIN UNIGRID FUNCTION ###############################################
 
 
 def mask_gas_clumps(shell_mask, gas_density, fcut=3.5, mode='zhuravleva13'):
@@ -1082,7 +1120,7 @@ def mask_gas_filaments(shell_mask, gas_density, gas_vr, fcut_low=1, fcut_high=3.
 
 
 def remove_gas_substructres(density, cr0amr, solapst, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz, rmin, rmax,
-                            nbins, mean_dens_l, fcut, npatch, mode='zhuravleva13', verbose=False):
+                            nbins, mean_dens_l, fcut, npatch, mode='zhuravleva13', verbose=False, kept_patches=None):
     """
     Removes gas substructures using the density field and returns a "cleaned" density field
 
@@ -1096,6 +1134,8 @@ def remove_gas_substructres(density, cr0amr, solapst, clusrx, clusry, clusrz, ce
     :param mean_dens_l: max level at which the density is computed
     :param fcut: number of stds from the mean that will be kept
     :param mode: for now, only 'zhuravleva13' implemented
+    :param verbose: if True, prints the binning
+    :param kept_patches: list of patches that are read. If None, all patches are assumed to be present
     :return: substructure excised (and refilled) density field
     """
     if mode == 'zhuravleva13':
@@ -1121,15 +1161,16 @@ def remove_gas_substructres(density, cr0amr, solapst, clusrx, clusry, clusrz, ce
             return w_median
 
         rlist = [0] + list(np.logspace(np.log10(rmin), np.log10(rmax), nbins))
-        cellsr = [np.sqrt((rx - clusrx) ** 2 + (ry - clusry) ** 2 + (rz - clusrz) ** 2) for rx, ry, rz in
-                  zip(cellsrx, cellsry, cellsrz)]
+        cellsr = [np.sqrt((rx - clusrx) ** 2 + (ry - clusry) ** 2 + (rz - clusrz) ** 2) if ki else -1
+                    for rx, ry, rz, ki in zip(cellsrx, cellsry, cellsrz, kept_patches)]
         for i in range(len(rlist) - 1):
             rmin = rlist[i]
             rmax = rlist[i + 1]
             inside = [(rmin < r) * (r < rmax) for r in cellsr]
             these = np.log10(np.concatenate(
-                [d[insi].flatten() for d, insi in zip(density, clean_field(inside, cr0amr, solapst, npatch,
-                                                                           up_to_level=mean_dens_l))]))
+                [d[insi].flatten() if ki else np.array([]) for d, insi, ki in zip(density, clean_field(inside, cr0amr, solapst, npatch,
+                                                                           up_to_level=mean_dens_l),
+                                                      kept_patches)]))
 
             mulogdensity = weighted_median(these,
                                            1 / 10 ** these)  # median weighted to the inverse density (see Zhuravleva et al. 2013)
@@ -1144,5 +1185,7 @@ def remove_gas_substructres(density, cr0amr, solapst, clusrx, clusry, clusrz, ce
                                                                               (these > np.log10(upper_bound)).sum()))
 
             for ipatch in range(len(density)):
+                if not kept_patches[ipatch]:
+                    continue
                 density[ipatch][density[ipatch] * inside[ipatch] > upper_bound] = upper_bound
     return density
