@@ -99,9 +99,9 @@ def gradient(field, dx, npatch, kept_patches=None):
     grad_z = []
 
     if kept_patches is None:
-        kept_patches = np.ones(npatch.sum(), dtype=bool)
+        kept_patches = np.ones(npatch.sum()+1, dtype=bool)
 
-    for ipatch in prange(npatch.sum()):
+    for ipatch in prange(npatch.sum()+1):
         if kept_patches[ipatch]:
             gx,gy,gz = arr_gradient(field[ipatch], resolution[ipatch])
         else:
@@ -140,9 +140,9 @@ def divergence(field_x, field_y, field_z, dx, npatch, kept_patches=None):
     div = []
 
     if kept_patches is None:
-        kept_patches = np.ones(npatch.sum(), dtype=bool)
+        kept_patches = np.ones(npatch.sum()+1, dtype=bool)
 
-    for ipatch in prange(npatch.sum()):
+    for ipatch in prange(npatch.sum()+1):
         if kept_patches[ipatch]:
             div.append(arr_divergence(field_x[ipatch], field_y[ipatch], field_z[ipatch], resolution[ipatch]))
         else:
@@ -182,9 +182,9 @@ def curl(field_x, field_y, field_z, dx, npatch, kept_patches=None):
     curl_z = []
 
     if kept_patches is None:
-        kept_patches = np.ones(npatch.sum(), dtype=bool)
+        kept_patches = np.ones(npatch.sum()+1, dtype=bool)
 
-    for ipatch in prange(npatch.sum()):
+    for ipatch in prange(npatch.sum()+1):
         if kept_patches[ipatch]:
             cx,cy,cz = arr_curl(field_x[ipatch], field_y[ipatch], field_z[ipatch], resolution[ipatch])
         else:
@@ -223,9 +223,9 @@ def curl_magnitude(field_x, field_y, field_z, dx, npatch, kept_patches=None):
     curl_mag = []
 
     if kept_patches is None:
-        kept_patches = np.ones(npatch.sum(), dtype=bool)
+        kept_patches = np.ones(npatch.sum()+1, dtype=bool)
 
-    for ipatch in prange(npatch.sum()):
+    for ipatch in prange(npatch.sum()+1):
         if kept_patches[ipatch]:
             curl_mag.append(arr_curl_magnitude(field_x[ipatch], field_y[ipatch], field_z[ipatch], resolution[ipatch]))
         else:
@@ -258,9 +258,9 @@ def gradient_magnitude(field, dx, npatch, kept_patches=None):
     grad_mag = []
 
     if kept_patches is None:
-        kept_patches = np.ones(npatch.sum(), dtype=bool)
+        kept_patches = np.ones(npatch.sum()+1, dtype=bool)
 
-    for ipatch in prange(npatch.sum()):
+    for ipatch in prange(npatch.sum()+1):
         if kept_patches[ipatch]:
             grad_mag.append(arr_gradient_magnitude(field[ipatch], resolution[ipatch]))
         else:
