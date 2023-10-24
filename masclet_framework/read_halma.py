@@ -14,14 +14,14 @@ Created by Óscar Monllor and David Vallés
 #  Last update on 03/11/22 10:14
 
 # GENERAL PURPOSE AND SPECIFIC LIBRARIES USED IN THIS MODULE
-import os, sys, numpy as np
+import numpy as np
 from cython_fortran_file import FortranFile as FF
 
 
 
 # FUNCTIONS DEFINED IN THIS MODULE
 
-def read_stellar_catalogue(it, path='', name='halma_halo_stars_rp.res', old = False, legacy = False, 
+def read_stellar_catalogue(it, path='', name='halma_halo_stars_rp.res', legacy = False, 
                         output_format = 'dictionaries', output_redshift = False, min_mass = None):
                         
     """
@@ -30,8 +30,6 @@ def read_stellar_catalogue(it, path='', name='halma_halo_stars_rp.res', old = Fa
     Args:
         path: path of "halma_halo_stars_rp.res"
         name: name of the catalogue file, default is "halma_halo_stars_rp.res"
-        old: If old (bool), it assumes halma in 2017 version, which requires old_catalog_with_SFR_merger.npy file, 
-            created with SFR_mergertype_old_catalog.py. Default is False, assuming halma27 (2022 version)
         legacy: if legacy (bool), returns return1, else returns return2
 
         (APLLIED ONLY IF legacy = False)
@@ -56,128 +54,88 @@ def read_stellar_catalogue(it, path='', name='halma_halo_stars_rp.res', old = Fa
     # Arrays with catalogue info
     total_iteration_data = []
     total_halo_data = []
-    if not old:# HALMA 2022
-        for it_halma in range(num_iter):
-            halma_catalogue.readline()
-            iteration_data = {}
+    for it_halma in range(num_iter):
+        halma_catalogue.readline()
+        iteration_data = {}
+        data_line = np.array(halma_catalogue.readline().split()).astype(np.float64())
+        iteration_data['nhal'] = int(data_line[0])
+        iteration_data['nparhal'] = int(data_line[1])
+        iteration_data['it_halma'] = int(data_line[2])
+        iteration_data['it_masclet'] = int(data_line[3])
+        iteration_data['t'] = data_line[4]
+        iteration_data['z'] = data_line[5]
+        halma_catalogue.readline()
+        halma_catalogue.readline()
+        halma_catalogue.readline()
+        halma_catalogue.readline()
+
+        num_halos = iteration_data['nhal']
+        haloes=[]
+        for ih in range(num_halos):
+            halo = {}
             data_line = np.array(halma_catalogue.readline().split()).astype(np.float64())
-            iteration_data['nhal'] = int(data_line[0])
-            iteration_data['nparhal'] = int(data_line[1])
-            iteration_data['it_halma'] = int(data_line[2])
-            iteration_data['it_masclet'] = int(data_line[3])
-            iteration_data['t'] = data_line[4]
-            iteration_data['z'] = data_line[5]
-            halma_catalogue.readline()
-            halma_catalogue.readline()
-            halma_catalogue.readline()
-            halma_catalogue.readline()
-
-            num_halos = iteration_data['nhal']
-            haloes=[]
-            for ih in range(num_halos):
-                halo = {}
-                data_line = np.array(halma_catalogue.readline().split()).astype(np.float64())
-                halo['id'] = int(data_line[0])
-                halo['partNum'] = int(data_line[1])
-                halo['M'] = data_line[2]
-                halo['Mv'] = data_line[3]
-                halo['Mgas'] = data_line[4]
-                halo['fcold'] = data_line[5]
-                halo['Mhotgas'] = data_line[6]
-                halo['Mcoldgas'] = data_line[7]
-                halo['Msfr'] = data_line[8]
-                halo['Rmax'] = data_line[9]
-                halo['R'] = data_line[10]
-                halo['R_1d'] = data_line[11]
-                halo['R_1dx'] = data_line[12]
-                halo['R_1dy'] = data_line[13]
-                halo['R_1dz'] = data_line[14]
-                halo['sigma_v'] = data_line[15]
-                halo['sigma_v_1d'] = data_line[16]
-                halo['sigma_v_1dx'] = data_line[17]
-                halo['sigma_v_1dy'] = data_line[18]
-                halo['sigma_v_1dz'] = data_line[19]
-                halo['L'] = data_line[20]
-                halo['xcm'] = data_line[21]
-                halo['ycm'] = data_line[22]
-                halo['zcm'] = data_line[23]
-                halo['vx'] = data_line[24]
-                halo['vy'] = data_line[25]
-                halo['vz'] = data_line[26]
-                halo['father1'] = int(data_line[27])
-                halo['father2'] = int(data_line[28])
-                halo['nmerg'] = int(data_line[29])
-                halo['mergType'] = int(data_line[30])
-                halo['age_m'] = data_line[31]
-                halo['age'] = data_line[32]
-                halo['Z_m'] = data_line[33]
-                halo['Z'] = data_line[34]
-                haloes.append(halo)
-            
-            total_iteration_data.append(iteration_data)
-            total_halo_data.append(haloes)
-
-    else: # HALMA 2017
-
-        data_with_SFR = np.load(path+'old_catalog_with_SFR_merger.npy', allow_pickle=True)
-        for it_halma in range(num_iter):
-            halma_catalogue.readline()
-            iteration_data = {}
-            data_line = np.array(halma_catalogue.readline().split()).astype(np.float64())
-            iteration_data['nhal'] = int(data_line[0])
-            iteration_data['nparhal'] = int(data_line[1])
-            iteration_data['it_halma'] = int(data_line[2])
-            iteration_data['it_masclet'] = int(data_line[3])
-            iteration_data['t'] = data_line[4]
-            iteration_data['z'] = data_line[5]
-            halma_catalogue.readline()
-            halma_catalogue.readline()
-            halma_catalogue.readline()
-
-            num_halos = iteration_data['nhal']
-            haloes=[]
-            for ih in range(num_halos):
-                halo = {}
-                data_line = np.array(halma_catalogue.readline().split()).astype(np.float64())
-                halo['id'] = int(data_with_SFR[it_halma][ih, 0])
-                halo['partNum'] = int(data_with_SFR[it_halma][ih, 1])
-                halo['M'] = data_with_SFR[it_halma][ih, 2]
-                halo['Mv'] = data_with_SFR[it_halma][ih, 3]
-                halo['Mgas'] = data_with_SFR[it_halma][ih, 4]
-                halo['fcold'] = data_with_SFR[it_halma][ih, 5]
-                halo['Mhotgas'] = data_with_SFR[it_halma][ih, 6]
-                halo['Mcoldgas'] = data_with_SFR[it_halma][ih, 7]
-                halo['Msfr'] = data_with_SFR[it_halma][ih, 8]
-                halo['Rmax'] = data_with_SFR[it_halma][ih, 9]
-                halo['R'] = data_with_SFR[it_halma][ih, 10]
-                halo['R_1d'] = data_with_SFR[it_halma][ih, 11]
-                halo['R_1dx'] = data_with_SFR[it_halma][ih, 12]
-                halo['R_1dy'] = data_with_SFR[it_halma][ih, 13]
-                halo['R_1dz'] = data_with_SFR[it_halma][ih, 14]
-                halo['sigma_v'] = data_with_SFR[it_halma][ih, 15]
-                halo['sigma_v_1d'] = data_with_SFR[it_halma][ih, 16]
-                halo['sigma_v_1dx'] = data_with_SFR[it_halma][ih, 17]
-                halo['sigma_v_1dy'] = data_with_SFR[it_halma][ih, 18]
-                halo['sigma_v_1dz'] = data_with_SFR[it_halma][ih, 19]
-                halo['L'] = data_with_SFR[it_halma][ih, 20]
-                halo['xcm'] = data_with_SFR[it_halma][ih, 21]
-                halo['ycm'] = data_with_SFR[it_halma][ih, 22]
-                halo['zcm'] = data_with_SFR[it_halma][ih, 23]
-                halo['vx'] = data_with_SFR[it_halma][ih, 24]
-                halo['vy'] = data_with_SFR[it_halma][ih, 25]
-                halo['vz'] = data_with_SFR[it_halma][ih, 26]
-                halo['father1'] = int(data_with_SFR[it_halma][ih, 27])
-                halo['father2'] = int(data_with_SFR[it_halma][ih, 28])
-                halo['nmerg'] = int(data_with_SFR[it_halma][ih, 29])
-                halo['mergType'] = int(data_with_SFR[it_halma][ih, 30])
-                halo['age_m'] = data_with_SFR[it_halma][ih, 31]
-                halo['age'] = data_with_SFR[it_halma][ih, 32]
-                halo['Z_m'] = data_with_SFR[it_halma][ih, 33]
-                halo['Z'] = data_with_SFR[it_halma][ih, 34]
-                haloes.append(halo)
-            
-            total_iteration_data.append(iteration_data)
-            total_halo_data.append(haloes)
+            halo['id'] = int(data_line[0])
+            halo['partNum'] = int(data_line[1])
+            halo['M'] = data_line[2]
+            halo['Mv'] = data_line[3]
+            halo['Mgas'] = data_line[4]
+            halo['fcold'] = data_line[5]
+            halo['Mhotgas'] = data_line[6]
+            halo['Mcoldgas'] = data_line[7]
+            halo['Msfr'] = data_line[8]
+            halo['Rmax'] = data_line[9]
+            halo['R'] = data_line[10]
+            halo['R_1d'] = data_line[11]
+            halo['R_1dx'] = data_line[12]
+            halo['R_1dy'] = data_line[13]
+            halo['R_1dz'] = data_line[14]
+            halo['sigma_v'] = data_line[15]
+            halo['sigma_v_1d'] = data_line[16]
+            halo['sigma_v_1dx'] = data_line[17]
+            halo['sigma_v_1dy'] = data_line[18]
+            halo['sigma_v_1dz'] = data_line[19]
+            halo['L'] = data_line[20]
+            halo['xcm'] = data_line[21]
+            halo['ycm'] = data_line[22]
+            halo['zcm'] = data_line[23]
+            halo['vx'] = data_line[24]
+            halo['vy'] = data_line[25]
+            halo['vz'] = data_line[26]
+            halo['father1'] = int(data_line[27])
+            halo['father2'] = int(data_line[28])
+            halo['nmerg'] = int(data_line[29])
+            halo['mergType'] = int(data_line[30])
+            halo['age_m'] = data_line[31]
+            halo['age'] = data_line[32]
+            halo['Z_m'] = data_line[33]
+            halo['Z'] = data_line[34]
+            #CLASSIC HALMA catalogue is 35 column long
+            #DATA OF NEW HALO FINDER
+            if len(data_line>35):
+                halo['Vsigma'] = data_line[35]
+                halo['lambda'] = data_line[36]
+                halo['kin_morph'] = data_line[37]
+                halo['v_TF'] = data_line[38]
+                halo['a'] = data_line[39]
+                halo['b'] = data_line[40]
+                halo['c'] = data_line[41]
+                halo['sersic'] = data_line[42]
+                #CALIPSO
+                halo['lum_u'] = data_line[43]
+                halo['lum_g'] = data_line[44]
+                halo['lum_r'] = data_line[45]
+                halo['lum_i'] = data_line[46]
+                halo['sb_u'] = data_line[47]
+                halo['sb_g'] = data_line[48]
+                halo['sb_r'] = data_line[49]
+                halo['sb_i'] = data_line[50]
+                halo['ur_color'] = data_line[51]
+                halo['gr_color'] = data_line[52]
+                halo['sersic_lum'] = data_line[53]
+            haloes.append(halo)
+        
+        total_iteration_data.append(iteration_data)
+        total_halo_data.append(haloes)
 
     halma_catalogue.close()
 
