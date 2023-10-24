@@ -892,7 +892,7 @@ def uniform_grid_zoom_several(fields, box_limits, up_to_level, npatch, patchnx, 
 
 ################################### THIS IS OUR MAIN UNIGRID FUNCTION ###############################################
 def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchnx, patchny, patchnz, patchrx, patchry,
-                                  patchrz, size, nmax, verbose=False, kept_patches=None, return_coords=False):
+                                  patchrz, size, nmax, interpolate=True, verbose=False, kept_patches=None, return_coords=False):
     """
     Builds a uniform grid, zooming on a box specified by box_limits, at level up_to_level, containing the most refined
     data at each region, and interpolating from coarser patches
@@ -909,6 +909,7 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
                                    (and Y and Z)
         size: comoving side of the simulation box
         nmax: cells at base level
+        interpolate (bool): if True (default) uses linear iterpolation for low-resolution regions. If False, uses NGP.
         verbose: if True, prints the patch being opened at a time
         kept_patches: list of patches that are read. If None, all patches are assumed to be present
         return_coords: if True, returns the coordinates of the uniform grid
@@ -1000,7 +1001,7 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
 
     @njit(parallel=True)
     def parallelize(uniform_size_x, uniform_size_y, uniform_size_z, fine_coordinates, cell_patch, vertices_patches,
-                    field,verbose):
+                    field,interpolate,verbose):
         uniform = np.zeros((uniform_size_x, uniform_size_y, uniform_size_z))
         for i in prange(uniform_size_x):
             if verbose:
@@ -1024,21 +1025,23 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
                         xbas, ybas, zbas = (x - xbas) / dx, (y - ybas) / dx, (z - zbas) / dx
 
                         ubas = field[ipatch][ii:ii + 2, jj:jj + 2, kk:kk + 2]
+                        if interpolate:
+                            c00 = ubas[0, 0, 0] * (1 - xbas) + ubas[1, 0, 0] * xbas
+                            c01 = ubas[0, 0, 1] * (1 - xbas) + ubas[1, 0, 1] * xbas
+                            c10 = ubas[0, 1, 0] * (1 - xbas) + ubas[1, 1, 0] * xbas
+                            c11 = ubas[0, 1, 1] * (1 - xbas) + ubas[1, 1, 1] * xbas
 
-                        c00 = ubas[0, 0, 0] * (1 - xbas) + ubas[1, 0, 0] * xbas
-                        c01 = ubas[0, 0, 1] * (1 - xbas) + ubas[1, 0, 1] * xbas
-                        c10 = ubas[0, 1, 0] * (1 - xbas) + ubas[1, 1, 0] * xbas
-                        c11 = ubas[0, 1, 1] * (1 - xbas) + ubas[1, 1, 1] * xbas
+                            c0 = c00 * (1 - ybas) + c10 * ybas
+                            c1 = c01 * (1 - ybas) + c11 * ybas
 
-                        c0 = c00 * (1 - ybas) + c10 * ybas
-                        c1 = c01 * (1 - ybas) + c11 * ybas
-
-                        uniform[i, j, k] = c0 * (1 - zbas) + c1 * zbas
+                            uniform[i, j, k] = c0 * (1 - zbas) + c1 * zbas
+                        else:
+                            uniform[i, j, k] = ubas[0 if xbas<=0.5 else 1, 0 if ybas<=0.5 else 1, 0 if zbas<=0.5 else 1]
         return uniform
     
     uniform=parallelize(uniform_size_x, uniform_size_y, uniform_size_z, fine_coordinates, cell_patch, vertices_patches,
                         List([f if ki else np.zeros((2,2,2), dtype=field[0].dtype, order='F') for f,ki in zip(field, kept_patches)]),
-                        verbose)
+                        interpolate,verbose)
 
     if return_coords:
         return uniform, fine_coordinates
