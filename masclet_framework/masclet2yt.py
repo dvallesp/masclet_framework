@@ -48,7 +48,7 @@ def load_grids(it, path='', digits=5, kept_patches=None):
         read_masclet.read_grids(it, path=path, read_patchposition=False, digits=digits)
 
     if kept_patches is None:
-        kept_patches = np.ones(npatch, dtype=bool)
+        kept_patches = np.ones(patchnx.size, dtype=bool)
 
     # l=0 (whole box)
     grid_data = [dict(left_edge=[-size / 2, -size / 2, -size / 2],
