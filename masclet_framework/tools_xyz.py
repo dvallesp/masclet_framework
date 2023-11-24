@@ -101,7 +101,7 @@ def compute_position_fields(patchnx, patchny, patchnz, patchrx, patchry, patchrz
         with Pool(ncores) as p:
             positions = p.map(compute_position_field_onepatch,
                               [(patchnx[ipatch], patchny[ipatch], patchnz[ipatch], patchrx[ipatch], patchry[ipatch],
-                                patchrz[ipatch], levels[ipatch], size, nma, kept_patches[ipatch]) 
+                                patchrz[ipatch], levels[ipatch], size, nmax, kept_patches[ipatch]) 
                                 for ipatch in range(len(patchnx))])
 
         cellsrx = [p[0] for p in positions]
