@@ -47,7 +47,7 @@ Contains functions to deal with particle species (either dark matter or stars), 
 Supplies easy unit conversion from MASCLET internal units to cgs, ISU and astrophysical units.
 
 ### cosmo_tools
-Includes several essential cosmological computations (like cosmological time from redshift, background and critical densities, etc. Also includes a function to write and read a cosmological parameters file for a simulation, analogously to what can be done with the parameters module.
+Includes several essential cosmological computations like cosmological time from redshift, background and critical densities, etc. Also includes a function to write and read a cosmological parameters file for a simulation, analogously to what can be done with the parameters module.
 
 ### graphics
 Includes several functions for straightforward representations, like computing projections from uniform grids and plotting colormaps (using matplotlib).
