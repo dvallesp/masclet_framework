@@ -62,7 +62,7 @@ def filename(it, filetype, digits=5):
         print('Insert a correct type: g, b, d, s, v, f or m')
 
 
-def read_grids(it, path='', parameters_path='', digits=5, read_general=True, read_patchnum=True, read_dmpartnum=True,
+def read_grids(it, path='', filename='masclet_parameters.json', parameters_path='', digits=5, read_general=True, read_patchnum=True, read_dmpartnum=True,
                read_patchcellextension=True, read_patchcellposition=True, read_patchposition=True,
                read_patchparent=True, nparray=True):
     """
@@ -114,7 +114,7 @@ def read_grids(it, path='', parameters_path='', digits=5, read_general=True, rea
         pare: which (l-1)-cell is left-bottom-front corner of each patch in
 
     """
-    nmax, nmay, nmaz, size = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=False,
+    nmax, nmay, nmaz, size = parameters.read_parameters(filename=filename, load_nma=True, load_npalev=False, load_nlevels=False,
                                                         load_namr=False, load_size=True, path=parameters_path)
     rx = - size / 2 + size / nmax
 
