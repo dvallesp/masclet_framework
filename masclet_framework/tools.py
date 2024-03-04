@@ -930,13 +930,14 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
     coarse_cellsize = size / nmax
     uniform_cellsize = size / nmax / 2 ** up_to_level
 
-    if type(box_limits[0]) in [float, np.float, np.float32, np.float64, np.float128]:
+    if type(box_limits[0]) in [float, np.float32, np.float64, np.float128]:
         box_limits = [intt((box_limits[0] + size / 2) * nmax / size),
                       intt((box_limits[1] + size / 2) * nmax / size)+1,
                       intt((box_limits[2] + size / 2) * nmax / size),
                       intt((box_limits[3] + size / 2) * nmax / size)+1,
                       intt((box_limits[4] + size / 2) * nmax / size),
                       intt((box_limits[5] + size / 2) * nmax / size)+1]
+        
     bimin = box_limits[0]
     bimax = box_limits[1]
     bjmin = box_limits[2]

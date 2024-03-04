@@ -66,10 +66,11 @@ J_to_keV = 1/keV_to_J
 
 ### DERIVED UNITS OF COMMON USE: PHYSICAL TO MASCLET UNITS
 cgs_to_density = 2.1416e24
-
+sunMpc3_to_density = sun_to_g / mpc_to_cm**3 * cgs_to_density
 
 ### DERIVED UNITS OF COMMON USE: MASCLET TO PHYSICAL UNITS
 density_to_cgs = 1/cgs_to_density
+density_to_sunMpc3 = 1/sunMpc3_to_density
 
 
 ### CONSTANTS

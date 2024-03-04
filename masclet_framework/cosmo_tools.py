@@ -150,5 +150,4 @@ def background_density(h, omega_m, z=0):
     Returns:
         Bkg density, in M_\odot / Mpc^3
     """
-    # rhoB = omega_m * rhoC0 / (1+z)^3
     return omega_m * critical_density(h) * (1+z)**3

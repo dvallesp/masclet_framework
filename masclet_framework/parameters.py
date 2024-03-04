@@ -109,6 +109,7 @@ def write_parameters(nmax, nmay, nmaz, npalev, nlevels, namrx, namry, namrz,
                   'NPALEV': npalev, 'NLEVELS': nlevels,
                   'NAMRX': namrx, 'NAMRY': namry, 'NAMRZ': namrz,
                   'SIZE': size}
+    
 
     with open(os.path.join(path,filename), 'w') as json_file:
         json.dump(parameters, json_file)

@@ -149,6 +149,7 @@ def dir_profile(field, cx,cy,cz,
     if type(binsr) is np.ndarray or type(binsr) is list:
         num_bins=len(binsr)
         rrr=binsr
+
     elif (rmin is not None) and (rmax is not None) and ((dex_rbins is not None) or (delta_rbins is not None)) and ((dex_rbins is None) or (delta_rbins is None)):
         if dex_rbins is not None:
             num_bins=int(np.log10(rmax/rmin)/dex_rbins/2)*2+1 # guarantee it is odd
@@ -221,7 +222,6 @@ def dir_profile(field, cx,cy,cz,
                 xxx=cx+rrr*np.sqrt(1-costheta**2)*np.cos(phi)
                 yyy=cy+rrr*np.sqrt(1-costheta**2)*np.sin(phi)
                 zzz=cz+rrr*costheta
-
                 for kbin,(xi,yi,zi,li) in enumerate(zip(xxx,yyy,zzz,lev_integral)):
                     ip,i,j,k=locate_point(xi,yi,zi,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,li)
                     dir_profiles[itheta,jphi,kbin]=field[ip][i,j,k]
