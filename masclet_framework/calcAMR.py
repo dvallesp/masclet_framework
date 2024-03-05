@@ -10,6 +10,7 @@ defined on the AMR hierarchy of MASCLET simulations.
 Created by Óscar Monllor
 """
 import numpy as np
+#from numba import njit
 
 
 ############################
@@ -35,13 +36,21 @@ def add(field1, field2, kept_patches=None):
 
     Author: Óscar Monllor
     '''
+
     total_npatch = len(field1)
     assert total_npatch == len(field2), "Field dimensions do not match"
 
     if kept_patches is None:
         kept_patches = np.ones((total_npatch,), dtype=bool)
 
-    return [field1[ipatch] + field2[ipatch] for ipatch in range(len(field1)) if kept_patches[ipatch]]
+    field = []
+    for ipatch in range(total_npatch):
+        if kept_patches[ipatch]:
+            field.append(field1[ipatch] + field2[ipatch])
+        else:
+            field.append(0)
+
+    return field
 
 
 def multiply(field1, field2, kept_patches=None):
@@ -63,13 +72,21 @@ def multiply(field1, field2, kept_patches=None):
     
     Author: Óscar Monllor
     '''
+
     total_npatch = len(field1)
     assert total_npatch == len(field2), "Field dimensions do not match"
 
     if kept_patches is None:
         kept_patches = np.ones((total_npatch,), dtype=bool)
 
-    return [field1[ipatch]*field2[ipatch] for ipatch in range(len(field1)) if kept_patches[ipatch]]
+    field = []
+    for ipatch in range(total_npatch):
+        if kept_patches[ipatch]:
+            field.append(field1[ipatch] * field2[ipatch])
+        else:
+            field.append(0)
+
+    return field
 
 
 def divide(field1, field2, kept_patches=None):
@@ -91,14 +108,21 @@ def divide(field1, field2, kept_patches=None):
     
     Author: Óscar Monllor
     '''
+
     total_npatch = len(field1)
     assert total_npatch == len(field2), "Field dimensions do not match"
 
     if kept_patches is None:
         kept_patches = np.ones((total_npatch,), dtype=bool)
 
-    return [field1[ipatch]/field2[ipatch] for ipatch in range(len(field1)) if kept_patches[ipatch]]
+    field = []
+    for ipatch in range(total_npatch):
+        if kept_patches[ipatch]:
+            field.append(field1[ipatch] / field2[ipatch])
+        else:
+            field.append(0)
 
+    return field
 
 
 
@@ -124,11 +148,19 @@ def add_scalar(field1, scalar, kept_patches=None):
     
     Author: Óscar Monllor
     '''
+
     total_npatch = len(field1)
     if kept_patches is None:
         kept_patches = np.ones((total_npatch,), dtype=bool)
 
-    return [field1[ipatch] + scalar for ipatch in range(len(field1)) if kept_patches[ipatch]]
+    field = []
+    for ipatch in range(total_npatch):
+        if kept_patches[ipatch]:
+            field.append(field1[ipatch] + scalar)
+        else:
+            field.append(0)
+
+    return field
 
 
 
@@ -151,8 +183,16 @@ def multiply_scalar(field1, scalar, kept_patches=None):
     
     Author: Óscar Monllor
     '''
+
     total_npatch = len(field1)
     if kept_patches is None:
         kept_patches = np.ones((total_npatch,), dtype=bool)
             
-    return [field1[ipatch]*scalar for ipatch in range(len(field1)) if kept_patches[ipatch]]
+    field = []
+    for ipatch in range(total_npatch):
+        if kept_patches[ipatch]:
+            field.append(field1[ipatch] * scalar)
+        else:
+            field.append(0)
+    
+    return field
