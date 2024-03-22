@@ -77,9 +77,9 @@ def particle2grid(field, x, y, z, Lx, Ly, Lz, nx, ny, nz, k = 32, ncores = 1):
         k: number of nearest neighbour to be used
 
     Returns:
-        hpart: h distance of the particles
         grid_field: particle field distributed into a grid
-
+        hpart: h distance of the particles
+        
     Author: Óscar Monllor
     '''
     
@@ -88,7 +88,7 @@ def particle2grid(field, x, y, z, Lx, Ly, Lz, nx, ny, nz, k = 32, ncores = 1):
     tree = KDTree(data)
 
     #
-    npart = len(x)
+    npart = np.int64(len(x))
 
     # Compute h distance of the particles using KDTree and multiprocessing
     with mp.get_context("fork").Pool(ncores) as p:
@@ -117,7 +117,7 @@ def particle2grid(field, x, y, z, Lx, Ly, Lz, nx, ny, nz, k = 32, ncores = 1):
 
     ##############################################
     # Distribute the particle field into the grid
-    @numba.njit(fastmath = True)
+    @numba.njit([numba.float64(numba.float64, numba.float64)], fastmath = True)
     def SPH_kernel(r, h):
         q = r/h
         if q < 1:
@@ -129,8 +129,15 @@ def particle2grid(field, x, y, z, Lx, Ly, Lz, nx, ny, nz, k = 32, ncores = 1):
         return W
     
 
-    @numba.njit(fastmath = True)
-    def put_particles_in_grid(grid_field, grid_pos_x, grid_pos_y, grid_pos_z, x, y, z, field, npart, hpart, dx, dy, dz, nx, ny, nz):
+    @numba.njit([numba.float64[:,:,:](numba.float64[:,:,:], numba.int64[:],   numba.int64[:],   numba.int64[:],
+                                      numba.float64[:],     numba.float64[:], numba.float64[:], numba.float64[:], numba.int64,
+                                      numba.float64[:],     numba.float64,    numba.float64,    numba.float64,
+                                      numba.int64,          numba.int64,      numba.int64)], 
+                                      fastmath = True)
+    def put_particles_in_grid(grid_field, grid_pos_x, grid_pos_y, grid_pos_z, 
+                              x, y, z, field, npart, 
+                              hpart, dx, dy, dz, 
+                              nx, ny, nz):
 
         # Distribute the particle field into the grid
         for ipart in range(npart):
@@ -159,6 +166,11 @@ def particle2grid(field, x, y, z, Lx, Ly, Lz, nx, ny, nz, k = 32, ncores = 1):
                                     #
                                     norm += W
 
+            # Particle only contributes to its own cell
+            if norm == 0.:
+                grid_field[ix, jy, kz] += field[ipart]
+                continue
+
             # distribute the field
             for ix in range(i - x_extent, i + x_extent + 1):
                 if ix >= 0 and ix < nx:
@@ -177,5 +189,11 @@ def particle2grid(field, x, y, z, Lx, Ly, Lz, nx, ny, nz, k = 32, ncores = 1):
         return grid_field
     ##############################################
 
-    return put_particles_in_grid(grid_field, grid_pos_x, grid_pos_y, grid_pos_z, x, y, z,
-                            field, npart, hpart, dx, dy, dz, nx, ny, nz)
+    #Force np.float64 in x,y,z
+    x = x.astype(np.float64)
+    y = y.astype(np.float64)
+    z = z.astype(np.float64)
+
+    grid_field = put_particles_in_grid(grid_field, grid_pos_x, grid_pos_y, grid_pos_z, x, y, z,
+                                       field, npart, hpart, dx, dy, dz, nx, ny, nz)
+    return grid_field, hpart
