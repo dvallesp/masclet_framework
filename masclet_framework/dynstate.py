@@ -37,7 +37,7 @@ def dynamical_state_thresholds(z=0., mode='VP23'):
     elif mode=='VP24':
         thresholds['centre_offset'] = 0.0716*z**0 + 0.0323*z - 0.0146*z**2 + 0.00192*z**3
         thresholds['virial_ratio'] = 1.3411*z**0 + 0.162*z - 0.043*z**2 + 0.0038*z**3
-        thresholds['mean_vr'] = -0.0858*z**0
+        thresholds['mean_vr'] = 0.0858*z**0
         thresholds['sparsity_200c500c'] = 1.550*z**0 + 0.0558*z
         thresholds['ellipticity'] = 0.2798*z**0
         thresholds['substructure_fraction'] = 0.0178*z**0 - 0.0080*z + 0.00092*z**2
