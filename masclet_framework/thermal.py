@@ -96,6 +96,36 @@ def molecular_weight(T, P, delta, h=0.678, omega_m=0.31, kept_patches=None, elec
         mu = [5*mi / (2+mi) if ki else 0. for mi, ki in zip(mu, kept_patches)]
 
     return mu
+
+
+def ionisation_fraction(T, P, delta, h=0.678, omega_m=0.31, kept_patches=None):
+    ''' 
+    Computes the local ionisation fraction, 
+
+    chi = (16 - 13 mu) / (14 mu).
+
+    The computation is performed on the AMR grid.
+
+    Args:
+        - T: temperature field in K (mandatory)
+        - P: pressure field, in MASCLET units
+        - delta: overdensity field
+        - h: dimensionless Hubble parameter, H_0 = 100 h km/s/Mpc
+        - omega_m: matter density parameter, at z=0
+        - kept_patches: 1d boolean array, True if the patch is kept, False if not.
+            If None, all patches are kept.
+    
+    Returns:
+        - chi: ionisation fraction
+    '''
+    if kept_patches is None:
+        kept_patches = np.ones(len(T), dtype=bool)
+
+    mu = molecular_weight(T, P, delta, h=h, omega_m=omega_m, kept_patches=kept_patches, electrons=False)
+
+    chi = [(16-13*mi) / (14*mi) if ki else 0. for mi, ki in zip(mu, kept_patches)]
+
+    return chi
         
 
 def entropy_electrons(T, delta, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, mode='local', kept_patches=None):
