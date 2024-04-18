@@ -54,7 +54,7 @@ def entropy(T, P=None, delta=None, mu=None, z=0.0, h=0.678, omega_m=0.31, mode='
             raise ValueError('Error! T, delta, mu, and z must be supplied in global mode')
         consta_T = units.kB_isu * units.J_to_keV # keV
         consta_rho = cosmo_tools.background_density(h, omega_m, z=z) * (units.sun_to_g / units.mpc_to_cm**3) # g/cm^3
-        consta_n = consta_rho / (mu * units.mp_isu) # cm^-3
+        consta_n = consta_rho / (mu * units.mp_cgs) # cm^-3
         consta = consta_T / consta_n**(2/3) # keV cm^2
         K = [consta * Ti / (1+di)**(2/3) if ki else 0. for Ti, di, ki in zip(T, delta, kept_patches)]
     else:
