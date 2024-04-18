@@ -555,4 +555,8 @@ def average_from_profile(rprof, prof, prof_weight=None, rmin=None, rmax=None, cu
     num = integrate_profile_volume(rprof, prof * prof_weight, rmin=rmin, rmax=rmax, cumulative=cumulative)
     den = integrate_profile_volume(rprof, prof_weight, rmin=rmin, rmax=rmax, cumulative=cumulative)
 
+    if cumulative:
+        if num[0]==0. and den[0]==0.:
+            den[0] = 1.
+
     return num / den
