@@ -10,8 +10,9 @@ Created by David Vallés
 """
 
 from masclet_framework import units, cosmo_tools
+import numpy as np
 
-def molecular_weight(T, P, delta, h=0.678, omega_m=0.31, kept_patches=None, electrons=False): 
+def molecular_weight(T, P, delta, h=0.678, omega_m=0.31, X=0.75, kept_patches=None, electrons=False): 
     ''' 
     Computes the local mean melecular weight, 
 
@@ -25,10 +26,12 @@ def molecular_weight(T, P, delta, h=0.678, omega_m=0.31, kept_patches=None, elec
         - delta: overdensity field
         - h: dimensionless Hubble parameter, H_0 = 100 h km/s/Mpc
         - omega_m: matter density parameter, at z=0
+        - X: hydrogen mass fraction (default: 0.75)
         - kept_patches: 1d boolean array, True if the patch is kept, False if not.
             If None, all patches are kept.
-        - electrons (bool): if True, returns the molecular weight per electron, 
-            mu_e = 5 mu / (2 + mu) (default: False)
+        - electrons (bool): if True, returns the molecular weight per electron, mu_e,
+            so that mu_e m_p = rho / n_e
+            assuming a primordial gas (Z=0) (default: False)
     '''
     if kept_patches is None:
         kept_patches = np.ones(len(T), dtype=bool)
@@ -42,12 +45,13 @@ def molecular_weight(T, P, delta, h=0.678, omega_m=0.31, kept_patches=None, elec
     mu = [consta * (1+di) * Ti / Pi if ki else 0. for Ti, Pi, di, ki in zip(T, P, delta, kept_patches)]
 
     if electrons:
-        mu = [5*mi / (2+mi) if ki else 0. for mi, ki in zip(mu, kept_patches)]
+        mu = [(4*mi)/np.maximum(4 - (1+3*X)*mi, 0.001*4*mi) if ki else 0. for mi, ki in zip(mu, kept_patches)]
+        # the np.maximum function is to avoid division by zero, and it is placed so that mu_e is capped to 100 (arbitrary)
 
     return mu
 
 
-def ionisation_fraction(T, P, delta, h=0.678, omega_m=0.31, kept_patches=None):
+def ionisation_fraction(T, P, delta, h=0.678, omega_m=0.31, X=0.75, kept_patches=None):
     ''' 
     Computes the local ionisation fraction, 
 
@@ -61,6 +65,7 @@ def ionisation_fraction(T, P, delta, h=0.678, omega_m=0.31, kept_patches=None):
         - delta: overdensity field
         - h: dimensionless Hubble parameter, H_0 = 100 h km/s/Mpc
         - omega_m: matter density parameter, at z=0
+        - X: hydrogen mass fraction (default: 0.75)
         - kept_patches: 1d boolean array, True if the patch is kept, False if not.
             If None, all patches are kept.
     
@@ -72,7 +77,7 @@ def ionisation_fraction(T, P, delta, h=0.678, omega_m=0.31, kept_patches=None):
 
     mu = molecular_weight(T, P, delta, h=h, omega_m=omega_m, kept_patches=kept_patches, electrons=False)
 
-    chi = [(16-13*mi) / (14*mi) if ki else 0. for mi, ki in zip(mu, kept_patches)]
+    chi = [(4-(1+3*X)*mi) / (2*(1+X)*mi) if ki else 0. for mi, ki in zip(mu, kept_patches)]
 
     return chi
 
@@ -175,7 +180,7 @@ def particle_number_density(delta, T=None, P=None, mu=None, z=0.0, h=0.678, omeg
     return n
 
 
-def electron_number_density(delta, T=None, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, mode='local', kept_patches=None):
+def electron_number_density(delta, T=None, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, X=0.75, mode='local', kept_patches=None):
     '''
     Computes the electron number density, 
 
@@ -194,6 +199,7 @@ def electron_number_density(delta, T=None, P=None, mu=None, z=0.0, h=0.678, omeg
         - z: redshift. z=0. to use the comoving particle number density.
         - h: dimensionless Hubble parameter, H_0 = 100 h km/s/Mpc
         - omega_m: matter density parameter, at z=0
+        - X: hydrogen mass fraction (default: 0.75)
         - mode: 'global' or 'local' 
             - if 'local', one must supply delta, T, and P
             - if 'global', one must supply delta, mu
@@ -214,19 +220,17 @@ def electron_number_density(delta, T=None, P=None, mu=None, z=0.0, h=0.678, omeg
 
         mu = molecular_weight(T, P, delta, h=h, omega_m=omega_m, kept_patches=kept_patches)
 
-        n = [ni * (2+mi)/5 if ki else 0. for ni, mi, ki in zip(n, mu, kept_patches)]
+        n = [ni * (4-(1+3*X)*mi)/4 if ki else 0. for ni, mi, ki in zip(n, mu, kept_patches)]
     elif mode=='global':
         if mu is None:
             raise ValueError('Error! mu must be supplied in global mode')
 
-        n = [ni * (2+mu)/5 if ki else 0. for ni, ki in zip(n, kept_patches)]
+        n = [ni * (4-(1+3*X)*mu)/4 if ki else 0. for ni, ki in zip(n, kept_patches)]
 
     return n
 
 
-        
-
-def entropy_electrons(T, delta, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, mode='local', kept_patches=None):
+def entropy_electrons(T, delta, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, X=0.75, mode='local', kept_patches=None):
     ''' 
     Computes the electron entropy, 
 
@@ -245,6 +249,7 @@ def entropy_electrons(T, delta, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, m
         - z: redshift. z=0. to use the comoving particle number density.
         - h: dimensionless Hubble parameter, H_0 = 100 h km/s/Mpc
         - omega_m: matter density parameter, at z=0
+        - X: hydrogen mass fraction (default: 0.75)
         - mode: 'global' or 'local' 
             - if 'local', one must supply T, delta and P 
             - if 'global', one must supply T, delta, mu, and z
@@ -262,20 +267,20 @@ def entropy_electrons(T, delta, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, m
     if mode=='global':
         if mu is None:
             raise ValueError('Error! mu must be supplied in global mode')
-        consta = ((2+mu)/5)**(-2/3)
+        consta = ((4-(1+3*X)*mu) / (4*mu))**(-2/3) # dimensionless
         Ke = [Ki * consta if ki else 0. for Ki, ki in zip(K, kept_patches)]
     elif mode=='local':
         if P is None:
             raise ValueError('Error! P must be supplied in local mode')
         mu = molecular_weight(T, P, delta, h=h, omega_m=omega_m, kept_patches=kept_patches)
-        Ke = [Ki * ((2+mi)/5)**(-2/3) if ki else 0. for Ki, mi, ki in zip(K, mu, kept_patches)]
+        Ke = [Ki * np.maximum(((4-(1+3*X)*mi)/(4*mi)), 0.001*np.ones_like(mi))**(-2/3) if ki else 0. for Ki, mi, ki in zip(K, mu, kept_patches)]
     else:
         raise ValueError('Error! mode must be either "local" or "global"')
 
     return Ke
 
        
-def electron_pressure(T, delta, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, mode='local', kept_patches=None):
+def electron_pressure(T, delta, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, X=0.75, mode='local', kept_patches=None):
     ''' 
     Computes the electron pressure,
 
@@ -294,6 +299,7 @@ def electron_pressure(T, delta, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, m
         - z: redshift. z=0. to use the comoving particle number density.
         - h: dimensionless Hubble parameter, H_0 = 100 h km/s/Mpc
         - omega_m: matter density parameter, at z=0
+        - X: hydrogen mass fraction (default: 0.75)
         - mode: 'global' or 'local'
             - if 'local', one must supply P 
             - if 'global', one must supply mu
@@ -310,13 +316,13 @@ def electron_pressure(T, delta, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, m
     if mode=='local':
         if P is None:
             raise ValueError('Error! P must be supplied in local mode')
-        ne = electron_number_density(delta, T=T, P=P, mu=mu, z=z, h=h, omega_m=omega_m, mode='local', kept_patches=kept_patches) # cm^-3
+        ne = electron_number_density(delta, T=T, P=P, mu=mu, z=z, h=h, omega_m=omega_m, X=X, mode='local', kept_patches=kept_patches) # cm^-3
         consta = units.kB_isu * units.J_to_keV # keV
         Pe = [nei * Ti * consta if ki else 0. for nei, Ti, ki in zip(ne, T, kept_patches)]
     elif mode=='global':
         if mu is None:
             raise ValueError('Error! mu must be supplied in global mode')
-        ne = electron_number_density(delta, T=None, P=None, mu=mu, z=z, h=h, omega_m=omega_m, mode='global', kept_patches=kept_patches)
+        ne = electron_number_density(delta, T=None, P=None, mu=mu, z=z, h=h, omega_m=omega_m, X=X, mode='global', kept_patches=kept_patches)
         consta = units.kB_isu * units.J_to_keV # keV
         Pe = [nei * Ti * consta if ki else 0. for nei, Ti, ki in zip(ne, T, kept_patches)]
     else:
@@ -333,6 +339,10 @@ def entropy_cells(mcells=None, Vcells=None, Tcells=None, rhocells=None, mu=0.6):
     
     assuming neutrality (n_p = n_e). Either (mcells, Vcells), or (rhocells) must 
         be supplied.
+
+    ##### WARNING: #############################################
+    # This function will likely be deprecated in the future.   #
+    ############################################################
         
     Args:
         - mcells: mass of each cell in Msun
