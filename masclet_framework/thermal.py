@@ -11,57 +11,6 @@ Created by David Vallés
 
 from masclet_framework import units, cosmo_tools
 
-def entropy(T, P=None, delta=None, mu=None, z=0.0, h=0.678, omega_m=0.31, mode='local', kept_patches=None):
-    '''
-    Computes the gas entropy, 
-
-    K = kB T n^{-2/3},
-
-    either assuming constant molecular mass (mu) (mode='global') by n = rho / mu mp, 
-    or local mu (mode='local') by K = (kB T)^(5/3) / P^(2/3).
-
-    The computation is performed on the AMR grid. 
-
-    Args:
-        - T: temperature field in K (mandatory)
-        - P: pressure field, in MASCLET units
-        - delta: overdensity field
-        - mu: mean molecular weight (scalar)
-        - z: redshift. z=0. to use the comoving particle number density.
-        - h: dimensionless Hubble parameter, H_0 = 100 h km/s/Mpc
-        - omega_m: matter density parameter, at z=0
-        - mode: 'global' or 'local' 
-            - if 'local', one must supply T and P 
-            - if 'global', one must supply T, delta, mu, and z
-        - kept_patches: 1d boolean array, True if the patch is kept, False if not.
-            If None, all patches are kept.
-
-    Returns: 
-        - K: gas entropy field in keV cm^2
-    ''' 
-    if kept_patches is None:
-        kept_patches = np.ones(len(T), dtype=bool)
-
-    if mode=='local':
-        if (T is None) or (P is None):
-            raise ValueError('Error! T and P must be supplied in local mode')
-        consta_T = units.kB_isu * units.J_to_keV # keV
-        consta_P = units.pressure_to_keVcm3
-        consta = consta_T**(5/3) / consta_P**(2/3) # keV cm^2
-        K = [consta * Ti**(5/3) / Pi**(2/3) if ki else 0. for Ti, Pi, ki in zip(T, P, kept_patches)]
-    elif mode=='global':
-        if (T is None) or (delta is None) or (mu is None) or (z is None):
-            raise ValueError('Error! T, delta, mu, and z must be supplied in global mode')
-        consta_T = units.kB_isu * units.J_to_keV # keV
-        consta_rho = cosmo_tools.background_density(h, omega_m, z=z) * (units.sun_to_g / units.mpc_to_cm**3) # g/cm^3
-        consta_n = consta_rho / (mu * units.mp_cgs) # cm^-3
-        consta = consta_T / consta_n**(2/3) # keV cm^2
-        K = [consta * Ti / (1+di)**(2/3) if ki else 0. for Ti, di, ki in zip(T, delta, kept_patches)]
-    else:
-        raise ValueError('Error! mode must be either "local" or "global"')
-
-    return K
-
 def molecular_weight(T, P, delta, h=0.678, omega_m=0.31, kept_patches=None, electrons=False): 
     ''' 
     Computes the local mean melecular weight, 
@@ -126,55 +75,57 @@ def ionisation_fraction(T, P, delta, h=0.678, omega_m=0.31, kept_patches=None):
     chi = [(16-13*mi) / (14*mi) if ki else 0. for mi, ki in zip(mu, kept_patches)]
 
     return chi
-        
 
-def entropy_electrons(T, delta, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, mode='local', kept_patches=None):
-    ''' 
-    Computes the electron entropy, 
+def entropy(T, P=None, delta=None, mu=None, z=0.0, h=0.678, omega_m=0.31, mode='local', kept_patches=None):
+    '''
+    Computes the gas entropy, 
 
-    K_e = kB T n_e^{-2/3},
+    K = kB T n^{-2/3},
 
-    either assuming constant molecular mass (mu) (mode='global') by n = rho / mu mp,
+    either assuming constant molecular mass (mu) (mode='global') by n = rho / mu mp, 
     or local mu (mode='local') by K = (kB T)^(5/3) / P^(2/3).
 
-    The computation is performed on the AMR grid.
+    The computation is performed on the AMR grid. 
 
     Args:
         - T: temperature field in K (mandatory)
-        - delta: overdensity field (mandatory)
         - P: pressure field, in MASCLET units
+        - delta: overdensity field
         - mu: mean molecular weight (scalar)
         - z: redshift. z=0. to use the comoving particle number density.
         - h: dimensionless Hubble parameter, H_0 = 100 h km/s/Mpc
         - omega_m: matter density parameter, at z=0
         - mode: 'global' or 'local' 
-            - if 'local', one must supply T, delta and P 
+            - if 'local', one must supply T and P 
             - if 'global', one must supply T, delta, mu, and z
         - kept_patches: 1d boolean array, True if the patch is kept, False if not.
             If None, all patches are kept.
 
-    Returns:
-        - K_e: electron entropy field in keV cm^2
+    Returns: 
+        - K: gas entropy field in keV cm^2
     ''' 
     if kept_patches is None:
         kept_patches = np.ones(len(T), dtype=bool)
 
-    K = entropy(T=T, P=P, delta=delta, mu=mu, z=z, h=h, omega_m=omega_m, mode=mode, kept_patches=kept_patches) 
-
-    if mode=='global':
-        if mu is None:
-            raise ValueError('Error! mu must be supplied in global mode')
-        consta = ((2+mu)/5)**(-2/3)
-        Ke = [Ki * consta if ki else 0. for Ki, ki in zip(K, kept_patches)]
-    elif mode=='local':
-        if P is None:
-            raise ValueError('Error! P must be supplied in local mode')
-        mu = molecular_weight(T, P, delta, h=h, omega_m=omega_m, kept_patches=kept_patches)
-        Ke = [Ki * ((2+mi)/5)**(-2/3) if ki else 0. for Ki, mi, ki in zip(K, mu, kept_patches)]
+    if mode=='local':
+        if (T is None) or (P is None):
+            raise ValueError('Error! T and P must be supplied in local mode')
+        consta_T = units.kB_isu * units.J_to_keV # keV
+        consta_P = units.pressure_to_keVcm3
+        consta = consta_T**(5/3) / consta_P**(2/3) # keV cm^2
+        K = [consta * Ti**(5/3) / Pi**(2/3) if ki else 0. for Ti, Pi, ki in zip(T, P, kept_patches)]
+    elif mode=='global':
+        if (T is None) or (delta is None) or (mu is None) or (z is None):
+            raise ValueError('Error! T, delta, mu, and z must be supplied in global mode')
+        consta_T = units.kB_isu * units.J_to_keV # keV
+        consta_rho = cosmo_tools.background_density(h, omega_m, z=z) * (units.sun_to_g / units.mpc_to_cm**3) # g/cm^3
+        consta_n = consta_rho / (mu * units.mp_cgs) # cm^-3
+        consta = consta_T / consta_n**(2/3) # keV cm^2
+        K = [consta * Ti / (1+di)**(2/3) if ki else 0. for Ti, di, ki in zip(T, delta, kept_patches)]
     else:
         raise ValueError('Error! mode must be either "local" or "global"')
 
-    return Ke
+    return K
 
 
 def particle_number_density(delta, T=None, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, mode='local', kept_patches=None):
@@ -271,6 +222,57 @@ def electron_number_density(delta, T=None, P=None, mu=None, z=0.0, h=0.678, omeg
         n = [ni * (2+mu)/5 if ki else 0. for ni, ki in zip(n, kept_patches)]
 
     return n
+
+
+        
+
+def entropy_electrons(T, delta, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, mode='local', kept_patches=None):
+    ''' 
+    Computes the electron entropy, 
+
+    K_e = kB T n_e^{-2/3},
+
+    either assuming constant molecular mass (mu) (mode='global') by n = rho / mu mp,
+    or local mu (mode='local') by K = (kB T)^(5/3) / P^(2/3).
+
+    The computation is performed on the AMR grid.
+
+    Args:
+        - T: temperature field in K (mandatory)
+        - delta: overdensity field (mandatory)
+        - P: pressure field, in MASCLET units
+        - mu: mean molecular weight (scalar)
+        - z: redshift. z=0. to use the comoving particle number density.
+        - h: dimensionless Hubble parameter, H_0 = 100 h km/s/Mpc
+        - omega_m: matter density parameter, at z=0
+        - mode: 'global' or 'local' 
+            - if 'local', one must supply T, delta and P 
+            - if 'global', one must supply T, delta, mu, and z
+        - kept_patches: 1d boolean array, True if the patch is kept, False if not.
+            If None, all patches are kept.
+
+    Returns:
+        - K_e: electron entropy field in keV cm^2
+    ''' 
+    if kept_patches is None:
+        kept_patches = np.ones(len(T), dtype=bool)
+
+    K = entropy(T=T, P=P, delta=delta, mu=mu, z=z, h=h, omega_m=omega_m, mode=mode, kept_patches=kept_patches) 
+
+    if mode=='global':
+        if mu is None:
+            raise ValueError('Error! mu must be supplied in global mode')
+        consta = ((2+mu)/5)**(-2/3)
+        Ke = [Ki * consta if ki else 0. for Ki, ki in zip(K, kept_patches)]
+    elif mode=='local':
+        if P is None:
+            raise ValueError('Error! P must be supplied in local mode')
+        mu = molecular_weight(T, P, delta, h=h, omega_m=omega_m, kept_patches=kept_patches)
+        Ke = [Ki * ((2+mi)/5)**(-2/3) if ki else 0. for Ki, mi, ki in zip(K, mu, kept_patches)]
+    else:
+        raise ValueError('Error! mode must be either "local" or "global"')
+
+    return Ke
 
        
 def electron_pressure(T, delta, P=None, mu=None, z=0.0, h=0.678, omega_m=0.31, mode='local', kept_patches=None):
