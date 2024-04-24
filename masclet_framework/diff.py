@@ -11,7 +11,7 @@ Created by David Vallés
 """
 
 import numpy as np
-from numba import njit, prange
+from numba import njit, prange, jit
 from masclet_framework import tools
 
 ## Patch stuff (arr_ functions)
@@ -68,6 +68,15 @@ def arr_curl_magnitude(arr_x, arr_y, arr_z, dx):
     return den*np.sqrt((arr_diff_y(arr_z) - arr_diff_z(arr_y))**2 +
                        (arr_diff_z(arr_x) - arr_diff_x(arr_z))**2 + 
                        (arr_diff_x(arr_y) - arr_diff_y(arr_x))**2)
+
+@njit(fastmath=True)
+def arr_u_nabla_phi(arrphi, arru_x, arru_y, arru_z, dx):
+    den = np.float32(1/dx)
+    return den*(arru_x*arr_diff_x(arrphi) + arru_y*arr_diff_y(arrphi) + arru_z*arr_diff_z(arrphi))
+
+@njit(fastmath=True)
+def arr_u_nabla_v(arrv_x, arrv_y, arrv_z, arru_x, arru_y, arru_z, dx):
+    return arr_u_nabla_phi(arrv_x, arru_x, arru_y, arru_z, dx), arr_u_nabla_phi(arrv_y, arru_x, arru_y, arru_z, dx), arr_u_nabla_phi(arrv_z, arru_x, arru_y, arru_z, dx)
 
 ## Fields stuff
 def gradient(field, dx, npatch, kept_patches=None):
@@ -267,3 +276,93 @@ def gradient_magnitude(field, dx, npatch, kept_patches=None):
             grad_mag.append(0)
 
     return grad_mag
+
+
+def directional_derivative_scalar_field(sfield, ufield_x, ufield_y, ufield_z, dx, npatch, kept_patches=None):
+    '''
+    Computes (\vb{u} \cdot \nabla) \phi, where \vb{u} is a vector field and
+        \phi is a scalar field, defined on the AMR hierarchy of grids.
+
+    Args:
+        sfield: a list of numpy arrays, each one containing the scalar field
+                defined on the corresponding grid of the AMR hierarchy
+        ufield_x: a list of numpy arrays, each one containing the x-component
+                of the vector field defined on the corresponding grid of the AMR
+                hierarchy
+        ufield_y: idem for the y-component
+        ufield_z: idem for the z-component
+        dx: the cell size of the coarsest grid
+        npatch: the number of patches in each direction
+        kept_patches: 1d boolean array, True if the patch is kept, False if not.
+                    If None, all patches are kept.
+
+    Returns:
+        u_nabla_phi: a list of numpy arrays, each one containing the result of
+                the operation (\vb{u} \cdot \nabla) \phi defined on the
+                corresponding grid of the AMR hierarchy
+
+    Author: David Vallés
+    '''
+    levels=tools.create_vector_levels(npatch)
+    resolution=dx/2**levels
+    u_nabla_phi = []
+
+    if kept_patches is None:
+        kept_patches = np.ones(npatch.sum()+1, dtype=bool)
+
+    for ipatch in prange(npatch.sum()+1):
+        if kept_patches[ipatch]:
+            u_nabla_phi.append(arr_u_nabla_phi(sfield[ipatch], ufield_x[ipatch], ufield_y[ipatch], ufield_z[ipatch], resolution[ipatch]))
+        else:
+            u_nabla_phi.append(0)
+
+    return u_nabla_phi
+
+def directional_derivative_vector_field(vfield_x, vfield_y, vfield_z, ufield_x, ufield_y, ufield_z, dx, npatch, kept_patches=None):
+    '''
+    Computes (\vb{u} \cdot \nabla) \vb{v}, where \vb{u} and \vb{v} are vector
+        fields defined on the AMR hierarchy of grids.
+
+    Args:
+        vfield_x: a list of numpy arrays, each one containing the x-component
+                of the vector field defined on the corresponding grid of the AMR
+                hierarchy
+        vfield_y: idem for the y-component
+        vfield_z: idem for the z-component
+        ufield_x: a list of numpy arrays, each one containing the x-component
+                of the vector field defined on the corresponding grid of the AMR
+                hierarchy
+        ufield_y: idem for the y-component
+        ufield_z: idem for the z-component
+        dx: the cell size of the coarsest grid
+        npatch: the number of patches in each direction
+        kept_patches: 1d boolean array, True if the patch is kept, False if not.
+                    If None, all patches are kept.
+
+    Returns:
+        u_nabla_v: a list of numpy arrays, each one containing the result of
+                the operation (\vb{u} \cdot \nabla) \vb{v} defined on the
+                corresponding grid of the AMR hierarchy
+    
+    Author: David Vallés
+    '''
+    levels=tools.create_vector_levels(npatch)
+    resolution=dx/2**levels
+    u_nabla_v_x = []
+    u_nabla_v_y = []
+    u_nabla_v_z = []
+
+    if kept_patches is None:
+        kept_patches = np.ones(npatch.sum()+1, dtype=bool)
+
+    for ipatch in prange(npatch.sum()+1):
+        if kept_patches[ipatch]:
+            ux,uy,uz = arr_u_nabla_v(vfield_x[ipatch], vfield_y[ipatch], vfield_z[ipatch], ufield_x[ipatch], ufield_y[ipatch], ufield_z[ipatch], resolution[ipatch])
+        else:
+            ux,uy,uz = 0,0,0
+        u_nabla_v_x.append(ux)
+        u_nabla_v_y.append(uy)
+        u_nabla_v_z.append(uz)
+
+    return u_nabla_v_x, u_nabla_v_y, u_nabla_v_z
+    
