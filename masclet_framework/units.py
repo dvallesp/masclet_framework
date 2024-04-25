@@ -63,14 +63,20 @@ eV_to_J = 1.6022e-19
 keV_to_J = 1e3 * eV_to_J
 J_to_eV = 1/eV_to_J
 J_to_keV = 1/keV_to_J
+J_to_erg = 1e7
+erg_to_J = 1/J_to_erg
 
 ### DERIVED UNITS OF COMMON USE: PHYSICAL TO MASCLET UNITS
 cgs_to_density = 2.1416e24
-
+sunMpc3_to_density = sun_to_g / mpc_to_cm**3 * cgs_to_density
 
 ### DERIVED UNITS OF COMMON USE: MASCLET TO PHYSICAL UNITS
 density_to_cgs = 1/cgs_to_density
+density_to_sunMpc3 = 1/sunMpc3_to_density
 
+pressure_to_isu = (mass_to_kg / (length_to_m * time_to_s**2)) # kg m^-1 s^-2 = Pa = J m^-3 = N m^-2
+pressure_to_cgs = pressure_to_isu * J_to_erg / m_to_cm**3 # erg cm^-3
+pressure_to_keVcm3 = pressure_to_isu * (J_to_eV/1e3) / m_to_cm**3 # keV cm^-3
 
 ### CONSTANTS
 G_isu = 6.67430e-11

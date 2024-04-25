@@ -137,10 +137,47 @@ def T(M, delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6):
 
     return T
 
+def n(delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6, fb=0.155):
+    """ 
+    Computes baryon number density (in cm^-3) for a given overdensity delta 
+        (either normalised to the critical density ['c'] or to the background 
+        density ['m']).
+
+    Args:
+        delta: overdensity (typically, 200, 500, 2500, etc.)
+        norm: normalization (whether the overdensity is given in units of 
+              the critical density ['c'] or the background density ['m'])
+        z: redshift (float)
+        h: dimensionless Hubble constant (float)
+        omega_m: matter density parameter, at z=0 (float)
+        mu: mean molecular weight (float)
+        fb: baryonic mass fraction (float)
+
+    Returns:
+        gas number density (in cm^-3) corresponding to the given mass 
+        and overdensity
+    """
+    # Check input data is correct
+    if norm not in ['c', 'm']:
+        raise ValueError("norm must be either 'c' or 'm'")
+    if delta < 0:
+        raise ValueError("delta must be positive")
+
+    omega_lambda = 1 - omega_m # We assume a flat universe with no radiation!
+
+    if norm == 'c':
+        ne = 2.66720e-4 * (delta/200) * (fb/0.155) * (h/0.678)**2 * (mu/0.6)**(-1) * \
+            cosmo_tools.E(z,omega_m, omega_lambda)**2
+    elif norm == 'm':
+        ne = 8.26818e-5 * (delta/200) * (fb/0.155) * (omega_m/0.31) * (h/0.678)**2 * (mu/0.6)**(-1) * \
+            (1+z)**3
+
+    return ne
+
 def ne(delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6, fb=0.155):
     """ 
     Computes electron number density (in cm^-3) for a given overdensity delta 
-        (either normalised to the critical density []'c'] or to the background 
+        (either normalised to the critical density ['c'] or to the background 
         density ['m']).
 
     Args:
@@ -166,19 +203,19 @@ def ne(delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6, fb=0.155):
     omega_lambda = 1 - omega_m # We assume a flat universe with no radiation!
 
     if norm == 'c':
-        ne = 1.06686e-4 * (delta/200) * (fb/0.155) * (h/0.678)**2 * (((1-mu)/mu)/(2/3)) * \
-            cosmo_tools.E(z,omega_m, omega_lambda)**2
+        ne = 1.38694e-4 * (delta/200) * (fb/0.155) * (h/0.678)**2 * (mu/0.6)**(-1) * \
+            ((2+mu)/2.6) * cosmo_tools.E(z,omega_m, omega_lambda)**2
     elif norm == 'm':
-        ne = 3.30727e-5 * (delta/200) * (fb/0.155) * (omega_m/0.31) * (h/0.678)**2 * (((1-mu)/mu)/(2/3)) * \
-            (1+z)**3 
+        ne = 4.29945e-5 * (delta/200) * (fb/0.155) * (omega_m/0.31) * (h/0.678)**2 * (mu/0.6)**(-1) * \
+            ((2+mu)/2.6) * (1+z)**3
 
     return ne
 
 def K(M, delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6, fb=0.155):
     """ 
-    Computes entropy (in keV cm^2) from mass (in Msun) for a given overdensity
-        delta (either normalised to the critical density ['c'] or to the 
-        background density ['m']).
+    Computes gas entropy (in keV cm^2) from mass (in Msun) for a given 
+        overdensity delta (either normalised to the critical density ['c'] 
+        or to the background density ['m']).
 
     Args:
         M: mass (in Msun)
@@ -192,7 +229,7 @@ def K(M, delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6, fb=0.155):
         fb: baryonic mass fraction (float)
     
     Returns:
-        entropy (in keV cm^2) corresponding to the given mass and overdensity
+        gas entropy (in keV cm^2) corresponding to the given mass and overdensity
     """
     # Check input data is correct
     if norm not in ['c', 'm']:
@@ -205,17 +242,56 @@ def K(M, delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6, fb=0.155):
     omega_lambda = 1 - omega_m # We assume a flat universe with no radiation!
 
     if norm == 'c':
-        K = 612.27 * (delta/200)**(-1/3) * (fb/0.155)**(-2/3) * (h/0.678)**(-4/3) * (mu/0.6) * \
-            (((1-mu)/mu)/(2/3))**(-2/3) * cosmo_tools.E(z,omega_m, omega_lambda)**(-2/3) * (M/1e14)**(2/3) 
+        K = 332.386 * (delta/200)**(-1/3) * (fb/0.155)**(-2/3) * (h/0.678)**(-2/3) * (mu/0.6)**(5/3) * \
+            cosmo_tools.E(z,omega_m, omega_lambda)**(-2/3) * (M/1e14)**(2/3) 
     elif norm == 'm':
-        K = 904.66 * (delta/200)**(-1/3) * (fb/0.155)**(-2/3) * (omega_m/0.31)**(-2/3) * (h/0.678)**(-4/3) * \
-            (mu/0.6) * (((1-mu)/mu)/(2/3))**(-2/3) * (1+z)**(-1) * (M/1e14)**(2/3)
+        K = 491.127 * (delta/200)**(-1/3) * (fb/0.155)**(-2/3) * (omega_m/0.31)**(-2/3) * (h/0.678)**(-2/3) * \
+            (mu/0.6)**(5/3) * (1+z)**(-1) * (M/1e14)**(2/3)
+
+    return K
+
+def Ke(M, delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6, fb=0.155):
+    """ 
+    Computes electron entropy (in keV cm^2) from mass (in Msun) for a given 
+        overdensity delta (either normalised to the critical density ['c'] 
+        or to the background density ['m']).
+
+    Args:
+        M: mass (in Msun)
+        delta: overdensity (typically, 200, 500, 2500, etc.)
+        norm: normalization (whether the overdensity is given in units of 
+              the critical density ['c'] or the background density ['m'])
+        z: redshift (float)
+        h: dimensionless Hubble constant (float)
+        omega_m: matter density parameter, at z=0 (float)
+        mu: mean molecular weight (float)
+        fb: baryonic mass fraction (float)
+    
+    Returns:
+        electron entropy (in keV cm^2) corresponding to the given mass and overdensity
+    """
+    # Check input data is correct
+    if norm not in ['c', 'm']:
+        raise ValueError("norm must be either 'c' or 'm'")
+    if delta < 0:
+        raise ValueError("delta must be positive")
+    if M < 0:
+        raise ValueError("M must be positive")
+
+    omega_lambda = 1 - omega_m # We assume a flat universe with no radiation!
+
+    if norm == 'c':
+        K = 514.013 * (delta/200)**(-1/3) * (fb/0.155)**(-2/3) * (h/0.678)**(-2/3) * (mu/0.6)**(5/3) * \
+            ((2+mu)/2.6)**(-2/3) * cosmo_tools.E(z,omega_m, omega_lambda)**(-2/3) * (M/1e14)**(2/3) 
+    elif norm == 'm':
+        K = 759.495 * (delta/200)**(-1/3) * (fb/0.155)**(-2/3) * (omega_m/0.31)**(-2/3) * (h/0.678)**(-2/3) * \
+            (mu/0.6)**(5/3) * ((2+mu)/2.6)**(-2/3) * (1+z)**(-1) * (M/1e14)**(2/3)
 
     return K
 
 def P(M, delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6, fb=0.155):
     """ 
-    Computes pressure (in keV cm^-3) from mass (in Msun) for a given
+    Computes gas pressure (in keV cm^-3) from mass (in Msun) for a given
         overdensity delta (either normalised to the critical density ['c'] or 
         to the background density ['m']).
 
@@ -231,7 +307,7 @@ def P(M, delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6, fb=0.155):
         fb: baryonic mass fraction (float)
 
     Returns:
-        pressure (in keV cm^-3) corresponding to the given mass and overdensity
+        gas pressure (in keV cm^-3) corresponding to the given mass and overdensity
     """
     # Check input data is correct
     if norm not in ['c', 'm']:
@@ -244,10 +320,49 @@ def P(M, delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6, fb=0.155):
     omega_lambda = 1 - omega_m # We assume a flat universe with no radiation!
 
     if norm == 'c':
-        P = 1.46933e-4 * (delta/200)**(4/3) * (fb/0.155) * (h/0.678)**(8/3) * \
+        P = 3.67340e-4 * (delta/200)**(4/3) * (fb/0.155) * (h/0.678)**(8/3) * \
             cosmo_tools.E(z,omega_m, omega_lambda)**(8/3) * (M/1e14)**(2/3)
     elif norm == 'm':
-        P = 3.08274e-5 * (delta/200)**(4/3) * (fb/0.155) * (omega_m/0.31)* (h/0.678)**(8/3) * \
+        P = 7.70685e-5 * (delta/200)**(4/3) * (fb/0.155) * (omega_m/0.31)* (h/0.678)**(8/3) * \
             (1+z)**4 * (M/1e14)**(2/3)
+
+    return P
+
+def Pe(M, delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6, fb=0.155):
+    """ 
+    Computes electron pressure (in keV cm^-3) from mass (in Msun) for a given
+        overdensity delta (either normalised to the critical density ['c'] or 
+        to the background density ['m']).
+
+    Args:
+        M: mass (in Msun)
+        delta: overdensity (typically, 200, 500, 2500, etc.)
+        norm: normalization (whether the overdensity is given in units of 
+              the critical density ['c'] or the background density ['m'])
+        z: redshift (float)
+        h: dimensionless Hubble constant (float)
+        omega_m: matter density parameter, at z=0 (float)
+        mu: mean molecular weight (float)
+        fb: baryonic mass fraction (float)
+
+    Returns:
+        electron pressure (in keV cm^-3) corresponding to the given mass and overdensity
+    """
+    # Check input data is correct
+    if norm not in ['c', 'm']:
+        raise ValueError("norm must be either 'c' or 'm'")
+    if delta < 0:
+        raise ValueError("delta must be positive")
+    if M < 0:
+        raise ValueError("M must be positive")
+
+    omega_lambda = 1 - omega_m # We assume a flat universe with no radiation!
+
+    if norm == 'c':
+        P = 1.91017e-4 * (delta/200)**(4/3) * (fb/0.155) * (h/0.678)**(8/3) * \
+            ((2+mu)/2.6) * cosmo_tools.E(z,omega_m, omega_lambda)**(8/3) * (M/1e14)**(2/3)
+    elif norm == 'm':
+        P = 4.00756e-5 * (delta/200)**(4/3) * (fb/0.155) * (omega_m/0.31) * (h/0.678)**(8/3) * \
+            ((2+mu)/2.6) * (1+z)**4 * (M/1e14)**(2/3)
 
     return P

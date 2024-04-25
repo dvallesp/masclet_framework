@@ -152,3 +152,26 @@ def background_density(h, omega_m, z=0):
     """
     # rhoB = omega_m * rhoC0 / (1+z)^3
     return omega_m * critical_density(h) * (1+z)**3
+
+
+def overdensity_BN98(z, omega_m, wrt='background'):
+    '''
+    Computes the Brian & Norman (1998) overdensity factor for a given redshift.
+    Assumes flat LCDM cosmology.
+
+    Args:
+        z: redshift
+        wrt: 'background' or 'critical' (default: 'background')
+
+    Returns:
+        Overdensity factor
+    '''
+    omega_m_z = omega_m * (1+z)**3 / E(z, omega_m, 1-omega_m)**2
+    x = omega_m_z - 1
+    delta_c = 18*np.pi**2 + 82*x - 39*x**2
+    if wrt == 'critical':
+        return delta_c
+    elif wrt == 'background':
+        return delta_c / omega_m_z
+    else:
+        raise ValueError("wrt must be 'background' or 'critical'")

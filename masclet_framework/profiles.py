@@ -18,6 +18,7 @@ except ImportError:
     def tqdm(iterator, *args, **kwargs):
         return iterator
 from scipy.spatial import KDTree
+from scipy.integrate import cumulative_trapezoid
 
 @jit(nopython=True, fastmath=True)
 def locate_point(x,y,z,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,nl,buf=1):
@@ -492,3 +493,70 @@ def radial_profile_particles(particles_field, cx,cy,cz,size, tree=None,
         raise ValueError('Wrong specification of average')
 
     return profile, rrr
+
+
+def integrate_profile_volume(rprof, prof, rmin=None, rmax=None, cumulative=False):
+    '''
+    Compute the volume integral of the profile 'prof', defined on the 
+     radial grid 'rprof', from rmin to rmax.
+
+    Args:
+        - rprof: radial grid
+        - prof: profile to integrate
+        - rmin: minimum radius
+        - rmax: maximum radius
+        - cumulative: if True, return the cumulative integral as a function of 
+            the input radial grid, only within rmin and rmax.
+    
+    Returns:
+        - integral of the profile
+    '''
+    if rmin is None:
+        rmin = rprof[0]
+    if rmax is None:
+        rmax = rprof[-1]
+
+    mask = (rprof >= rmin) & (rprof <= rmax)
+
+    if not cumulative: # Total integral
+        return (4*np.pi) * np.trapz(prof[mask] * rprof[mask]**2, x=rprof[mask])
+    else: # Cumulative integral
+        return (4*np.pi) * cumulative_trapezoid(prof[mask] * rprof[mask]**2, x=rprof[mask], initial=0)
+        
+
+def average_from_profile(rprof, prof, prof_weight=None, rmin=None, rmax=None, cumulative=False):
+    '''
+    Compute the weighted volume integral of the profile 'prof', defined on the 
+     radial grid 'rprof', from rmin to rmax. That is to say, it returns:
+
+        \int_{rmin}^{rmax} prof(r) * prof_weight(r) * 4*pi*r^2 dr 
+        ---------------------------------------------------------
+              \int_{rmin}^{rmax} prof_weight(r) * 4*pi*r^2 dr
+
+    Args:
+        - rprof: radial grid
+        - prof: profile to integrate
+        - prof_weight: weight profile. If not specified, the weight is 1 (volume-weighted)
+        - rmin: minimum radius
+        - rmax: maximum radius
+        - cumulative: if True, return the cumulative integral as a function of 
+            the input radial grid, only within rmin and rmax.
+    
+    Returns:
+        - weighted integral of the profile
+    '''
+    if rmin is None:
+        rmin = rprof[0]
+    if rmax is None:
+        rmax = rprof[-1]
+    if prof_weight is None:
+        prof_weight = np.ones_like(prof)
+
+    num = integrate_profile_volume(rprof, prof * prof_weight, rmin=rmin, rmax=rmax, cumulative=cumulative)
+    den = integrate_profile_volume(rprof, prof_weight, rmin=rmin, rmax=rmax, cumulative=cumulative)
+
+    if cumulative:
+        if num[0]==0. and den[0]==0.:
+            den[0] = 1.
+
+    return num / den

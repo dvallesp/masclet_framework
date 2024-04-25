@@ -26,7 +26,8 @@ import struct
 
 # tqdm
 import importlib.util
-if importlib.util.find_spec('tqdm') is None:
+__use_tqdm=True
+if (importlib.util.find_spec('tqdm') is None) and __use_tqdm:
     def tqdm(x, desc=None): return x
 else:
     from tqdm import tqdm
@@ -533,7 +534,7 @@ def lowlevel_read_clus(it, path='', parameters_path='', digits=5, max_refined_le
         as the number of patches, indicating which patches are inside the region (True) and which are not (False).
     """
     #if not verbose:
-    #    def tqdm(x): return x
+    #    def tqdm(x, desc=None): return x
 
     if output_B and (not is_mascletB):
         print('Error: cannot output magnetic field if the simulation has not.')
