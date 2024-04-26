@@ -234,7 +234,7 @@ def patch_is_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry,
 
     cell_l0_size = size / nmax
     max_side = max([nx, ny, nz]) * cell_l0_size / 2 ** level
-    upper_bound_squared = R ** 2 + max_side ** 2 / 4
+    upper_bound_squared = R ** 2 + max_side ** 2 / 2 # half the face diagoonal, (max_side * sqrt2 / 2)^2
     for vertex in vertices:
         distance_squared = (vertex[0] - clusrx) ** 2 + (vertex[1] - clusry) ** 2 + (vertex[2] - clusrz) ** 2
         if distance_squared <= upper_bound_squared:

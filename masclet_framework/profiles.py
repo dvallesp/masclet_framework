@@ -558,5 +558,6 @@ def average_from_profile(rprof, prof, prof_weight=None, rmin=None, rmax=None, cu
     if cumulative:
         if num[0]==0. and den[0]==0.:
             den[0] = 1.
+            num[0] = num[1]/den[1] #?
 
     return num / den
