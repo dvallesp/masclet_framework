@@ -235,8 +235,14 @@ def patch_is_inside_sphere(R, clusrx, clusry, clusrz, level, nx, ny, nz, rx, ry,
     cell_l0_size = size / nmax
     max_side = max([nx, ny, nz]) * cell_l0_size / 2 ** level
     upper_bound_squared = R ** 2 + max_side ** 2 / 2 # half the face diagoonal, (max_side * sqrt2 / 2)^2
+    
+    def dista_periodic_1d(d, size):
+        return min(abs(d), size-abs(d))
+
     for vertex in vertices:
-        distance_squared = (vertex[0] - clusrx) ** 2 + (vertex[1] - clusry) ** 2 + (vertex[2] - clusrz) ** 2
+        distance_squared = dista_periodic_1d((vertex[0] - clusrx), size) ** 2 +\
+                           dista_periodic_1d((vertex[1] - clusry), size) ** 2 +\
+                           dista_periodic_1d((vertex[2] - clusrz), size) ** 2
         if distance_squared <= upper_bound_squared:
             isinside = True
             break
@@ -1183,12 +1189,6 @@ def remove_gas_substructres(density, cr0amr, solapst, clusrx, clusry, clusrz, ce
             if verbose:
                 if i == 0:
                     print('Bin \t rmin \t rmax \t Ncells \t logmedian \t logstd \t upperbound \t Nexceed')
-                print('{}\t{:.3f}\t{:.3f}\t{}\t{:.3f}\t{:.3f}\t{}\t{}'.format(i, rmin, rmax, these.size, mulogdensity,
-                                                                              sigmalogdensity, upper_bound,
-                                                                              (these > np.log10(upper_bound)).sum()))
-
-            for ipatch in range(len(density)):
-                if not kept_patches[ipatch]:
                     continue
                 density[ipatch][density[ipatch] * inside[ipatch] > upper_bound] = upper_bound
     return density
