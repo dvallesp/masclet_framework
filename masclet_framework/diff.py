@@ -20,8 +20,9 @@ def arr_diff_x(arr):
     nx = arr.shape[0]
     difference = np.zeros_like(arr)
     difference[1:nx-1,:,:] = (arr[2:nx,:,:] - arr[0:nx-2,:,:])
-    difference[0,:,:] = 2*(arr[1,:,:] - arr[0,:,:]) - difference[1,:,:] # Second order extrapolation at the boundary
-    difference[nx-1,:,:] = 2*(arr[nx-1,:,:] - arr[nx-2,:,:]) - difference[nx-2,:,:] # Second order extrapolation at the boundary
+    # Second order extrapolation at the boundary
+    difference[0,:,:] = 4*arr[1,:,:] - 3*arr[0,:,:] - arr[2,:,:]
+    difference[nx-1,:,:] = 3*arr[nx-1,:,:] + arr[nx-3,:,:] - 4*arr[nx-2,:,:]
     return difference
 
 @njit(fastmath=True)
@@ -29,8 +30,9 @@ def arr_diff_y(arr):
     ny = arr.shape[1]
     difference = np.zeros_like(arr)
     difference[:,1:ny-1,:] = (arr[:,2:ny,:] - arr[:,0:ny-2,:])
-    difference[:,0,:] = 2*(arr[:,1,:] - arr[:,0,:]) - difference[:,1,:] # Second order extrapolation at the boundary
-    difference[:,ny-1,:] = 2*(arr[:,ny-1,:] - arr[:,ny-2,:]) - difference[:,ny-2,:] # Second order extrapolation at the boundary
+    # Second order extrapolation at the boundary
+    difference[:,0,:] = 4*arr[:,1,:] - 3*arr[:,0,:] - arr[:,2,:]
+    difference[:,ny-1,:] = 3*arr[:,ny-1,:] + arr[:,ny-3,:] - 4*arr[:,ny-2,:]
     return difference
 
 @njit(fastmath=True)
@@ -38,40 +40,41 @@ def arr_diff_z(arr):
     nz = arr.shape[2]
     difference = np.zeros_like(arr)
     difference[:,:,1:nz-1] = (arr[:,:,2:nz] - arr[:,:,0:nz-2])
-    difference[:,:,0] = 2*(arr[:,:,1] - arr[:,:,0]) - difference[:,:,1] # Second order extrapolation at the boundary
-    difference[:,:,nz-1] = 2*(arr[:,:,nz-1] - arr[:,:,nz-2]) - difference[:,:,nz-2] # Second order extrapolation at the boundary
+    # Second order extrapolation at the boundary
+    difference[:,:,0] = 4*arr[:,:,1] - 3*arr[:,:,0] - arr[:,:,2]
+    difference[:,:,nz-1] = 3*arr[:,:,nz-1] + arr[:,:,nz-3] - 4*arr[:,:,nz-2]
     return difference
 
 @njit(fastmath=True)
 def arr_gradient(arr, dx):
-    den = np.float32(1/dx)
+    den = np.float32(1/(2*dx))
     return den*arr_diff_x(arr), den*arr_diff_y(arr), den*arr_diff_z(arr)
 
 @njit(fastmath=True)
 def arr_gradient_magnitude(arr, dx):
-    den = np.float32(1/dx)
+    den = np.float32(1/(2*dx))
     return den*np.sqrt(arr_diff_x(arr)**2 + arr_diff_y(arr)**2 + arr_diff_z(arr)**2)
 
 @njit(fastmath=True)
 def arr_divergence(arr_x, arr_y, arr_z, dx):
-    den = np.float32(1/dx)
+    den = np.float32(1/(2*dx))
     return (arr_diff_x(arr_x) + arr_diff_y(arr_y) + arr_diff_z(arr_z))*den
 
 @njit(fastmath=True)
 def arr_curl(arr_x, arr_y, arr_z, dx):
-    den = np.float32(1/dx)
+    den = np.float32(1/(2*dx))
     return den*(arr_diff_y(arr_z) - arr_diff_z(arr_y)), den*(arr_diff_z(arr_x) - arr_diff_x(arr_z)), den*(arr_diff_x(arr_y) - arr_diff_y(arr_x))
 
 @njit(fastmath=True)
 def arr_curl_magnitude(arr_x, arr_y, arr_z, dx):
-    den = np.float32(1/dx)
+    den = np.float32(1/(2*dx))
     return den*np.sqrt((arr_diff_y(arr_z) - arr_diff_z(arr_y))**2 +
                        (arr_diff_z(arr_x) - arr_diff_x(arr_z))**2 + 
                        (arr_diff_x(arr_y) - arr_diff_y(arr_x))**2)
 
 @njit(fastmath=True)
 def arr_u_nabla_phi(arrphi, arru_x, arru_y, arru_z, dx):
-    den = np.float32(1/dx)
+    den = np.float32(1/(2*dx))
     return den*(arru_x*arr_diff_x(arrphi) + arru_y*arr_diff_y(arrphi) + arru_z*arr_diff_z(arrphi))
 
 @njit(fastmath=True)
