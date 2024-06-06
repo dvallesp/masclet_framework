@@ -24,6 +24,8 @@ from masclet_framework import cosmo_tools, tools
 
 from scipy import optimize
 
+import numba
+
 
 # FUNCTIONS DEFINED IN THIS MODULE
 
@@ -356,13 +358,14 @@ def several_radial_profiles_vw(fields, clusrx, clusry, clusrz, rmin, rmax, nbins
     return bin_centers, profiles_split
 
 
-def vol_integral(field, units, zeta, cr0amr, solapst, npatch, patchrx, patchry, patchrz, patchnx, patchny, patchnz, size, nmax, coords, rad, kept_patches=None):
+def vol_integral(field, units, a0, zeta, cr0amr, solapst, npatch, patchrx, patchry, patchrz, patchnx, patchny, patchnz, size, nmax, coords, rad, max_refined_level=1000, kept_patches=None, vol=False, verbose=False):
     """
     Given a scalar field and a sphere defined with a center (x,y,z) and a radious together with the patch structure, returns the volumetric integral of the field along the sphere.
 
     Args:
         - field: scalar field to be integrated
         - units: change of units factor to be multiplied by the final integral if one wants physical units
+        - a0: scale factor at the initial time with the units of the simulation
         - zeta: redshift of the simulation snap to calculate the scale factor
         - cr0amr: AMR maximum refinement factor (only the maximally resolved cells are considered)
         - solapst: AMR overlap factor (only the maximally resolved cells are considered)
@@ -373,11 +376,21 @@ def vol_integral(field, units, zeta, cr0amr, solapst, npatch, patchrx, patchry, 
         - nmax: number of cells in the coarsest resolution level
         - coords: center of the sphere in a numpy array [x,y,z]
         - rad: radius of the sphere
+        - max_refined_level: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
         - kept_patches: boolean array to select the patches to be considered in the integration. True if the patch is kept, False if not. If None, all patches are kept.
+        - vol: if True, returns the volume of integration in phiysical and comoving units
+        - verbose: if True, prints the integral being calculated
 
     Returns:
         - integral: volumetric integral of the field along the sphere
+    
+    Author: Marco José Molina Pradillo
     """
+    if vol == True:
+        ones_array = [np.ones_like(patch) for patch in field]  # Test array
+        volume_fi = 0
+        volume_co = 0
+    
     if kept_patches is None:
         total_npatch = len(field)
         kept_patches = np.ones((total_npatch,), dtype=bool)
@@ -386,41 +399,148 @@ def vol_integral(field, units, zeta, cr0amr, solapst, npatch, patchrx, patchry, 
     
     dx = size/nmax
     
-    a = 1 / (1 + zeta) # We compute the scale factor
+    a = a0 / (1 + zeta) # We compute the scale factor
     
     integral = 0
     
-    for p in range(len(kept_patches)): # We run across all the patches
+    for p in range(len(vector_levels)): # We run across all the patches we are interested in
         
-        patch_res = dx/(2**vector_levels[p])
+        if kept_patches[p] != 0: # We only want the patches inside the region of interest
         
-        x0 = patchrx[p] - patch_res/2 #Center of the left-bottom-front cell
-        y0 = patchry[p] - patch_res/2
-        z0 = patchrz[p] - patch_res/2
-        
-        x_grid = np.linspace(x0, x0 + patch_res*patchnx[p], patchnx[p])
-        y_grid = np.linspace(y0, y0 + patch_res*patchny[p], patchny[p])
-        z_grid = np.linspace(z0, z0 + patch_res*patchnz[p], patchnz[p])
-        
-        X_grid, Y_grid, Z_grid = np.meshgrid(x_grid, y_grid, z_grid, indexing='ij')
-        
-        # Create a boolean mask where the condition is True
-        mask = ((coords[0] - X_grid)**2 + (coords[1] - Y_grid)**2 + (coords[2] - Z_grid)**2) <= rad**2
-        
-        # Calculate the physical volume of the cell in this simulation patch
-        dr3 = (a*patch_res)**3
-        
-        # Calculate the integral of the scalar quantity over the volume
-        
-        masked = np.where(mask, field[p], 0)
-        
-        integral += np.sum(masked*cr0amr[p]*solapst[p])*dr3
+            patch_res = dx/(2**vector_levels[p])
+            
+            x0 = patchrx[p] - patch_res/2 #Center of the left-bottom-front cell
+            y0 = patchry[p] - patch_res/2
+            z0 = patchrz[p] - patch_res/2
+            
+            x_grid = np.linspace(x0, x0 + patch_res * (patchnx[p] - 1), patchnx[p])
+            y_grid = np.linspace(y0, y0 + patch_res * (patchny[p] - 1), patchny[p])
+            z_grid = np.linspace(z0, z0 + patch_res * (patchnz[p] - 1), patchnz[p])
+            
+            X_grid, Y_grid, Z_grid = np.meshgrid(x_grid, y_grid, z_grid, indexing='ij')
+            
+            # Create a boolean mask where the condition is True
+            mask = ((coords[0] - X_grid)**2 + (coords[1] - Y_grid)**2 + (coords[2] - Z_grid)**2) <= rad**2
+            
+            # Calculate the physical volume of the cell in this simulation patch
+            dr3 = (a*patch_res)**3
+            
+            # Calculate the integral of the scalar quantity over the volume
+            
+            masked = np.where(mask, field[p], 0)
+            
+            if vol == True: 
+                masked1 = np.where(mask, ones_array[p], 0)
+            
+            if vector_levels[p] < max_refined_level:
+                integral += np.sum(masked*cr0amr[p]*solapst[p])*dr3
+                if vol == True:
+                    volume_fi += np.sum(masked1*cr0amr[p]*solapst[p])*dr3
+                    volume_co += np.sum(masked1*cr0amr[p]*solapst[p])*(patch_res)**3
+            elif vector_levels[p] == max_refined_level:
+                integral += np.sum(masked*solapst[p])*dr3
+                if vol == True:
+                    volume_fi += np.sum(masked1*solapst[p])*dr3
+                    volume_co += np.sum(masked1*solapst[p])*(patch_res)**3
     
     integral = units * integral
     
-    print('Total integrated field: ' + str(integral))
+    if verbose:
+        print('Total integrated field: ' + str(integral))
     
-    return integral
+    if vol == True:
+        return integral, volume_fi, volume_co
+    else:
+        return integral
+    
+# def vol_integral_david(field, units, a0, zeta, cr0amr, solapst, npatch, patchrx, patchry, patchrz, patchnx, patchny, patchnz, size, nmax, coords, rad, max_refined_level=1000, kept_patches=None, vol=False, verbose=False):
+#     """
+#     Given a scalar field and a sphere defined with a center (x,y,z) and a radious together with the patch structure, returns the volumetric integral of the field along the sphere.
+
+#     Args:
+#         - field: scalar field to be integrated
+#         - units: change of units factor to be multiplied by the final integral if one wants physical units
+#         - a0: scale factor at the initial time with the units of the simulation
+#         - zeta: redshift of the simulation snap to calculate the scale factor
+#         - cr0amr: AMR maximum refinement factor (only the maximally resolved cells are considered)
+#         - solapst: AMR overlap factor (only the maximally resolved cells are considered)
+#         - npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+#         - patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+#         - patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+#         - size: comoving size of the simulation box
+#         - nmax: number of cells in the coarsest resolution level
+#         - coords: center of the sphere in a numpy array [x,y,z]
+#         - rad: radius of the sphere
+#         - max_refined_level: maximum refinement level that wants to be read. Subsequent refinements will be skipped. (int)
+#         - kept_patches: boolean array to select the patches to be considered in the integration. True if the patch is kept, False if not. If None, all patches are kept.
+#         - vol: if True, returns the volume of integration in phiysical and comoving units
+#         - verbose: if True, prints the integral being calculated
+
+#     Returns:
+#         - integral: volumetric integral of the field along the sphere
+    
+#     Author: Marco José Molina Pradillo
+#     """
+#         X, Y, Z = tools_xyz.compute_position_fields(grid_patchnx[i+j], grid_patchny[i+j], grid_patchnz[i+j], grid_patchrx[i+j], grid_patchry[i+j], grid_patchrz[i+j], grid_npatch[i+j], size[0], nmax, ncores=1, kept_patches=clus_kp[i+j])
+
+#         integral[i+j] = (1/2)*units*sum([qi[(xi-coords[0])**2 + (yi-coords[1])**2 + (zi-coords[2])**2 <= Rad**2].sum() * ((a0 / (1 + grid_zeta[i+j]))*size[0]/nmax/2**li)**3 if ki else 0 for xi,yi,zi,qi,li,ki in 
+#                                             zip(X, Y, Z, tools.clean_field(field[i+j], clus_cr0amr[i+j], clus_solapst[i+j], grid_npatch[i+j]), vector_levels[i+j], clus_kp[i+j])])
+
+#         print(integral[i+j])
+
+        
+@numba.njit(fastmath = True)
+def patch_contribution(coords,rad,x0,y0,z0,nx,ny,nz,patch_res,cr0amr,solapst,field):
+    patch_integral = 0.
+    for ix in range(nx):
+        for iy in range(ny):
+            for iz in range(nz):
+                x = x0 + ix*patch_res
+                y = y0 + iy*patch_res
+                z = z0 + iz*patch_res
+                if (x-coords[0])**2 + (y-coords[1])**2 + (z-coords[2])**2 < rad**2:
+                    patch_integral += field[ix,iy,iz]*cr0amr[ix,iy,iz]*solapst[ix,iy,iz]*(patch_res)**3
+
+    return patch_integral
+
+def vol_integral_oscar(field, units, a0, zeta, cr0amr, solapst, npatch, patchrx, patchry, patchrz, patchnx, patchny, patchnz, size, nmax, coords, rad, max_refined_level=1000, kept_patches=None):
+
+    vector_levels = tools.create_vector_levels(npatch)
+    
+    dx = size/nmax
+    
+    a = a0 / (1 + zeta) # We compute the scale factor
+    
+    integral = 0
+    for p in range(len(vector_levels)): # We run across all the patches we are interested in
+        
+        if kept_patches[p] != 0: # We only want the patches inside the region of interest
+        
+            patch_res = dx/(2**vector_levels[p])
+            
+            x0 = patchrx[p] - patch_res/2 #Center of the left-bottom-front cell
+            y0 = patchry[p] - patch_res/2
+            z0 = patchrz[p] - patch_res/2
+            nx = patchnx[p]
+            ny = patchny[p]
+            nz = patchnz[p]
+
+            if vector_levels[p] == max_refined_level:
+                cr0amr_patch = np.ones((nx, ny, nz))
+
+            else:
+                cr0amr_patch = cr0amr[p]
+
+            if p == 0:
+                solapst_patch = np.ones((nx, ny, nz))
+            else:
+                solapst_patch = solapst[p]
+
+            field_patch = field[p]
+            patch_integral = patch_contribution(coords,rad,x0,y0,z0,nx,ny,nz,patch_res,cr0amr_patch,solapst_patch,field_patch)
+            integral += patch_integral  
+
+    return units*a**3*integral
 
 
 # SECTION: find radius from R_\Delta radii definitions
@@ -662,7 +782,5 @@ def ellipsoidal_shape_cells(cellsrx, cellsry, cellsrz, cellsm, r, tol=1e-3, maxi
             break
 
     return [semiax_x, semiax_y, semiax_z], [ppal_x, ppal_y, ppal_z]
-
-
 
 
