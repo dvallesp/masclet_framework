@@ -20,8 +20,8 @@ def arr_diff_x(arr):
     nx = arr.shape[0]
     difference = np.zeros_like(arr)
     difference[1:nx-1,:,:] = (arr[2:nx,:,:] - arr[0:nx-2,:,:])/2
-    difference[0,:,:] = 2*(arr[1,:,:] - arr[0,:,:]) - difference[1,:,:] # Second order extrapolation at the boundary
-    difference[nx-1,:,:] = 2*(arr[nx-1,:,:] - arr[nx-2,:,:]) - difference[nx-2,:,:] # Second order extrapolation at the boundary
+    difference[0,:,:] = 4*arr[1,:,:] - 3*arr[0,:,:] - arr[2,:,:] # Second order extrapolation at the boundary
+    difference[nx-1,:,:] = 3*arr[nx-1,:,:] + arr[nx-3,:,:] - 4*arr[nx-2,:,:] # Second order extrapolation at the boundary
     return difference
 
 @njit(fastmath=True)
@@ -31,8 +31,8 @@ def arr_diff_x_5_stencil(arr):
     difference[2:nx-2,:,:] = (-arr[4:nx,:,:] + 8*arr[3:nx-1,:,:] - 8*arr[1:nx-3,:,:] + arr[0:nx-4,:,:])/12
     difference[1,:,:] = (arr[2,:,:] - arr[0,:,:])/2 # Second order central difference at the second to last boundary
     difference[nx-2,:,:] = (arr[nx-1,:,:] - arr[nx-3,:,:])/2 # Second order central difference at the second to last boundary
-    difference[0,:,:] = 2*(arr[1,:,:] - arr[0,:,:]) - difference[1,:,:] # Second order extrapolation at the boundary
-    difference[nx-1,:,:] = 2*(arr[nx-1,:,:] - arr[nx-2,:,:]) - difference[nx-2,:,:] # Second order extrapolation at the boundary
+    difference[0,:,:] = 4*arr[1,:,:] - 3*arr[0,:,:] - arr[2,:,:] # Second order extrapolation at the boundary
+    difference[nx-1,:,:] = 3*arr[nx-1,:,:] + arr[nx-3,:,:] - 4*arr[nx-2,:,:] # Second order extrapolation at the boundary
     return difference
 
 @njit(fastmath=True)
@@ -40,8 +40,19 @@ def arr_diff_y(arr):
     ny = arr.shape[1]
     difference = np.zeros_like(arr)
     difference[:,1:ny-1,:] = (arr[:,2:ny,:] - arr[:,0:ny-2,:])/2
-    difference[:,0,:] = 2*(arr[:,1,:] - arr[:,0,:]) - difference[:,1,:] # Second order extrapolation at the boundary
-    difference[:,ny-1,:] = 2*(arr[:,ny-1,:] - arr[:,ny-2,:]) - difference[:,ny-2,:] # Second order extrapolation at the boundary
+    difference[:,0,:] = 4*arr[:,1,:] - 3*arr[:,0,:] - arr[:,2,:] # Second order extrapolation at the boundary
+    difference[:,ny-1,:] = 3*arr[:,ny-1,:] + arr[:,ny-3,:] - 4*arr[:,ny-2,:] # Second order extrapolation at the boundary
+    return difference
+
+@njit(fastmath=True)
+def arr_diff_y_5_stencil(arr):
+    ny = arr.shape[1]
+    difference = np.zeros_like(arr)
+    difference[:,2:ny-2,:] = (-arr[:,4:ny,:] + 8*arr[:,3:ny-1,:] - 8*arr[:,1:ny-3,:] + arr[:,0:ny-4,:])/12
+    difference[:,1,:] = (arr[:,2,:] - arr[:,0,:])/2 # Second order central difference at the second to last boundary
+    difference[:,ny-2,:] = (arr[:,ny-1,:] - arr[:,ny-3,:])/2 # Second order central difference at the second to last boundary
+    difference[:,0,:] = 4*arr[:,1,:] - 3*arr[:,0,:] - arr[:,2,:] # Second order extrapolation at the boundary
+    difference[:,ny-1,:] = 3*arr[:,ny-1,:] + arr[:,ny-3,:] - 4*arr[:,ny-2,:] # Second order extrapolation at the boundary
     return difference
 
 @njit(fastmath=True)
@@ -49,8 +60,19 @@ def arr_diff_z(arr):
     nz = arr.shape[2]
     difference = np.zeros_like(arr)
     difference[:,:,1:nz-1] = (arr[:,:,2:nz] - arr[:,:,0:nz-2])/2
-    difference[:,:,0] = 2*(arr[:,:,1] - arr[:,:,0]) - difference[:,:,1] # Second order extrapolation at the boundary
-    difference[:,:,nz-1] = 2*(arr[:,:,nz-1] - arr[:,:,nz-2]) - difference[:,:,nz-2] # Second order extrapolation at the boundary
+    difference[:,:,0] = 4*arr[:,:,1] - 3*arr[:,:,0] - arr[:,:,2] # Second order extrapolation at the boundary
+    difference[:,:,nz-1] = 3*arr[:,:,nz-1] + arr[:,:,nz-3] - 4*arr[:,:,nz-2] # Second order extrapolation at the boundary
+    return difference
+
+@njit(fastmath=True)
+def arr_diff_z_5_stencil(arr):
+    nz = arr.shape[2]
+    difference = np.zeros_like(arr)
+    difference[:,:,2:nz-2] = (-arr[:,:,4:nz] + 8*arr[:,:,3:nz-1] - 8*arr[:,:,1:nz-3] + arr[:,:,0:nz-4])/12
+    difference[:,:,1] = (arr[:,:,2] - arr[:,:,0])/2 # Second order central difference at the second to last boundary
+    difference[:,:,nz-2] = (arr[:,:,nz-1] - arr[:,:,nz-3])/2 # Second order central difference at the second to last boundary
+    difference[:,:,0] = 4*arr[:,:,1] - 3*arr[:,:,0] - arr[:,:,2] # Second order extrapolation at the boundary
+    difference[:,:,nz-1] = 3*arr[:,:,nz-1] + arr[:,:,nz-3] - 4*arr[:,:,nz-2] # Second order extrapolation at the boundary
     return difference
 
 @njit(fastmath=True)
