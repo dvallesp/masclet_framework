@@ -1,6 +1,6 @@
 # MASCLET Framework
 
-This library implements some functions which can be used to handle the outputs from the cosmological code MASCLET (Quilis, 2004). Do not hesitate to contact the creator of the library (David Vallés) for any troubles you might encounter or suggestions you might have regarding this library.
+This library implements some functions which can be used to handle the outputs from the cosmological code MASCLET (Quilis, 2004). The intention of this new update is to add the necessary scripts to interact with the results related to the magnetic field. Do not hesitate to contact the creator of the library (David Vallés) or the magnetism part (Marco Molina) for any troubles you might encounter or suggestions you might have regarding this library.
 
 In the following lines, we add some brief information about each of the modules of the library. More information about the specific usage of each function can be found in their corresponding docstrings. 
 
@@ -47,7 +47,7 @@ Contains functions to deal with particle species (either dark matter or stars), 
 Supplies easy unit conversion from MASCLET internal units to cgs, ISU and astrophysical units.
 
 ### cosmo_tools
-Includes several essential cosmological computations (like cosmological time from redshift, background and critical densities, etc. Also includes a function to write and read a cosmological parameters file for a simulation, analogously to what can be done with the parameters module.
+Includes several essential cosmological computations like cosmological time from redshift, background and critical densities, etc. Also includes a function to write and read a cosmological parameters file for a simulation, analogously to what can be done with the parameters module.
 
 ### graphics
 Includes several functions for straightforward representations, like computing projections from uniform grids and plotting colormaps (using matplotlib).

@@ -255,6 +255,16 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         print('Error: cannot output magnetic field if the simulation has not.')
         print('Terminating')
         return
+    
+    if output_temp and (not is_cooling):
+        print('Error: cannot output temperature if cooling was not allowed in the simulation.')
+        print('Terminating')
+        return
+    
+    if output_metalicity and (not is_cooling):
+        print('Error: cannot output metalicity if cooling was not allowed in the simulation.')
+        print('Terminating')
+        return
 
     nmax, nmay, nmaz, nlevels, size = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
                                                                  load_namr=False, load_size=True, path=parameters_path)
