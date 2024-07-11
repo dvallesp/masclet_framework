@@ -114,6 +114,61 @@ def LCDM_time(z1,z2,omega_m,omega_lambda,h):
     return tH * t[0] / h
 
 
+def LCDM_time_to_z(t, omega_m, omega_lambda, h, zmin=0., zmax=1000., zini=1.,
+                    ztol=1e-4,method='newton'):
+    """
+    Computes the redshift corresponding to a given time, using a bisection method.
+
+    Args:
+        t: time, in years
+        omega_m: matter density parameter, at z=0
+        omega_lambda: dark energy density parameter, at z=0
+        h: dimensionless Hubble constant
+        zmin: minimum redshift to consider (bisection)
+        zmax: maximum redshift to consider (bisection)
+        zinit: initial guess for the redshift (Newton)
+        ztol: tolerance for the redshift
+        method: method to use for the computation. Options: 'bisection', 'newton'
+    
+    Returns:
+        Redshift corresponding to the given time
+    """
+    if method == 'bisection':
+        # simple bisection method 
+        # at all times, z1 < z2 --> t1 > t2
+        z1 = zmin 
+        z2 = zmax 
+        t1 = LCDM_time(np.inf, z1, omega_m, omega_lambda, h)
+        t2 = LCDM_time(np.inf, z2, omega_m, omega_lambda, h)
+        assert t1 > t and t2 < t
+
+        while z2 - z1 > ztol:
+            ztest = (z1+z2)/2
+            ttest = LCDM_time(np.inf, ztest, omega_m, omega_lambda, h)
+            if ttest < t:
+                z2 = ztest
+                t2 = ttest
+            else:
+                z1 = ztest
+                t1 = ttest
+
+            assert t1 > t and t2 < t
+        
+        return (z1+z2)/2
+    elif method == 'newton':
+        tH = 9784597488 / h
+
+        zbackup = zini + 1000*ztol 
+        z = zini 
+        while abs(z-zbackup) > ztol:
+            zbackup = z
+            tz = LCDM_time(np.inf, z, omega_m, omega_lambda, h)
+            z = z - (1+z)*E(z, omega_m, omega_lambda) * (t - tz)/tH
+        return z
+    else:
+        raise ValueError("Method not implemented")
+
+
 def critical_density(h, z=0, omega_m=0, omega_lambda=0):
     """
     Computes the value of the critical density of the universe (for making k=0, Lambda=0) at a given redshift, z.
