@@ -83,7 +83,7 @@ def arr_diff_z(arr):
     difference[:,:,nz-1] = 3*arr[:,:,nz-1] + arr[:,:,nz-3] - 4*arr[:,:,nz-2]
     return difference
 
-    @njit(fastmath=True)
+@njit(fastmath=True)
 def arr_diff_z_5_stencil(arr):
     '''
     Computes the five-point stencil derivative in this coordinate direction.
