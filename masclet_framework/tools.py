@@ -23,6 +23,7 @@ import gc
 
 from numba import jit, njit, prange
 from numba.typed import List
+import warnings
 
 # from masclet_framework import cosmo_tools, units
 
@@ -922,6 +923,9 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
 
     Returns:
         Uniform grid as described, and optionally the coordinates of the grid
+
+    KNOWN ISSUES: if interpolate=True and box_limits reaches the edge of the simulation box, the interpolation will fail,
+                  crashing the interpreter. This is a known issue and will be fixed in future versions.
     """
 
     def intt(x):
@@ -949,6 +953,11 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
     bjmax = box_limits[3]
     bkmin = box_limits[4]
     bkmax = box_limits[5]
+
+    # Warning for the issue mentioned above
+    if interpolate and (bimin == 0 or bimax == nmax-1 or bjmin == 0 or bjmax == nmax-1 or bkmin == 0 or bkmax == nmax-1):
+        warnings.warn('Interpolation may fail at the edges of the simulation box. Please, use NGP interpolation or '+\
+                        'avoid reaching the edges of the box. This issue will be fixed in future versions.')
 
     bxmin = -size / 2 + bimin * coarse_cellsize
     bxmax = -size / 2 + (bimax + 1) * coarse_cellsize
@@ -1008,7 +1017,7 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
     @njit(parallel=True)
     def parallelize(uniform_size_x, uniform_size_y, uniform_size_z, fine_coordinates, cell_patch, vertices_patches,
                     field,interpolate,verbose):
-        uniform = np.zeros((uniform_size_x, uniform_size_y, uniform_size_z))
+        uniform = np.zeros((uniform_size_x, uniform_size_y, uniform_size_z), dtype=np.float32)
         for i in prange(uniform_size_x):
             if verbose:
                 print('ix=',i,uniform_size_x)
@@ -1044,7 +1053,7 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
                         else:
                             uniform[i, j, k] = ubas[0 if xbas<=0.5 else 1, 0 if ybas<=0.5 else 1, 0 if zbas<=0.5 else 1]
         return uniform
-    
+
     uniform=parallelize(uniform_size_x, uniform_size_y, uniform_size_z, fine_coordinates, cell_patch, vertices_patches,
                         List([f if ki else np.zeros((2,2,2), dtype=field[0].dtype, order='F') for f,ki in zip(field, kept_patches)]),
                         interpolate,verbose)
