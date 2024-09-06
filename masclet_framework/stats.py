@@ -150,7 +150,7 @@ def parametric_conditional_correlation(x, y, z, mode='spearman'):
     Args:
         x: first array (1d np.array)
         y: second array (1d np.array)
-        z: third array (1d np.array)
+        z: third array (1d np.array), control variable
         mode: 'spearman' or 'pearson' (str)
 
     Returns:
@@ -163,3 +163,32 @@ def parametric_conditional_correlation(x, y, z, mode='spearman'):
 
     # Compute the correlation between the residuals and z
     return correlation(residuals, z, mode=mode)
+
+
+def conditional_correlation(x, y, z, mode='spearman', linear=True):
+    """
+    Compute the conditional correlation between x and y given z, using a linear model or a 
+    nonparametric fit to estimate the residuals. For the nonparametric fit, see parametric_conditional_correlation
+    for details.
+
+    The correlation can be computed in two modes: 'spearman' or 'pearson'.
+
+    Args:
+        x: first array (1d np.array)
+        y: second array (1d np.array)
+        z: third array (1d np.array), control variable
+        mode: 'spearman' or 'pearson' (str)
+        linear: if True, use a linear model to estimate the residuals. Otherwise, use a nonparametric fit.
+
+    Returns:
+        correlation: the conditional correlation value (float)
+    """
+    if linear:
+        rho_XY = correlation(x, y, mode=mode)
+        rho_XZ = correlation(x, z, mode=mode)
+        rho_YZ = correlation(y, z, mode=mode)
+        return (rho_XY - rho_XZ*rho_YZ) / np.sqrt((1-rho_XZ**2)*(1-rho_YZ**2))
+
+    else:
+        return parametric_conditional_correlation(x, y, z, mode=mode)
+        
