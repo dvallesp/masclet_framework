@@ -96,7 +96,7 @@ def partial_correlation(x, y, z, mode='spearman'):
     return (rho_xy - rho_xz*rho_yz) / np.sqrt((1-rho_xz**2)*(1-rho_yz**2))
 
 
-def nonparametric_fit(x, y):
+def nonparametric_fit(x, y, sfactor=1., verbose=True):
     """ 
     Fit a nonparametric smoothing spline to the data (x, y) using scipy's UnivariateSpline.
     The smoothing parameter s is determined automatically, by estimating the standard deviation 
@@ -105,34 +105,112 @@ def nonparametric_fit(x, y):
     Args:
         x: the x values (1d np.array)
         y: the y values (1d np.array)
+        sfactor: a scaling factor for the smoothing parameter. (float; optional, default=1. [no scaling])
+                 if None, it is optimized to minimize the scatter in the residuals while preventing overfitting.
+        verbose: if True and sfactor is None, print the optimal sfactor
 
     Returns:
         interpolant: the interpolant function (UnivariateSpline)
     """
-    # Order dots (requirement of scipy UnivariateSpline)
-    order = np.argsort(x)
+    if sfactor is not None:
+        # Order dots (requirement of scipy UnivariateSpline)
+        order = np.argsort(x)
 
-    # Determine the smoothing parameter s 
-    width = x.size//100
-    if width < 5:
-        width = 5
-    if width > 100:
-        width = 100
-    if width > x.size:
-        width = x.size
+        # Determine the smoothing parameter s 
+        width = x.size//100
+        if width < 5:
+            width = 5
+        if width > 100:
+            width = 100
+        if width > x.size:
+            width = x.size
 
-    w = np.zeros_like(x)
-    for i in range(x.size):
-        i1 = max(0, i-width)
-        i2 = min(x.size, i+width)
-        w[i] = np.std(y[order][i1:i2])
+        w = np.zeros_like(x)
+        for i in range(x.size):
+            i1 = max(0, i-width)
+            i2 = min(x.size, i+width)
+            w[i] = np.std(y[order][i1:i2])
 
-    w = 1/w
-    s = len(w)
-    w[:] = sum(w)/len(w)
+        w = 1/w
+        s = len(w)
+        w[:] = sum(w)/len(w)
 
-    interpolant = UnivariateSpline(x[order], y[order], k=3, s=s, w=w)
-    return interpolant
+        # Scale the smoothing parameter by sfactor
+        s *= sfactor
+
+        interpolant = UnivariateSpline(x[order], y[order], k=3, s=s, w=w)
+        return interpolant
+    else: # Optimize the smoothing parameter
+        sfacs = []
+        targets = []
+        sc1s = []
+        sc2s = []
+
+        xxx = np.linspace(min(x), max(x), 50)
+        # Note: changin the number of points in xxx will directly affect the scatter_of_fit 
+        # and change the results. I keep it to 50 since it is a reasonable scale for typical 
+        # 2d plots.
+        for sfactor in np.arange(0.1, 3, 0.1):
+            interpolant = nonparametric_fit(x, y, sfactor=sfactor)
+            yyy = interpolant(xxx)
+
+            # prevent overfitting
+            residuals = y - interpolant(x)
+            scatter_around_fit = np.mean(residuals**2)**0.5 
+            scatter_of_fit = np.mean(np.diff(yyy)**2)**0.5
+
+            # we want minimal scatter_around_fit and minimal scatter_of_fit, thus minimal target
+            target = scatter_around_fit + scatter_of_fit
+            #print('{:.1f} --> {:.3f} ({:.3f} {:.3f})'.format(sfactor, target, scatter_around_fit, scatter_of_fit))
+            sfacs.append(sfactor)
+            targets.append(target)
+            sc1s.append(scatter_around_fit)
+            sc2s.append(scatter_of_fit)
+
+        # Find the optimal sfactor, parabolic interpolation to find the minimum sfactor
+        idx = np.argmin(targets)
+        if idx == 0 or idx == len(targets)-1:
+            sfactor = sfacs[idx]
+        else:
+            # without parabolic 
+            sfactor = sfacs[idx]
+            interpolant = nonparametric_fit(x, y, sfactor=sfactor)
+            yyy = interpolant(xxx)
+            residuals = y - interpolant(x)
+            scatter_around_fit = np.mean(residuals**2)**0.5
+            scatter_of_fit = np.mean(np.diff(yyy)**2)**0.5
+            target0 = scatter_around_fit + scatter_of_fit
+
+            # with parabolic
+            x1 = sfacs[idx-1]
+            x2 = sfacs[idx]
+            x3 = sfacs[idx+1]
+            y1 = targets[idx-1]
+            y2 = targets[idx]
+            y3 = targets[idx+1]
+            
+            sfactor = x3*(y2-y1) + x1*(y3-y2) + x2*(y1-y3)
+            sfactor *= (x3**2*(y2-y1) + x1**2*(y3-y2) + x2**2*(y1-y3))
+            sfactor /= 2*((x1-x2)*(x1-x3)*(x2-x3))**2
+
+            interpolant = nonparametric_fit(x, y, sfactor=sfactor)
+            yyy = interpolant(xxx)
+            residuals = y - interpolant(x)
+            scatter_around_fit = np.mean(residuals**2)**0.5
+            scatter_of_fit = np.mean(np.diff(yyy)**2)**0.5
+            target1 = scatter_around_fit + scatter_of_fit
+
+            if target1 > target0:
+                sfactor = sfacs[idx]
+
+            if verbose:
+                print('Optimal sfactor:', sfactor)
+            
+        return nonparametric_fit(x, y, sfactor=sfactor)
+
+
+
+
 
 def parametric_conditional_correlation(x, y, z, mode='spearman'):
     """
