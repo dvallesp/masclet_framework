@@ -93,6 +93,9 @@ mp_masclet = mp_isu * kg_to_mass
 
 c_masclet = 1.
 c_MpcMyr = 0.306594745
+c_isu = 299792458
+c_kms = 299792.458
+c_cm_s = 29979245800
 
 e_isu = 1.60218e-19
 
