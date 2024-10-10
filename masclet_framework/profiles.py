@@ -21,7 +21,8 @@ from scipy.spatial import KDTree
 from scipy.integrate import cumulative_trapezoid
 
 @jit(nopython=True, fastmath=True)
-def locate_point(x,y,z,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,nl,buf=1):
+def locate_point(x,y,z,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,nl,buf=1,
+                 no_interp=False):
     """
     Given a point (x,y,z) and the patch structure, returns the patch and cell
     where the point is located.
@@ -35,6 +36,8 @@ def locate_point(x,y,z,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,si
         - nmax: cells at base level
         - nl: maximum AMR level to be considered
         - buf: number of cells to be ignored in the border of each patch
+        - no_interp: if True, the point is located in the cell where it is. If False (default), it is 
+                     assigned to its left-bottom-back corner cell, so as to do CIC interpolation.
 
     Returns:
         - f_patch: patch where the point is located
@@ -75,14 +78,15 @@ def locate_point(x,y,z,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,si
     x1=patchrx[f_patch]-dxpa
     y1=patchry[f_patch]-dxpa
     z1=patchrz[f_patch]-dxpa
-    
-    ix=int((x-x1)/dxpa)
-    jy=int((y-y1)/dxpa)
-    kz=int((z-z1)/dxpa)
-    
-    ix=int((x-x1)/dxpa-.5)
-    jy=int((y-y1)/dxpa-.5)
-    kz=int((z-z1)/dxpa-.5)
+
+    if no_interp:
+        ix=int((x-x1)/dxpa)
+        jy=int((y-y1)/dxpa)
+        kz=int((z-z1)/dxpa)
+    else:  
+        ix=int((x-x1)/dxpa-.5)
+        jy=int((y-y1)/dxpa-.5)
+        kz=int((z-z1)/dxpa-.5)
     
     return f_patch,ix,jy,kz
 
@@ -130,6 +134,8 @@ def dir_profile(field, cx,cy,cz,
     if type(binsphi) is np.ndarray or type(binsphi) is list:
         Nphi=len(binsphi)
         vec_phi=binsphi
+        if type(binsphi) is list:
+            vec_phi=np.array(vec_phi)
     elif type(binsphi) is int:
         Nphi=binsphi
         vec_phi=np.linspace(-np.pi + np.pi/Nphi,np.pi -np.pi/Nphi,Nphi)
@@ -140,6 +146,8 @@ def dir_profile(field, cx,cy,cz,
     if type(binscostheta) is np.ndarray or type(binscostheta) is list:
         Ncostheta=len(binscostheta)
         vec_costheta=binscostheta
+        if type(binscostheta) is list:
+            vec_costheta=np.array(vec_costheta)
     elif type(binscostheta) is int:
         Ncostheta=binscostheta
         vec_costheta=np.linspace(-1+1/Ncostheta,1-1/Ncostheta,Ncostheta)
@@ -150,6 +158,8 @@ def dir_profile(field, cx,cy,cz,
     if type(binsr) is np.ndarray or type(binsr) is list:
         num_bins=len(binsr)
         rrr=binsr
+        if type(binsr) is list:
+            rrr=np.array(rrr)
     elif (rmin is not None) and (rmax is not None) and ((dex_rbins is not None) or (delta_rbins is not None)) and ((dex_rbins is None) or (delta_rbins is None)):
         if dex_rbins is not None:
             num_bins=int(np.log10(rmax/rmin)/dex_rbins/2)*2+1 # guarantee it is odd
@@ -351,6 +361,8 @@ def dir_profile_particles(particles_field, cx,cy,cz,size, tree=None,
     if type(binsphi) is np.ndarray or type(binsphi) is list:
         Nphi=len(binsphi)
         vec_phi=binsphi
+        if type(binsphi) is list:
+            vec_phi=np.array(vec_phi)
     elif type(binsphi) is int:
         Nphi=binsphi
         vec_phi=np.linspace(-np.pi + np.pi/Nphi,np.pi -np.pi/Nphi,Nphi)
@@ -361,6 +373,8 @@ def dir_profile_particles(particles_field, cx,cy,cz,size, tree=None,
     if type(binscostheta) is np.ndarray or type(binscostheta) is list:
         Ncostheta=len(binscostheta)
         vec_costheta=binscostheta
+        if type(binscostheta) is list:
+            vec_costheta=np.array(vec_costheta)
     elif type(binscostheta) is int:
         Ncostheta=binscostheta
         vec_costheta=np.linspace(-1+1/Ncostheta,1-1/Ncostheta,Ncostheta)
@@ -371,6 +385,8 @@ def dir_profile_particles(particles_field, cx,cy,cz,size, tree=None,
     if type(binsr) is np.ndarray or type(binsr) is list:
         num_bins=len(binsr)
         rrr=binsr
+        if type(binsr) is list:
+            rrr=np.array(rrr)
     elif (rmin is not None) and (rmax is not None) and ((dex_rbins is not None) or (delta_rbins is not None)) and ((dex_rbins is None) or (delta_rbins is None)):
         if dex_rbins is not None:
             num_bins=int(np.log10(rmax/rmin)/dex_rbins/2)*2+1 # guarantee it is odd
