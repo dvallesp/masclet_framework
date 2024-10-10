@@ -20,6 +20,11 @@ import numpy as np
 # matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+import seaborn as sns
+import matplotlib.ticker as mticker
+from matplotlib.ticker import MaxNLocator
+import math
+from scipy.stats import gaussian_kde
 
 
 # FUNCTIONS DEFINED IN THIS MODULE
@@ -153,3 +158,192 @@ def compute_projection(matrix, axis=2, slicepositions=None):
         return matrix.mean(axis)
     else:
         raise ValueError('slicemin should be smaller than slicemax')
+    
+
+def format_uncertainty(median, lower_err, upper_err):
+    """
+    Formats the median and the asymmetric errors in the form:
+    median^{+upper_err}_{-lower_err} with consistent precision and scientific notation when necessary.
+
+    Args:
+        median (float): The central value (median).
+        lower_err (float): The lower error (difference between the median and lower bound).
+        upper_err (float): The upper error (difference between the median and upper bound).
+
+    Returns:
+        str: The formatted string in the form of median^{+upper_err}_{-lower_err}, with scientific notation if necessary.
+    """
+    # Find the largest error and determine its precision (2 significant figures)
+    max_err = max(lower_err, upper_err)
+    err_order = math.floor(math.log10(abs(max_err))) if max_err != 0 else 0
+    precision = -err_order + 1  # 2 significant figures for the errors
+
+    # Round the median and the errors to the same precision
+    rounded_median = round(median, precision)
+    rounded_lower = round(lower_err, precision)
+    rounded_upper = round(upper_err, precision)
+
+    # Determine if scientific notation is needed based on the order of the median
+    median_order = math.floor(math.log10(abs(rounded_median))) if rounded_median != 0 else 0
+
+    # If the median is large/small, use scientific notation
+    if abs(median_order) >= 3:
+        factor = 10 ** median_order
+        rounded_median /= factor
+        rounded_lower /= factor
+        rounded_upper /= factor
+
+        precision = max(0, precision + median_order)
+
+        formatted = f"$({rounded_median:.{precision}f}^{{+{rounded_upper:.{precision}f}}}_{{-{rounded_lower:.{precision}f}}}) \\times 10^{{{median_order}}}$"
+    else:
+        formatted = f"${rounded_median:.{precision}f}^{{+{rounded_upper:.{precision}f}}}_{{-{rounded_lower:.{precision}f}}}$"
+
+
+    return formatted
+
+
+def cornerplot(dataset, varnames=None, units=None, logscale=None, figsize=None, labelsize=12, ticksize=10,
+               title=None, s=3, color='blue', kde=True, cmap_kde='Blues', filled_kde=True):
+    """
+    Generates a corner plot of the dataset. For scatter plots, it uses KDE to estimate the density of the points.
+
+    Args:
+        dataset: n x m numpy array, where n is the number of samples and m the number of variables.
+        varnames: list of m strings with the names of the variables. If not specified, it will place no labels.
+        units: list of m strings with the units of the variables. If not specified, it will place no units.
+        logscale: list of m booleans, indicating if the variables should be plotted in logscale
+        figsize: tuple with the dimensions of the figure
+        labelsize: size of the labels
+        ticksize: size of the ticks
+        title: title of the plot
+        s: size of the scatter points
+        color: color of the histograms and scatter plots
+        kde: whether to plot the KDE or not
+        cmap_kde: colormap for the KDE plot
+        filled_kde: whether to fill the KDE plot or not
+    
+    Returns:
+        figure object and grid of axes with the corner plot
+    """
+    m = dataset.shape[1]
+    n = dataset.shape[0]
+
+    if varnames is None:
+        varnames = [''] * m
+    else:
+        if len(varnames) != m:
+            raise ValueError('varnames should have the same length as the number of variables')
+    if units is None:
+        units = [''] * m
+    else:
+        if len(units) != m:
+            raise ValueError('units should have the same length as the number of variables')
+    if logscale is None:
+        logscale = [False] * m
+    else:
+        if len(logscale) != m:
+            raise ValueError('logscale should have the same length as the number of variables')
+    if figsize is None:
+        figsize = (2.5 * m, 2.5 * m)
+    
+    fig, axes = plt.subplots(m, m, figsize=figsize)
+
+    for i in range(m):
+        for j in range(m):
+            if i == j:
+                sns.histplot(dataset[:, i], kde=True, ax=axes[i, j], log_scale=logscale[i], color=color)
+
+                axes[i, j].tick_params(axis='both', which='major', labelsize=ticksize)
+                axes[i, j].set_yticks([])
+                axes[i, j].set_ylabel('', fontsize=labelsize)
+                if i != m - 1:
+                    axes[i, j].tick_params(axis='x', which='both', bottom=True, labelbottom=False)
+                if logscale[i]:
+                    axes[i, j].set_xscale('log')
+                    axes[i, j].xaxis.set_major_formatter(mticker.ScalarFormatter(useMathText=True))
+                    axes[i, j].xaxis.get_offset_text().set_size(labelsize)  # Adjust offset text size if needed
+                    axes[i, j].xaxis.get_offset_text().set_position((1.0, 0))  # Position the offset to the right
+                    axes[i, j].ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
+                if i == m - 1:
+                    axes[i, j].set_xlabel(varnames[i], fontsize=ticksize)
+
+                # string with median and 16-84 percentiles as upper and lower errors (written with super and subindices)
+                # if there is scientific notation, it has to be written as (10.1 + 2.3 - 1.2) x 10^3
+                median = np.median(dataset[:, i])
+                upper = np.percentile(dataset[:, i], 84) - median
+                lower = median - np.percentile(dataset[:, i], 16)
+
+                axes[i,j].set_title(varnames[i] + ' = ' + format_uncertainty(median, lower, upper) + '$\;$' + units[i], 
+                                    fontsize=labelsize)
+
+            elif i > j:
+                if not kde:
+                    sns.scatterplot(x=dataset[:, j], y=dataset[:, i], ax=axes[i, j], s=s, color=color)
+                else: # kde plot + scatter for outliers
+                    thr_kde = 0.2
+                    dens = gaussian_kde(np.vstack([dataset[:, j], dataset[:, i]]))(np.vstack([dataset[:, j], dataset[:, i]]))
+                    mask = dens < np.percentile(dens, 100*thr_kde)
+                    sns.scatterplot(x=dataset[mask, j], y=dataset[mask, i], ax=axes[i, j], s=s, color=color)
+                    sns.kdeplot(x=dataset[:, j], y=dataset[:, i], ax=axes[i, j], cmap=cmap_kde, fill=filled_kde, thresh=thr_kde, levels=100, gridsize=100)
+                    #raise ValueError('Not implemented')
+
+
+                    #k = gaussian_kde(np.vstack([dataset[:, j], dataset[:, i]]))
+                    #xi, yi = np.mgrid[dataset[:, j].min():dataset[:, j].max():100j, dataset[:, i].min():dataset[:, i].max():100j]
+                    #zi = k(np.vstack([xi.flatten(), yi.flatten()]))
+                    #axes[i, j].pcolormesh(xi, yi, zi.reshape(xi.shape), shading='gouraud', cmap=cmap_kde)
+
+
+                if i==m-1:
+                    axes[i, j].set_xlabel(varnames[j], fontsize=labelsize)
+                if j==0:
+                    axes[i, j].set_ylabel(varnames[i], fontsize=labelsize)
+                
+                axes[i, j].tick_params(axis='both', which='major', labelsize=ticksize)
+                
+                if i != m - 1:
+                    axes[i, j].tick_params(axis='x', which='both', bottom=True, labelbottom=False)
+                if j != 0:
+                    axes[i, j].tick_params(axis='y', which='both', left=True, labelleft=False)
+                
+                if logscale[i]:
+                    #print('logscale y', i, j)
+                    axes[i, j].set_yscale('log')
+                    axes[i, j].yaxis.set_major_formatter(mticker.ScalarFormatter(useMathText=True, useOffset=True))
+                    axes[i, j].yaxis.get_offset_text().set_size(ticksize)
+                    axes[i, j].yaxis.get_offset_text().set_position((0, 1.0))
+                    axes[i, j].ticklabel_format(style='sci', axis='y', scilimits=(0, 0))
+
+                    axes[i, j].yaxis.set_minor_locator(MaxNLocator(5))
+
+                    # put minor ticks only if there are no major ticks
+                    formatter = mticker.ScalarFormatter(useMathText=True, useOffset=True)
+                    formatter.set_powerlimits((0, 0))
+                    axes[i, j].yaxis.set_major_formatter(formatter)
+                    axes[i, j].yaxis.set_minor_formatter(formatter)
+                if logscale[j]:
+                    #print('logscale x', i, j)
+                    axes[i, j].set_xscale('log')
+                    axes[i, j].xaxis.set_major_formatter(mticker.ScalarFormatter(useMathText=True, useOffset=True))
+                    axes[i, j].xaxis.get_offset_text().set_size(ticksize)  # Adjust offset text size if needed
+                    axes[i, j].xaxis.get_offset_text().set_position((1.0, 0))  # Position the offset to the right
+                    axes[i, j].ticklabel_format(style='sci', axis='x', scilimits=(0, 0))
+                    
+                    axes[i, j].xaxis.set_minor_locator(MaxNLocator(5))  # Limit number of ticks
+
+                    formatter = mticker.ScalarFormatter(useMathText=True, useOffset=True)
+                    formatter.set_powerlimits((0, 0))  # Force scientific notation
+                    axes[i, j].xaxis.set_major_formatter(formatter)
+                    axes[i, j].xaxis.set_minor_formatter(formatter) 
+            else:
+                axes[i, j].axis('off')
+
+    if title is not None:
+        fig.suptitle(title, fontsize=labelsize)
+
+    fig.tight_layout()
+    fig.bbox_inches = 'tight'
+
+    return fig, axes
+    

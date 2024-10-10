@@ -16,6 +16,8 @@ import numpy as np
 import astropy.stats
 from scipy.stats import spearmanr
 from scipy.interpolate import UnivariateSpline
+import emcee
+from masclet_framework import graphics
 
 def biweight_statistic(array, nmaxiter=100, tol=1e-4):
     '''
@@ -189,9 +191,8 @@ def nonparametric_fit(x, y, sfactor=1., verbose=True):
             y2 = targets[idx]
             y3 = targets[idx+1]
             
-            sfactor = x3*(y2-y1) + x1*(y3-y2) + x2*(y1-y3)
-            sfactor *= (x3**2*(y2-y1) + x1**2*(y3-y2) + x2**2*(y1-y3))
-            sfactor /= 2*((x1-x2)*(x1-x3)*(x2-x3))**2
+            sfactor = x3**2*(y1-y2) + x1**2*(y2-y3) + x2**2*(y3-y1)
+            sfactor /= 2*(x3*(y1-y2) + x1*(y2-y3) + x2*(y3-y1))
 
             interpolant = nonparametric_fit(x, y, sfactor=sfactor)
             yyy = interpolant(xxx)
@@ -209,16 +210,13 @@ def nonparametric_fit(x, y, sfactor=1., verbose=True):
         return nonparametric_fit(x, y, sfactor=sfactor)
 
 
-
-
-
-def parametric_conditional_correlation(x, y, z, mode='spearman'):
+def nonparametric_conditional_correlation(x, y, z, mode='spearman', sfactor=None):
     """
     Compute the conditional correlation between x and y given z, using a nonparametric fit
     to estimate the residuals.
 
-    In detail, the function fits a nonparametric smoothing spline to the data (x, y) and computes
-    the residuals. Then, it computes the correlation between the residuals and z. The correlation
+    In detail, the function fits a nonparametric smoothing spline to the data (z, y) and computes
+    the residuals. Then, it computes the correlation between the residuals and x. The correlation
     can be computed in two modes: 'spearman' or 'pearson'.
 
     ****
@@ -230,23 +228,24 @@ def parametric_conditional_correlation(x, y, z, mode='spearman'):
         y: second array (1d np.array)
         z: third array (1d np.array), control variable
         mode: 'spearman' or 'pearson' (str)
+        sfactor: a scaling factor for the smoothing parameter. (float; optional, default=None [optimize])
 
     Returns:
         correlation: the conditional correlation value (float)
     """
-    interpolant = nonparametric_fit(x, y)
+    interpolant = nonparametric_fit(z, y, sfactor=sfactor)
 
     # Compute the residuals
-    residuals = y - interpolant(x)
+    residuals = y - interpolant(z)
 
     # Compute the correlation between the residuals and z
-    return correlation(residuals, z, mode=mode)
+    return correlation(residuals, x, mode=mode)
 
 
-def conditional_correlation(x, y, z, mode='spearman', linear=True):
+def conditional_correlation(x, y, z, mode='spearman', linear=True, sfactor=None):
     """
     Compute the conditional correlation between x and y given z, using a linear model or a 
-    nonparametric fit to estimate the residuals. For the nonparametric fit, see parametric_conditional_correlation
+    nonparametric fit to estimate the residuals. For the nonparametric fit, see nonparametric_conditional_correlation
     for details.
 
     The correlation can be computed in two modes: 'spearman' or 'pearson'.
@@ -257,6 +256,7 @@ def conditional_correlation(x, y, z, mode='spearman', linear=True):
         z: third array (1d np.array), control variable
         mode: 'spearman' or 'pearson' (str)
         linear: if True, use a linear model to estimate the residuals. Otherwise, use a nonparametric fit.
+        sfactor: a scaling factor for the smoothing parameter. (float; optional, default=None [optimize])
 
     Returns:
         correlation: the conditional correlation value (float)
@@ -268,5 +268,188 @@ def conditional_correlation(x, y, z, mode='spearman', linear=True):
         return (rho_XY - rho_XZ*rho_YZ) / np.sqrt((1-rho_XZ**2)*(1-rho_YZ**2))
 
     else:
-        return parametric_conditional_correlation(x, y, z, mode=mode)
+        return nonparametric_conditional_correlation(x, y, z, mode=mode, sfactor=sfactor)
         
+
+def MCMC_fit(f, initial, x, y, yerr, loglikelihood=None, logprior=None, nwalkers=100, nsteps=1000, burnin=100):
+    """
+    Performs a MCMC fit to the function f using the emcee package.
+
+    Args:
+        f: the model function to fit (callable). 
+            The function should have the form f(theta, x=x).
+                theta is a list of parameters to fit.
+                x is the independent variable.
+            The function should return the model prediction for x given theta.
+
+        loglikelihood: the log-likelihood function (callable).
+            The function should have the form loglikelihood(theta, x, y, yerr).
+                theta is a list of parameters to fit.
+                x is the independent variable.
+                y is the dependent variable.
+                yerr is the uncertainty in y.
+            The function should return the log-likelihood of the model given the data.
+            If None, a chi2 log-likelihood is used.
+
+        x: the independent variable (np.array)
+
+        y: the dependent variable (np.array)
+
+        yerr: the uncertainty in y (np.array)
+
+        logprior: the log-prior function (callable).
+            The function should have the form logprior(theta).
+                theta is a list of parameters to fit.
+            The function should return the log-prior of the parameters.
+            If None, a flat prior is used.
+
+            Alternatively, logprior can be a list of 2-element lists, given the prior range for each parameter.
+            In this case, a flat prior is used, but only for the specified range.
+
+        nwalkers: the number of walkers in the MCMC chain (int)
+
+        nsteps: the number of steps in the MCMC chain (int)
+
+    Returns:
+        sampler: the emcee sampler object, containing the MCMC chain
+        pos: the final position of the walkers (np.array)
+        prob: the final probability of the walkers (np.array)
+        state: the final state of the walkers (dict)
+    """
+
+    if loglikelihood is None:
+        def loglikelihood(theta, x, y, yerr):
+            model = f(theta, x=x)
+            return -0.5*np.sum((y-model)**2/yerr**2)
+        
+    if logprior is None:
+        def logprior(theta):
+            return 0.0
+    elif isinstance(logprior, list):
+        logpriorlist = [a for a in logprior]
+        def logprior(theta):
+            for i, t in enumerate(theta):
+                if t < logpriorlist[i][0] or t > logpriorlist[i][1]:
+                    return -np.inf
+            return 0.0
+
+    def logprob(theta, x, y, yerr):
+        lp = logprior(theta)
+        if not np.isfinite(lp):
+            return -np.inf
+        return lp + loglikelihood(theta, x, y, yerr)
+    
+    ndim = len(initial)
+    if type(initial) is list:
+        initial = np.array(initial)
+    p0 = [initial * (1 + 1e-3*np.random.randn(ndim)) for i in range(nwalkers)]
+    sampler = emcee.EnsembleSampler(nwalkers, ndim, logprob, args=(x, y, yerr))
+
+    # Burn-in
+    pos, prob, state = sampler.run_mcmc(p0, burnin)
+    sampler.reset()
+
+    # Perform the MCMC
+    pos, prob, state = sampler.run_mcmc(pos, nsteps)
+    
+    return sampler, pos, prob, state
+
+
+def MCMC_get_samples(sampler):
+    """
+    Given the sampler, return the MCMC samples.
+
+    Args:
+        sampler: the emcee sampler object, containing the MCMC chain
+
+    Returns:
+        samples: the MCMC samples (np.array)
+    """
+    return sampler.flatchain
+
+
+def MCMC_parameter_estimation(sampler, parameter_type='mean', uncertainty_type='std'):
+    """
+    Given the sampler, compute the parameter estimation and uncertainties.
+
+    Args:
+        sampler: the emcee sampler object, containing the MCMC chain
+        parameter_type: the way to compute the parameter. Options are 'mean' or 'mode'.
+        uncertainty_type: the type of uncertainty to compute. 
+            'std' for standard deviation, [q1, q2] for quantiles q1 and q2 (per 1.)
+
+    Returns:
+        theta: the parameter estimation (np.array)
+        (low, high): the lower and upper thresholds (tuple of np.arrays)
+    """
+    samples = MCMC_get_samples(sampler)
+    if parameter_type == 'mean':
+        theta = np.mean(samples, axis=0)
+    elif parameter_type == 'mode':
+        logprob = sampler.get_log_prob(flat=True)
+        idx = np.argmax(logprob)
+        theta = samples[idx]
+    else:
+        raise ValueError('Unknown parameter type')
+    
+    if uncertainty_type == 'std':
+        sigma = np.std(samples, axis=0)
+        low, high = theta - sigma, theta + sigma
+    elif isinstance(uncertainty_type, list):
+        q1, q2 = uncertainty_type
+        low, high = np.quantile(samples, [q1, q2], axis=0)
+    else:
+        raise ValueError('Unknown uncertainty type')
+
+    return theta, (low, high)
+
+
+def MCMC_cornerplot(sampler, nsamples_plot=1000, varnames=None, units=None, logscale=None, figsize=None, labelsize=12, ticksize=10, title=None,
+                    s=3, color='blue', kde=True, cmap_kde='Blues', filled_kde=True, annotate_best=True, best_color='red', annotate_best_uncertainty=False,
+                    parameter_type='mean', uncertainty_type='std'):
+    
+    """
+    Generates a corner plot of the MCMC chain.
+
+    Args:
+        sampler: the emcee sampler object, containing the MCMC chain
+        nsamples_plot: the number of samples to plot (int)
+        varnames: list of m strings with the names of the variables. If not specified, it will place no labels.
+        units: list of m strings with the units of the variables. If not specified, it will place no units.
+        logscale: list of m booleans, True if the variable is in log scale, False if not. If not specified, it will place no log scale.
+        figsize: tuple with the dimensions of the figure
+        labelsize: size of the labels
+        ticksize: size of the ticks
+        title: title of the plot
+        s: size of the scatter points
+        color: color of the histograms and scatter plots
+        kde: whether to plot the KDE or not
+        cmap_kde: colormap for the KDE plot
+        filled_kde: whether to fill the KDE plot or not
+        annotate_best: whether to annotate the best fit values or not
+        best_color: color of the annotation of the best fit values
+
+    Returns:
+        figure object and grid of axes with the corner plot
+    """
+    samples = sampler.flatchain
+    if nsamples_plot < samples.shape[0]:
+        idx = np.random.choice(samples.shape[0], nsamples_plot, replace=False)
+        samples = samples[idx, :]
+    
+    fig, axes = graphics.cornerplot(samples, varnames=varnames, units=units, figsize=figsize, labelsize=labelsize, ticksize=ticksize, title=title,
+                                s=s, color=color, kde=kde, cmap_kde=cmap_kde, filled_kde=filled_kde)
+
+    if annotate_best:
+        theta, (low, high) = MCMC_parameter_estimation(sampler, parameter_type=parameter_type, uncertainty_type=uncertainty_type)
+        for i in range(samples.shape[1]):
+            axes[i,i].axvline(theta[i], color=best_color)
+            if annotate_best_uncertainty:
+                axes[i,i].axvspan(low[i], high[i], color=best_color, alpha=0.2)
+        
+        for i in range(samples.shape[1]):
+            for j in range(i):
+                axes[i,j].scatter(theta[j], theta[i], color=best_color, s=10, marker='x')
+
+    return fig, axes
+
