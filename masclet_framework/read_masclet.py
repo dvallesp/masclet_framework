@@ -27,7 +27,7 @@ import struct
 # tqdm
 import importlib.util
 __use_tqdm=True
-if (importlib.util.find_spec('tqdm') is None) and __use_tqdm:
+if ((importlib.util.find_spec('tqdm') is None) and __use_tqdm) or (not __use_tqdm):
     def tqdm(x, desc=None): return x
 else:
     from tqdm import tqdm
@@ -482,10 +482,10 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
     return tuple(returnvariables)
 
 
-def lowlevel_read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_delta=True, output_v=True,
-              output_pres=True, output_pot=True, output_opot=False, output_temp=True, output_metalicity=True,
-              output_cr0amr=True, output_solapst=True, is_mascletB=False, output_B=False, is_cooling=True,
-              verbose=False, read_region=None):
+def lowlevel_read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_delta=False, output_v=False,
+              output_pres=False, output_pot=False, output_opot=False, output_temp=False, output_metalicity=False,
+              output_cr0amr=False, output_solapst=False, is_mascletB=False, output_B=False, is_cooling=True,
+              verbose=False, read_region=None, use_tqdm=True):
     """
     Reads the gas (baryonic, clus) file
 
@@ -513,6 +513,7 @@ def lowlevel_read_clus(it, path='', parameters_path='', digits=5, max_refined_le
                         - ("sphere", cx, cy, cz, R) for a sphere of radius R centered in (cx, cy, cz)
                         - ("box", x1, x2, y1, y2, z1, z2) for a box with corners (x1, y1, z1) and (x2, y2, z2)
                         - ("box_cw", xc, yc, zc, width) for a box centered in (xc, yc, zc) with width "width"
+        use_tqdm: whether to use tqdm to show progress bars (bool)
 
     Returns:
         Chosen quantities, as a list of arrays (one for each patch, starting with l=0 and subsequently);
@@ -524,6 +525,8 @@ def lowlevel_read_clus(it, path='', parameters_path='', digits=5, max_refined_le
         as the number of patches, indicating which patches are inside the region (True) and which are not (False).
     """
     #if not verbose:
+    #    def tqdm(x, desc=None): return x
+    #if not use_tqdm:
     #    def tqdm(x, desc=None): return x
 
     if output_B and (not is_mascletB):
@@ -799,7 +802,8 @@ def lowlevel_read_clus(it, path='', parameters_path='', digits=5, max_refined_le
 
 
 def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltadm=True,
-              output_position=True, output_velocity=True, output_mass=True, output_id=False, verbose=False):
+              output_position=True, output_velocity=True, output_mass=True, output_id=False, verbose=False,
+              use_tqdm=True):
     """
     Reads the dark matter (cldm) file.
 
@@ -815,6 +819,7 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         output_mass: whether particles' masses are returned (bool)
         output_id: whether particles' ids are returned (bool)
         verbose: whether a message is printed when each refinement level is started (bool)
+        use_tqdm: whether to use tqdm to show progress bars (bool)
 
     Returns:
         Chosen quantities, in the order specified by the order of the parameters in this definition.
@@ -826,6 +831,8 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
     """
     #if not verbose:
     #    def tqdm(x): return x
+    #if not use_tqdm:
+    #    def tqdm(x, desc=None): return x
     nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
                                                            load_namr=False, load_size=False, path=parameters_path)
     npatch, npart, patchnx, patchny, patchnz = read_grids(it, path=path, read_general=False, read_patchnum=True,
@@ -997,8 +1004,8 @@ def skip_record(f):
     return
 
 
-def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltadm=True,
-                       output_position=True, output_velocity=True, output_mass=True, output_id=False, verbose=False,
+def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltadm=False,
+                       output_position=False, output_velocity=False, output_mass=False, output_id=False, verbose=False,
                        read_region=None):
     """
     Reads the dark matter (cldm) file.
@@ -1383,7 +1390,7 @@ def read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000,
 
     return tuple(returnvariables)
 
-def lowlevel_read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltastar=True, 
+def lowlevel_read_clst(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltastar=False, 
                        verbose=False, output_position=False, output_velocity=False, output_mass=False, 
                        output_time=False, output_metalicity=False, output_id=False, output_BH = False, are_BH = True,
                        read_region=None):
