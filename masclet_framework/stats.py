@@ -319,6 +319,7 @@ def MCMC_fit(f, initial, x, y, yerr, loglikelihood=None, logprior=None, nwalkers
 
     if loglikelihood is None:
         def loglikelihood(theta, x, y, yerr):
+            # Chi2 log-likelihood
             model = f(theta, x=x)
             return -0.5*np.sum((y-model)**2/yerr**2)
         
@@ -368,6 +369,19 @@ def MCMC_get_samples(sampler):
     return sampler.flatchain
 
 
+def MCMC_get_autocorrelationtime(sampler):
+    """
+    Given the sampler, return the autocorrelation time.
+
+    Args:
+        sampler: the emcee sampler object, containing the MCMC chain
+
+    Returns:
+        tau: the autocorrelation time (float)
+    """
+    return sampler.get_autocorr_time()
+
+
 def MCMC_parameter_estimation(sampler, parameter_type='mean', uncertainty_type='std'):
     """
     Given the sampler, compute the parameter estimation and uncertainties.
@@ -402,6 +416,36 @@ def MCMC_parameter_estimation(sampler, parameter_type='mean', uncertainty_type='
         raise ValueError('Unknown uncertainty type')
 
     return theta, (low, high)
+
+def MCMC_fit_R2(sampler, x, y, f, parameter_type='mean', take_logs=False):
+    """
+    Given the sampler, compute the R2 value of the fit.
+
+    Args:
+        sampler: the emcee sampler object, containing the MCMC chain
+        x: the independent variable (np.array)
+        y: the dependent variable (np.array)
+        f: the model function to fit (callable).
+        parameter_type: the way to compute the parameter. Options are 'mean' or 'mode'.
+        take_logs: if True, take the logarithm of the model and data before computing the R2 value.
+
+    Returns:
+        R2: the R2 value of the fit (float)
+    """
+    theta, (low, high) = MCMC_parameter_estimation(sampler, parameter_type=parameter_type)
+    model = f(theta, x=x)
+
+    if take_logs:
+        model2 = np.log10(model)
+        y2 = np.log10(y)
+    else:
+        model2 = model
+        y2 = y
+
+    SS_res = np.sum((y2-model2)**2)
+    SS_tot = np.sum((y2-np.mean(y2))**2)
+
+    return 1 - SS_res/SS_tot
 
 
 def MCMC_cornerplot(sampler, nsamples_plot=1000, varnames=None, units=None, logscale=None, figsize=None, labelsize=12, ticksize=10, title=None,
