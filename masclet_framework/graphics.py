@@ -285,7 +285,18 @@ def cornerplot(dataset, varnames=None, units=None, logscale=None, figsize=None, 
                     dens = gaussian_kde(np.vstack([dataset[:, j], dataset[:, i]]))(np.vstack([dataset[:, j], dataset[:, i]]))
                     mask = dens < np.percentile(dens, 100*thr_kde)
                     sns.scatterplot(x=dataset[mask, j], y=dataset[mask, i], ax=axes[i, j], s=s, color=color)
-                    sns.kdeplot(x=dataset[:, j], y=dataset[:, i], ax=axes[i, j], cmap=cmap_kde, fill=filled_kde, thresh=thr_kde, levels=100, gridsize=100)
+                    try:
+                        sns.kdeplot(x=dataset[:, j], y=dataset[:, i], ax=axes[i, j], cmap=cmap_kde, fill=filled_kde, thresh=thr_kde, levels=100, gridsize=100)
+                    except ValueError: 
+                        error = True 
+                        fac = 1
+                        while error:
+                            try:
+                                fac *= 2
+                                sns.kdeplot(x=dataset[:, j], y=dataset[:, i], ax=axes[i, j], cmap=cmap_kde, fill=filled_kde, thresh=thr_kde, levels=100//fac, gridsize=100)
+                                error = False 
+                            except ValueError:
+                                continue
                     #raise ValueError('Not implemented')
 
 
