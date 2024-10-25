@@ -18,6 +18,7 @@ from scipy.stats import spearmanr
 from scipy.interpolate import UnivariateSpline
 import emcee
 from masclet_framework import graphics
+from multiprocessing import Pool
 
 def biweight_statistic(array, nmaxiter=100, tol=1e-4):
     '''
@@ -271,7 +272,8 @@ def conditional_correlation(x, y, z, mode='spearman', linear=True, sfactor=None)
         return nonparametric_conditional_correlation(x, y, z, mode=mode, sfactor=sfactor)
         
 
-def MCMC_fit(f, initial, x, y, yerr, loglikelihood=None, logprior=None, nwalkers=100, nsteps=1000, burnin=100):
+def MCMC_fit(f, initial, x, y, yerr, loglikelihood=None, logprior=None, nwalkers=100, nsteps=1000, burnin=100,
+             ncores=1):
     """
     Performs a MCMC fit to the function f using the emcee package.
 
@@ -310,6 +312,11 @@ def MCMC_fit(f, initial, x, y, yerr, loglikelihood=None, logprior=None, nwalkers
 
         nsteps: the number of steps in the MCMC chain (int)
 
+        burnin: the number of burn-in steps (int)
+
+        ncores: the number of cores to use in the MCMC computation (int)
+            !! WARNING: parallel not working as expected. Use with caution!!!!
+
     Returns:
         sampler: the emcee sampler object, containing the MCMC chain
         pos: the final position of the walkers (np.array)
@@ -344,29 +351,46 @@ def MCMC_fit(f, initial, x, y, yerr, loglikelihood=None, logprior=None, nwalkers
     if type(initial) is list:
         initial = np.array(initial)
     p0 = [initial * (1 + 1e-3*np.random.randn(ndim)) for i in range(nwalkers)]
-    sampler = emcee.EnsembleSampler(nwalkers, ndim, logprob, args=(x, y, yerr))
 
     # Burn-in
-    pos, prob, state = sampler.run_mcmc(p0, burnin)
-    sampler.reset()
+    if ncores==1:
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, logprob, args=(x, y, yerr))
+        
+        pos, prob, state = sampler.run_mcmc(p0, burnin)
+        sampler.reset()
 
-    # Perform the MCMC
-    pos, prob, state = sampler.run_mcmc(pos, nsteps)
+        # Perform the MCMC
+        pos, prob, state = sampler.run_mcmc(pos, nsteps)
+    else:
+        with Pool(ncores) as pool:
+            sampler = emcee.EnsembleSampler(nwalkers, ndim, logprob, args=(x, y, yerr), pool=pool)
+
+            pos, prob, state = sampler.run_mcmc(p0, burnin)
+            sampler.reset()
+
+            # Perform the MCMC
+            pos, prob, state = sampler.run_mcmc(pos, nsteps)
     
     return sampler, pos, prob, state
 
 
-def MCMC_get_samples(sampler):
+def MCMC_get_samples(sampler, thin=1):
     """
     Given the sampler, return the MCMC samples.
 
     Args:
         sampler: the emcee sampler object, containing the MCMC chain
+        thin: the thinning factor (int). If thin=1, no thinning is performed.
+              If thin>1, only every thin-th sample is kept.
+              If thin=-1, the thinning factor is automatically determined by the autocorrelation time.
 
     Returns:
         samples: the MCMC samples (np.array)
     """
-    return sampler.flatchain
+    if thin == -1:
+        tau = MCMC_get_autocorrelationtime(sampler).mean()
+        thin = max(1,int(0.5*tau))
+    return sampler.get_chain(thin=thin, flat=True)
 
 
 def MCMC_get_autocorrelationtime(sampler):
@@ -448,9 +472,9 @@ def MCMC_fit_R2(sampler, x, y, f, parameter_type='mean', take_logs=False):
     return 1 - SS_res/SS_tot
 
 
-def MCMC_cornerplot(sampler, nsamples_plot=1000, varnames=None, units=None, logscale=None, figsize=None, labelsize=12, ticksize=10, title=None,
+def MCMC_cornerplot(sampler, nsamples_plot=1000, thin=1, varnames=None, units=None, logscale=None, figsize=None, labelsize=12, ticksize=10, title=None,
                     s=3, color='blue', kde=True, cmap_kde='Blues', filled_kde=True, annotate_best=True, best_color='red', annotate_best_uncertainty=False,
-                    parameter_type='mean', uncertainty_type='std'):
+                    parameter_type='mean', uncertainty_type='std', kde_plot_outliers=True, kde_quantiles=None, axes_limits=None):
     
     """
     Generates a corner plot of the MCMC chain.
@@ -458,6 +482,7 @@ def MCMC_cornerplot(sampler, nsamples_plot=1000, varnames=None, units=None, logs
     Args:
         sampler: the emcee sampler object, containing the MCMC chain
         nsamples_plot: the number of samples to plot (int)
+        thin: the thinning factor (int). If thin=1, no thinning is performed. If thin>1, only every thin-th sample is kept. If thin=-1, the thinning factor is automatically determined by the autocorrelation time.
         varnames: list of m strings with the names of the variables. If not specified, it will place no labels.
         units: list of m strings with the units of the variables. If not specified, it will place no units.
         logscale: list of m booleans, True if the variable is in log scale, False if not. If not specified, it will place no log scale.
@@ -469,20 +494,30 @@ def MCMC_cornerplot(sampler, nsamples_plot=1000, varnames=None, units=None, logs
         color: color of the histograms and scatter plots
         kde: whether to plot the KDE or not
         cmap_kde: colormap for the KDE plot
+        kde_plot_outliers: whether to plot the outliers in the KDE plot or not
+        kde_quantiles: if None, it will just plot the KDE. If a list of quantiles is given, it will plot the
+            filled contour plot of the KDE with the specified quantiles (and not the KDE itself).
         filled_kde: whether to fill the KDE plot or not
         annotate_best: whether to annotate the best fit values or not
         best_color: color of the annotation of the best fit values
+        kde_plot_outliers: whether to plot the outliers in the KDE plot or not
+        kde_quantiles: if None, it will just plot the KDE. If a list of quantiles is given, it will plot the
+         filled contour plot of the KDE with the specified quantiles (and not the KDE itself).
+        axes_limits: list of m tuples with the limits of the axes. 
+            If not specified, it will use the data limits.
+            Optionally, if a single float (0<f<1), it will discard this fraction from the extremes of the data.
 
     Returns:
         figure object and grid of axes with the corner plot
     """
-    samples = sampler.flatchain
+    samples = MCMC_get_samples(sampler, thin=thin)
     if nsamples_plot < samples.shape[0]:
         idx = np.random.choice(samples.shape[0], nsamples_plot, replace=False)
         samples = samples[idx, :]
     
     fig, axes = graphics.cornerplot(samples, varnames=varnames, units=units, figsize=figsize, labelsize=labelsize, ticksize=ticksize, title=title,
-                                s=s, color=color, kde=kde, cmap_kde=cmap_kde, filled_kde=filled_kde)
+                                s=s, color=color, kde=kde, cmap_kde=cmap_kde, filled_kde=filled_kde, kde_plot_outliers=kde_plot_outliers, kde_quantiles=kde_quantiles,
+                                axes_limits=axes_limits)
 
     if annotate_best:
         theta, (low, high) = MCMC_parameter_estimation(sampler, parameter_type=parameter_type, uncertainty_type=uncertainty_type)

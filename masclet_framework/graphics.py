@@ -204,7 +204,8 @@ def format_uncertainty(median, lower_err, upper_err):
 
 
 def cornerplot(dataset, varnames=None, units=None, logscale=None, figsize=None, labelsize=12, ticksize=10,
-               title=None, s=3, color='blue', kde=True, cmap_kde='Blues', filled_kde=True):
+               title=None, s=3, color='blue', kde=True, cmap_kde='Blues', filled_kde=True,
+               kde_plot_outliers=True, kde_quantiles=None, axes_limits=None):
     """
     Generates a corner plot of the dataset. For scatter plots, it uses KDE to estimate the density of the points.
 
@@ -222,6 +223,12 @@ def cornerplot(dataset, varnames=None, units=None, logscale=None, figsize=None, 
         kde: whether to plot the KDE or not
         cmap_kde: colormap for the KDE plot
         filled_kde: whether to fill the KDE plot or not
+        kde_plot_outliers: whether to plot the outliers in the KDE plot or not
+        kde_quantiles: if None, it will just plot the KDE. If a list of quantiles is given, it will plot the
+         filled contour plot of the KDE with the specified quantiles (and not the KDE itself).
+        axes_limits: list of m tuples with the limits of the axes. 
+            If not specified, it will use the data limits.
+            Optionally, if a single float (0<f<1), it will discard this fraction from the extremes of the data.
     
     Returns:
         figure object and grid of axes with the corner plot
@@ -246,6 +253,19 @@ def cornerplot(dataset, varnames=None, units=None, logscale=None, figsize=None, 
             raise ValueError('logscale should have the same length as the number of variables')
     if figsize is None:
         figsize = (2.5 * m, 2.5 * m)
+
+    if isinstance(axes_limits, list):
+        if len(axes_limits) != m:
+            raise ValueError('axes_limits should have the same length as the number of variables')
+    elif isinstance(axes_limits, float):
+        axes_limits = [np.percentile(dataset[:, i], [100*axes_limits/2, 100*(1-axes_limits/2)]) for i in range(m)]
+    else:
+        axes_limits = []
+        for i in range(m):
+            vmin = np.min(dataset[:, i])
+            vmax = np.max(dataset[:, i])
+            ext = 0.1 * (vmax - vmin) / 2
+            axes_limits.append((vmin - ext, vmax + ext))
     
     fig, axes = plt.subplots(m, m, figsize=figsize)
 
@@ -282,28 +302,43 @@ def cornerplot(dataset, varnames=None, units=None, logscale=None, figsize=None, 
                     sns.scatterplot(x=dataset[:, j], y=dataset[:, i], ax=axes[i, j], s=s, color=color)
                 else: # kde plot + scatter for outliers
                     thr_kde = 0.2
-                    dens = gaussian_kde(np.vstack([dataset[:, j], dataset[:, i]]))(np.vstack([dataset[:, j], dataset[:, i]]))
+                    dens_func = gaussian_kde(np.vstack([dataset[:, j], dataset[:, i]]))
+                    dens = dens_func(np.vstack([dataset[:, j], dataset[:, i]]))
                     mask = dens < np.percentile(dens, 100*thr_kde)
-                    sns.scatterplot(x=dataset[mask, j], y=dataset[mask, i], ax=axes[i, j], s=s, color=color)
-                    try:
-                        sns.kdeplot(x=dataset[:, j], y=dataset[:, i], ax=axes[i, j], cmap=cmap_kde, fill=filled_kde, thresh=thr_kde, levels=100, gridsize=100)
-                    except ValueError: 
-                        error = True 
-                        fac = 1
-                        while error:
-                            try:
-                                fac *= 2
-                                sns.kdeplot(x=dataset[:, j], y=dataset[:, i], ax=axes[i, j], cmap=cmap_kde, fill=filled_kde, thresh=thr_kde, levels=100//fac, gridsize=100)
-                                error = False 
-                            except ValueError:
-                                continue
-                    #raise ValueError('Not implemented')
+                    if kde_plot_outliers:
+                        sns.scatterplot(x=dataset[mask, j], y=dataset[mask, i], ax=axes[i, j], s=s, color=color)
+                    
+                    if kde_quantiles is None:
+                        try:
+                            sns.kdeplot(x=dataset[:, j], y=dataset[:, i], ax=axes[i, j], cmap=cmap_kde, fill=filled_kde, thresh=thr_kde, levels=100, gridsize=100)
+                        except ValueError: 
+                            error = True 
+                            fac = 1
+                            while error:
+                                try:
+                                    fac *= 2
+                                    sns.kdeplot(x=dataset[:, j], y=dataset[:, i], ax=axes[i, j], cmap=cmap_kde, fill=filled_kde, thresh=thr_kde, levels=100//fac, gridsize=100)
+                                    error = False 
+                                except ValueError:
+                                    continue
+                        #raise ValueError('Not implemented')
+                    else:
+                        # I already have dens, therefore:
+                        # I have to find the percentiles of the density
+                        kde_quantiles = [0] + kde_quantiles
+                        kde_quantiles = np.sort(kde_quantiles)[::-1]
 
+                        xgrid = np.linspace(axes_limits[j][0], axes_limits[j][1], 200)
+                        ygrid = np.linspace(axes_limits[i][0], axes_limits[i][1], 200)
+                        xi, yi = np.meshgrid(xgrid, ygrid)
+                        zi = dens_func(np.vstack([xi.flatten(), yi.flatten()])).reshape(xi.shape)
 
-                    #k = gaussian_kde(np.vstack([dataset[:, j], dataset[:, i]]))
-                    #xi, yi = np.mgrid[dataset[:, j].min():dataset[:, j].max():100j, dataset[:, i].min():dataset[:, i].max():100j]
-                    #zi = k(np.vstack([xi.flatten(), yi.flatten()]))
-                    #axes[i, j].pcolormesh(xi, yi, zi.reshape(xi.shape), shading='gouraud', cmap=cmap_kde)
+                        levels = [np.percentile(dens, 100*(1-quant)) for quant in kde_quantiles]
+
+                        # contour with external borders
+                        axes[i, j].contourf(xi, yi, zi, levels=levels, cmap=cmap_kde, alpha=0.5)
+                        axes[i,j].contour(xi, yi, zi, levels=levels, colors='k', alpha=0.5, linewidths=1)
+
 
 
                 if i==m-1:
