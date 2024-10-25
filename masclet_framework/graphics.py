@@ -306,9 +306,6 @@ def cornerplot(dataset, varnames=None, units=None, logscale=None, figsize=None, 
                     thr_kde = 0.2
                     dens_func = gaussian_kde(np.vstack([dataset[:, j], dataset[:, i]]))
                     dens = dens_func(np.vstack([dataset[:, j], dataset[:, i]]))
-                    mask = dens < np.percentile(dens, 100*thr_kde)
-                    if kde_plot_outliers:
-                        sns.scatterplot(x=dataset[mask, j], y=dataset[mask, i], ax=axes[i, j], s=s, color=color)
                     
                     if kde_quantiles is None:
                         try:
@@ -324,6 +321,10 @@ def cornerplot(dataset, varnames=None, units=None, logscale=None, figsize=None, 
                                 except ValueError:
                                     continue
                         #raise ValueError('Not implemented')
+
+                        if kde_plot_outliers:
+                            mask = dens < np.percentile(dens, 100*thr_kde)
+                            sns.scatterplot(x=dataset[mask, j], y=dataset[mask, i], ax=axes[i, j], s=s, color=color)
                     else:
                         # I already have dens, therefore:
                         # I have to find the percentiles of the density
@@ -341,6 +342,10 @@ def cornerplot(dataset, varnames=None, units=None, logscale=None, figsize=None, 
                         discrete_cmap = ListedColormap([cm.get_cmap(cmap_kde)(i) for i in np.linspace(0, 1, len(levels))])
                         axes[i, j].contourf(xi, yi, zi, levels=levels, cmap=discrete_cmap, alpha=0.5, vmin=min(levels), vmax=max(levels))
                         axes[i,j].contour(xi, yi, zi, levels=levels, colors='k', alpha=0.5, linewidths=1)
+
+                        if kde_plot_outliers:
+                            mask = dens < np.percentile(dens, 100*(1-max(kde_quantiles)))
+                            sns.scatterplot(x=dataset[mask, j], y=dataset[mask, i], ax=axes[i, j], s=s, color=color)
 
 
 
@@ -387,6 +392,15 @@ def cornerplot(dataset, varnames=None, units=None, logscale=None, figsize=None, 
                     axes[i, j].xaxis.set_minor_formatter(formatter) 
             else:
                 axes[i, j].axis('off')
+
+    # set axes limits
+    for i in range(m):
+        for j in range(m):
+            if i > j:
+                axes[i, j].set_xlim(axes_limits[j])
+                axes[i, j].set_ylim(axes_limits[i])
+            if i == j:
+                axes[i, j].set_xlim(axes_limits[j])
 
     if title is not None:
         fig.suptitle(title, fontsize=labelsize)
