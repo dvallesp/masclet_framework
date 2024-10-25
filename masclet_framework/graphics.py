@@ -20,9 +20,11 @@ import numpy as np
 # matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
+import matplotlib.cm as cm
 import seaborn as sns
 import matplotlib.ticker as mticker
 from matplotlib.ticker import MaxNLocator
+from matplotlib.colors import ListedColormap
 import math
 from scipy.stats import gaussian_kde
 
@@ -336,7 +338,8 @@ def cornerplot(dataset, varnames=None, units=None, logscale=None, figsize=None, 
                         levels = [np.percentile(dens, 100*(1-quant)) for quant in kde_quantiles]
 
                         # contour with external borders
-                        axes[i, j].contourf(xi, yi, zi, levels=levels, cmap=cmap_kde, alpha=0.5)
+                        discrete_cmap = ListedColormap([cm.get_cmap(cmap_kde)(i) for i in np.linspace(0, 1, len(levels))])
+                        axes[i, j].contourf(xi, yi, zi, levels=levels, cmap=discrete_cmap, alpha=0.5, vmin=min(levels), vmax=max(levels))
                         axes[i,j].contour(xi, yi, zi, levels=levels, colors='k', alpha=0.5, linewidths=1)
 
 
