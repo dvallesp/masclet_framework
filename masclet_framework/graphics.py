@@ -204,6 +204,42 @@ def format_uncertainty(median, lower_err, upper_err):
 
     return formatted
 
+def format_interval(mean, lower, upper, significant_figures_error=2):
+    """
+    Formats the mean and the asymmetric errors in the form:
+    mean^{+upper-mean}_{-(mean-lower)} with consistent precision and scientific notation when necessary.
+
+    Args:
+        mean (float): The central value.
+        lower (float): The lower bound.
+        upper (float): The upper bound.
+        significant_figures_error (int): The number of significant figures for the errors. Defaults to 2.
+
+    Returns:
+        str: The formatted string in the form of mean^{+upper-mean}_{-(mean-lower)}, with scientific notation if necessary.
+    """
+    absmean = np.abs(mean)
+    superior = np.abs(upper - mean)
+    inferior = np.abs(mean - lower)
+    if 1e-2 < absmean < 1e3: # non-scientific notation
+        precision = - int(np.floor(np.log10(min(superior, inferior))))
+        precision += (significant_figures_error - 1)
+
+        mean = '{:.{prec}f}'.format(mean, prec=precision)
+        superior = '{:.{prec}f}'.format(superior, prec=precision)
+        inferior = '{:.{prec}f}'.format(inferior, prec=precision)
+        return '$'+mean+'^{+'+superior+'}_{-'+inferior+'}$'
+    else:
+        oom = int(np.floor(np.log10(absmean)))
+        
+        mean /= 10**oom
+        lower /= 10**oom
+        upper /= 10**oom
+
+        mantissa = format_interval(mean, lower, upper, significant_figures_error=significant_figures_error)[1:-1]
+
+        return '$('+mantissa+') \\times 10^{'+str(oom)+'}$'
+
 
 def cornerplot(dataset, varnames=None, units=None, logscale=None, figsize=None, labelsize=12, ticksize=10,
                title=None, s=3, color='blue', kde=True, cmap_kde='Blues', filled_kde=True,
