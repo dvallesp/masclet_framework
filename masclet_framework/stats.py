@@ -272,7 +272,7 @@ def conditional_correlation(x, y, z, mode='spearman', linear=True, sfactor=None)
         return nonparametric_conditional_correlation(x, y, z, mode=mode, sfactor=sfactor)
         
 
-def MCMC_fit(f, initial, x, y, yerr, loglikelihood=None, logprior=None, nwalkers=100, nsteps=1000, burnin=100,
+def MCMC_fit(f, initial, x, y, yerr, xerr=None, loglikelihood=None, logprior=None, nwalkers=100, nsteps=1000, burnin=100,
              ncores=1):
     """
     Performs a MCMC fit to the function f using the emcee package.
@@ -298,6 +298,8 @@ def MCMC_fit(f, initial, x, y, yerr, loglikelihood=None, logprior=None, nwalkers
         y: the dependent variable (np.array)
 
         yerr: the uncertainty in y (np.array)
+
+        xerr: the uncertainty in x (np.array). If None, no uncertainty in x is considered.
 
         logprior: the log-prior function (callable).
             The function should have the form logprior(theta).
@@ -325,7 +327,7 @@ def MCMC_fit(f, initial, x, y, yerr, loglikelihood=None, logprior=None, nwalkers
     """
 
     if loglikelihood is None:
-        def loglikelihood(theta, x, y, yerr):
+        def loglikelihood(theta, x, y, yerr, xerr):
             # Chi2 log-likelihood
             model = f(theta, x=x)
             return -0.5*np.sum((y-model)**2/yerr**2)
@@ -341,11 +343,11 @@ def MCMC_fit(f, initial, x, y, yerr, loglikelihood=None, logprior=None, nwalkers
                     return -np.inf
             return 0.0
 
-    def logprob(theta, x, y, yerr):
+    def logprob(theta, x, y, yerr, xerr):
         lp = logprior(theta)
         if not np.isfinite(lp):
             return -np.inf
-        return lp + loglikelihood(theta, x, y, yerr)
+        return lp + loglikelihood(theta, x, y, yerr, xerr)
     
     ndim = len(initial)
     if type(initial) is list:
@@ -354,7 +356,7 @@ def MCMC_fit(f, initial, x, y, yerr, loglikelihood=None, logprior=None, nwalkers
 
     # Burn-in
     if ncores==1:
-        sampler = emcee.EnsembleSampler(nwalkers, ndim, logprob, args=(x, y, yerr))
+        sampler = emcee.EnsembleSampler(nwalkers, ndim, logprob, args=(x, y, yerr, xerr))
         
         pos, prob, state = sampler.run_mcmc(p0, burnin)
         sampler.reset()
@@ -363,7 +365,7 @@ def MCMC_fit(f, initial, x, y, yerr, loglikelihood=None, logprior=None, nwalkers
         pos, prob, state = sampler.run_mcmc(pos, nsteps)
     else:
         with Pool(ncores) as pool:
-            sampler = emcee.EnsembleSampler(nwalkers, ndim, logprob, args=(x, y, yerr), pool=pool)
+            sampler = emcee.EnsembleSampler(nwalkers, ndim, logprob, args=(x, y, yerr, xerr), pool=pool)
 
             pos, prob, state = sampler.run_mcmc(p0, burnin)
             sampler.reset()
