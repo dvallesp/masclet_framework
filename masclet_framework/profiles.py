@@ -208,7 +208,7 @@ def dir_profile(field, cx,cy,cz,
                     #assert 0 <= dxx <= 1
                     #assert 0 <= dyy <= 1
                     #assert 0 <= dzz <= 1
-                    if ip==0 and (i==0 or j==0 or k==0 or i==nmax-1 or j==nmax-1 or k==nmax-1):
+                    if ip==0 and (i<=0 or j<=0 or k<=0 or i>=nmax-1 or j>=nmax-1 or k>=nmax-1):
                         dir_profiles[itheta,jphi,kbin]=field[ip][(i  )%nmax,(j  )%nmax,(k  )%nmax] *(1-dxx)*(1-dyy)*(1-dzz) \
                                                      + field[ip][(i  )%nmax,(j  )%nmax,(k+1)%nmax] *(1-dxx)*(1-dyy)*  dzz   \
                                                      + field[ip][(i  )%nmax,(j+1)%nmax,(k  )%nmax] *(1-dxx)*  dyy  *(1-dzz) \
@@ -219,13 +219,13 @@ def dir_profile(field, cx,cy,cz,
                                                      + field[ip][(i+1)%nmax,(j+1)%nmax,(k+1)%nmax] *  dxx  *  dyy  *  dzz  
                     else:
                         dir_profiles[itheta,jphi,kbin]=field[ip][i,j,k]      *(1-dxx)*(1-dyy)*(1-dzz) \
-                                                    + field[ip][i,j,k+1]    *(1-dxx)*(1-dyy)*  dzz   \
-                                                    + field[ip][i,j+1,k]    *(1-dxx)*  dyy  *(1-dzz) \
-                                                    + field[ip][i,j+1,k+1]  *(1-dxx)*  dyy  *  dzz   \
-                                                    + field[ip][i+1,j,k]    *  dxx  *(1-dyy)*(1-dzz) \
-                                                    + field[ip][i+1,j,k+1]  *  dxx  *(1-dyy)*  dzz   \
-                                                    + field[ip][i+1,j+1,k]  *  dxx  *  dyy  *(1-dzz) \
-                                                    + field[ip][i+1,j+1,k+1]*  dxx  *  dyy  *  dzz  
+                                                     + field[ip][i,j,k+1]    *(1-dxx)*(1-dyy)*  dzz   \
+                                                     + field[ip][i,j+1,k]    *(1-dxx)*  dyy  *(1-dzz) \
+                                                     + field[ip][i,j+1,k+1]  *(1-dxx)*  dyy  *  dzz   \
+                                                     + field[ip][i+1,j,k]    *  dxx  *(1-dyy)*(1-dzz) \
+                                                     + field[ip][i+1,j,k+1]  *  dxx  *(1-dyy)*  dzz   \
+                                                     + field[ip][i+1,j+1,k]  *  dxx  *  dyy  *(1-dzz) \
+                                                     + field[ip][i+1,j+1,k+1]*  dxx  *  dyy  *  dzz  
     else:
         for itheta,costheta in tqdm(enumerate(vec_costheta),total=len(vec_costheta),disable=not use_tqdm):
             for jphi,phi in enumerate(vec_phi):
@@ -235,7 +235,10 @@ def dir_profile(field, cx,cy,cz,
 
                 for kbin,(xi,yi,zi,li) in enumerate(zip(xxx,yyy,zzz,lev_integral)):
                     ip,i,j,k=locate_point(xi,yi,zi,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,li)
-                    dir_profiles[itheta,jphi,kbin]=field[ip][i,j,k]
+                    if ip != 0:
+                        dir_profiles[itheta,jphi,kbin]=field[ip][i,j,k]
+                    else:
+                        dir_profiles[itheta,jphi,kbin]=field[ip][i%nmax,j%nmax,k%nmax]
                     
     return dir_profiles, rrr, vec_costheta, vec_phi
 
