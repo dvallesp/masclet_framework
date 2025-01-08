@@ -26,8 +26,7 @@ import struct
 
 # tqdm
 import importlib.util
-__use_tqdm=True
-if ((importlib.util.find_spec('tqdm') is None) and __use_tqdm) or (not __use_tqdm):
+if (importlib.util.find_spec('tqdm') is None):
     def tqdm(x, desc=None): return x
 else:
     from tqdm import tqdm
@@ -210,7 +209,7 @@ def read_grids(it, path='', parameters_path='', digits=5, read_general=True, rea
 def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_delta=True, output_v=True,
               output_pres=True, output_pot=True, output_opot=False, output_temp=True, output_metalicity=True,
               output_cr0amr=True, output_solapst=True, is_mascletB=False, output_B=False, is_cooling=True,
-              verbose=False, read_region=None):
+              verbose=False, use_tqdm=True, read_region=None):
     """
     Reads the gas (baryonic, clus) file
 
@@ -233,6 +232,7 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         output_B: whether magnetic field is returned; only if is_mascletB = True (bool)
         is_cooling: whether there is cooling (an thus T and metalicity are written) or not (bool)
         verbose: whether a message is printed when each refinement level is started (bool)
+        use_tqdm: whether to use tqdm to show progress bars (bool)
         read_region: whether to select a subregion (see region specification below), or keep all the simulation data 
                      (None). If a region wants to be selected, there are the following possibilities:
                         - ("sphere", cx, cy, cz, R) for a sphere of radius R centered in (cx, cy, cz)
@@ -248,9 +248,6 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         in this case, after all the returned variables, a 1d array of booleans is returned, with the same length
         as the number of patches, indicating which patches are inside the region (True) and which are not (False).
     """
-    #if not verbose:
-    #    def tqdm(x): return x
-
     if output_B and (not is_mascletB):
         print('Error: cannot output magnetic field if the simulation has not.')
         print('Terminating')
@@ -361,7 +358,7 @@ def read_clus(it, path='', parameters_path='', digits=5, max_refined_level=1000,
             if verbose:
                 print('Reading level {}.'.format(l))
                 print('{} patches.'.format(npatch[l]))
-            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l)):
+            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l), disable=not use_tqdm):
                 #if verbose:
                 #    print('Reading patch {}'.format(ipatch))
                 if output_delta and keep_patches[ipatch]:
@@ -524,11 +521,6 @@ def lowlevel_read_clus(it, path='', parameters_path='', digits=5, max_refined_le
         in this case, after all the returned variables, a 1d array of booleans is returned, with the same length
         as the number of patches, indicating which patches are inside the region (True) and which are not (False).
     """
-    #if not verbose:
-    #    def tqdm(x, desc=None): return x
-    #if not use_tqdm:
-    #    def tqdm(x, desc=None): return x
-
     if output_B and (not is_mascletB):
         print('Error: cannot output magnetic field if the simulation has not.')
         print('Terminating')
@@ -645,7 +637,7 @@ def lowlevel_read_clus(it, path='', parameters_path='', digits=5, max_refined_le
             if verbose:
                 print('Reading level {}.'.format(l))
                 print('{} patches.'.format(npatch[l]))
-            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l)):
+            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l), disable=not use_tqdm):
                 #if verbose:
                 #    print('Reading patch {}'.format(ipatch))
                 if not keep_patches[ipatch]:
@@ -829,10 +821,6 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
 
 
     """
-    #if not verbose:
-    #    def tqdm(x): return x
-    #if not use_tqdm:
-    #    def tqdm(x, desc=None): return x
     nmax, nmay, nmaz, nlevels = parameters.read_parameters(load_nma=True, load_npalev=False, load_nlevels=True,
                                                            load_namr=False, load_size=False, path=parameters_path)
     npatch, npart, patchnx, patchny, patchnz = read_grids(it, path=path, read_general=False, read_patchnum=True,
@@ -847,7 +835,8 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
         return lowlevel_read_cldm(it, path=path, parameters_path=parameters_path, digits=digits, 
                                   max_refined_level=max_refined_level, output_deltadm=output_deltadm,
                                   output_position=output_position, output_velocity=output_velocity, 
-                                  output_mass=output_mass, output_id=output_id, verbose=verbose)
+                                  output_mass=output_mass, output_id=output_id, verbose=verbose,
+                                  use_tqdm=use_tqdm)
 
     with FF(os.path.join(path, filename(it, 'd', digits))) as f:
 
@@ -893,7 +882,7 @@ def read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000,
             if verbose:
                 print('Reading level {}.'.format(l))
                 print('{} patches. {} particles.'.format(npatch[l], npart[l]))
-            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l)):
+            for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l), disable=not use_tqdm):
                 if output_deltadm:
                     delta_dm.append(np.reshape(f.read_vector('f'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]),
                                                'F'))
@@ -1005,7 +994,7 @@ def skip_record(f):
 
 
 def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_level=1000, output_deltadm=False,
-                       output_position=False, output_velocity=False, output_mass=False, output_id=False, verbose=False,
+                       output_position=False, output_velocity=False, output_mass=False, output_id=False, verbose=False, use_tqdm=True,
                        read_region=None):
     """
     Reads the dark matter (cldm) file.
@@ -1023,6 +1012,7 @@ def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_le
         output_mass: whether particles' masses are returned (bool)
         output_id: whether particles' ids are returned (bool)
         verbose: whether a message is printed when each refinement level is started (bool)
+        use_tqdm: whether to use tqdm to show progress bars (bool)
         read_region: whether to select a subregion (see region specification below), or keep all the simulation data 
         (None). If a region wants to be selected, there are the following possibilities:
         - ("sphere", cx, cy, cz, R) for a sphere of radius R centered in (cx, cy, cz)
@@ -1044,9 +1034,6 @@ def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_le
 
 
     """
-    #if not verbose:
-    #    def tqdm(x): return x
-
     force_read_positions = False
     if (read_region is not None) and (output_position or output_velocity or output_mass or output_id):
         force_read_positions = True
@@ -1134,7 +1121,7 @@ def lowlevel_read_cldm(it, path='', parameters_path='', digits=5, max_refined_le
                 print('{} patches. {} particles.'.format(npatch[l], npart[l]))
 
             if output_deltadm:
-                for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l)):
+                for ipatch in tqdm(range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1), desc='Level {:}'.format(l), disable=not use_tqdm):
                     if keep_patches[ipatch]:
                         delta_dm.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
                     else:
