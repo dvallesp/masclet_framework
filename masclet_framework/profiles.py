@@ -93,7 +93,7 @@ def locate_point(x,y,z,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,si
 def dir_profile(field, cx,cy,cz,
                 npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,
                 binsphi=None, binscostheta=None, binsr=None, rmin=None, rmax=None, dex_rbins=None, delta_rbins=None,
-                interpolate=False,
+                interpolate=True,
                 use_tqdm=False):
     """
     Computes a directional profile of a given field, centered in a given point (cx,cy,cz).
