@@ -27,6 +27,11 @@ from matplotlib.ticker import MaxNLocator
 from matplotlib.colors import ListedColormap
 import math
 from scipy.stats import gaussian_kde
+from tqdm import tqdm
+
+# MASCLET FRAMEWORK MODULES
+from masclet_framework.profiles import locate_point
+from masclet_framework import tools
 
 
 # FUNCTIONS DEFINED IN THIS MODULE
@@ -446,3 +451,174 @@ def cornerplot(dataset, varnames=None, units=None, logscale=None, figsize=None, 
 
     return fig, axes
     
+def slice_map(field, normal_vector, north_vector, 
+              xc, yc, zc, 
+              npatch,patchnx,patchny,patchnz,patchrx,patchry,patchrz,size,nmax,nl,
+              widthN=None, widthE=None, res=None, resN=None, resE=None, nN=None, nE=None,
+              kept_patches=None,
+              interpolate=True,
+              return_grid=False, return_grid_3d=False,
+              use_tqdm=True):
+    """ 
+    Slice a 3D AMR field along a plane defined by a normal vector and a point (center of the slice).
+
+    Args:
+        field: field to be computed at the uniform grid, in the usual MASCLET style (list of 3d np.arrays). MUST BE UNCLEANED!!
+        normal_vector (3-element list or 1d np.array): The normal vector to the plane. Points towards the observer.
+        north_vector (3-element list or 1d np.array): The vector pointing north in the plane.
+        xc, yc, zc (float): The coordinates of the center of the slice.
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+                                   (and Y and Z)
+        size: comoving side of the simulation box
+        nmax: cells at base level
+        nl: number of AMR levels (max AMR level to be considered)
+
+        Two of the following three must be specified:
+            - widthN, widthE (float): The width of the slice in the north and east directions, respectively. Must be in the same units as the coordinates.
+            - res (float), or resN and resE: The resolution of the slice. Must be in the same units as the coordinates.
+            - nN, nE (int): The number of points in the north and east directions, respectively.
+
+        kept_patches: list of patches that are read. If None, all patches are assumed to be present
+        interpolate (bool): If True, the slice will be interpolated. If False, the slice will be a plane.
+        return_grid (bool): If True, the function will return the grid of the slice (2d: east and north directions).
+        return_grid_3d (bool): If True, the function will return the simulation coordinates of the slice pixels (3d: x, y, z).
+        use_tqdm (bool): If True, a progress bar will be shown.
+
+    Returns:
+        2D numpy array with the computed projection.
+        If return_grid is True, it will return two 1D numpy arrays with the coordinates of the grid (E and N directions).
+    """
+
+    # Vectors to np array
+    if type(normal_vector) is list:
+        normal_vector = np.array(normal_vector)
+    if type(north_vector) is list:
+        north_vector = np.array(north_vector)
+
+    # normalize vectors
+    normal_vector = normal_vector / np.linalg.norm(normal_vector)
+    north_vector = north_vector / np.linalg.norm(north_vector)
+
+    if np.dot(normal_vector, north_vector) != 0:
+        raise ValueError("The normal and north vectors must be orthogonal")
+    east_vector = np.cross(normal_vector, north_vector)
+
+    if res is not None:
+        resN = res 
+        resE = res
+
+    # Check enough information is given
+    if (widthN is None) + (resN is None) + (nN is None) != 1:
+        raise ValueError("Exactly two of widthN, resN (or res) and nN must be given")
+
+    if widthN is None:
+        widthN = res * nN
+    elif resN is None:
+        resN = widthN / nN
+    else:
+        nN = int(widthN // resN)
+
+    if (widthE is None) + (resE is None) + (nE is None) != 1:
+        raise ValueError("Exactly two of widthE, resE (or res) and nE must be given")
+
+    if widthE is None:
+        widthE = res * nE
+    elif resE is None:
+        resE = widthE / nE
+    else:
+        nE = int(widthE // resE)
+
+    if kept_patches is None:
+        kept_patches = np.ones(npatch.sum()+1, dtype=bool)
+
+    # Compute the grid
+    # Notation: x, y, z are the coordinates in the simulation box, while N, E are the coordinates in the slice
+    xgrid = np.zeros((nN, nE))
+    ygrid = np.zeros((nN, nE))
+    zgrid = np.zeros((nN, nE))
+
+    imid = int(nN // 2)
+    jmid = int(nE // 2)
+
+    for i in range(nN):
+        for j in range(nE):
+            xgrid[i, j] = xc + (i - imid) * resN * north_vector[0] + (j - jmid) * resE * east_vector[0]
+            ygrid[i, j] = yc + (i - imid) * resN * north_vector[1] + (j - jmid) * resE * east_vector[1]
+            zgrid[i, j] = zc + (i - imid) * resN * north_vector[2] + (j - jmid) * resE * east_vector[2]
+
+
+    # Compute the projection
+    proj = np.zeros((nN, nE), dtype=field[0].dtype)
+    res_worst = max(resN, resE)
+    lmax = np.clip(np.log2((size/nmax)/res_worst).astype('int32'),0,nl)#+1
+    levels = tools.create_vector_levels(npatch)
+
+    for i in tqdm(range(nN), disable=not use_tqdm):
+        for j in range(nE):
+            xij = xgrid[i, j]
+            yij = ygrid[i, j]
+            zij = zgrid[i, j]
+
+            if not interpolate:
+                ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=0)
+                if not kept_patches[ip]:
+                    raise ValueError("Patch not read!!!")
+
+                proj[i, j] = field[ip][ix, jy, kz]
+            else:
+                ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=1)
+                if not kept_patches[ip]:
+                    raise ValueError("Patch not read!!!")
+
+                ll=levels[ip]
+                dxx=(xij-(patchrx[ip]+(ix-0.5)*(size/nmax/2**ll)))/(size/nmax/2**ll)
+                dyy=(yij-(patchry[ip]+(jy-0.5)*(size/nmax/2**ll)))/(size/nmax/2**ll)
+                dzz=(zij-(patchrz[ip]+(kz-0.5)*(size/nmax/2**ll)))/(size/nmax/2**ll)
+
+                if ip==0 and (i<=0 or j<=0 or k<=0 or i>=nmax-1 or j>=nmax-1 or k>=nmax-1):
+                    proj[i,j] = field[ip][(ix  )%nmax,(jy  )%nmax,(kz  )%nmax] *(1-dxx)*(1-dyy)*(1-dzz) \
+                              + field[ip][(ix  )%nmax,(jy  )%nmax,(kz+1)%nmax] *(1-dxx)*(1-dyy)*  dzz   \
+                              + field[ip][(ix  )%nmax,(jy+1)%nmax,(kz  )%nmax] *(1-dxx)*  dyy  *(1-dzz) \
+                              + field[ip][(ix  )%nmax,(jy+1)%nmax,(kz+1)%nmax] *(1-dxx)*  dyy  *  dzz   \
+                              + field[ip][(ix+1)%nmax,(jy  )%nmax,(kz  )%nmax] *  dxx  *(1-dyy)*(1-dzz) \
+                              + field[ip][(ix+1)%nmax,(jy  )%nmax,(kz+1)%nmax] *  dxx  *(1-dyy)*  dzz   \
+                              + field[ip][(ix+1)%nmax,(jy+1)%nmax,(kz  )%nmax] *  dxx  *  dyy  *(1-dzz) \
+                              + field[ip][(ix+1)%nmax,(jy+1)%nmax,(kz+1)%nmax] *  dxx  *  dyy  *  dzz  
+                else:
+                    proj[i,j] = field[ip][ix  , jy  , kz  ] *(1-dxx)*(1-dyy)*(1-dzz) \
+                              + field[ip][ix  , jy  , kz+1] *(1-dxx)*(1-dyy)*  dzz   \
+                              + field[ip][ix  , jy+1, kz  ] *(1-dxx)*  dyy  *(1-dzz) \
+                              + field[ip][ix  , jy+1, kz+1] *(1-dxx)*  dyy  *  dzz   \
+                              + field[ip][ix+1, jy  , kz  ] *  dxx  *(1-dyy)*(1-dzz) \
+                              + field[ip][ix+1, jy  , kz+1] *  dxx  *(1-dyy)*  dzz   \
+                              + field[ip][ix+1, jy+1, kz  ] *  dxx  *  dyy  *(1-dzz) \
+                              + field[ip][ix+1, jy+1, kz+1] *  dxx  *  dyy  *  dzz  
+
+    # reorient the projection array: east is the first index increasing, north is the second index increasing
+    proj = np.transpose(proj)
+    proj = np.flipud(proj)
+
+    return_vars = [proj]
+
+
+    if return_grid:
+        Ngrid = np.zeros(nN)
+        Egrid = np.zeros(nE)
+
+        for i in range(nN):
+            Ngrid[i] = (i - imid) * resN
+        for j in range(nE):
+            Egrid[j] = (j - jmid) * resE
+
+        return_vars.append(Egrid)
+        return_vars.append(Ngrid)
+
+    if return_grid_3d:
+        return_vars.append(xgrid)
+        return_vars.append(ygrid)
+        return_vars.append(zgrid)
+
+    return tuple(return_vars)
+
