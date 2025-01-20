@@ -577,7 +577,7 @@ def slice_map(field, normal_vector, north_vector,
                 dyy=(yij-(patchry[ip]+(jy-0.5)*(size/nmax/2**ll)))/(size/nmax/2**ll)
                 dzz=(zij-(patchrz[ip]+(kz-0.5)*(size/nmax/2**ll)))/(size/nmax/2**ll)
 
-                if ip==0 and (i<=0 or j<=0 or k<=0 or i>=nmax-1 or j>=nmax-1 or k>=nmax-1):
+                if ip==0 and (ix<=0 or jy<=0 or kz<=0 or ix>=nmax-1 or jy>=nmax-1 or kz>=nmax-1):
                     proj[i,j] = field[ip][(ix  )%nmax,(jy  )%nmax,(kz  )%nmax] *(1-dxx)*(1-dyy)*(1-dzz) \
                               + field[ip][(ix  )%nmax,(jy  )%nmax,(kz+1)%nmax] *(1-dxx)*(1-dyy)*  dzz   \
                               + field[ip][(ix  )%nmax,(jy+1)%nmax,(kz  )%nmax] *(1-dxx)*  dyy  *(1-dzz) \
