@@ -28,6 +28,8 @@ from matplotlib.colors import ListedColormap
 import math
 from scipy.stats import gaussian_kde
 from tqdm import tqdm
+from numba import jit, njit, prange, get_num_threads
+from numba.typed import List
 
 # MASCLET FRAMEWORK MODULES
 from masclet_framework.profiles import locate_point
@@ -533,72 +535,92 @@ def slice_map(field, normal_vector, north_vector,
     if kept_patches is None:
         kept_patches = np.ones(npatch.sum()+1, dtype=bool)
 
-    # Compute the grid
-    # Notation: x, y, z are the coordinates in the simulation box, while N, E are the coordinates in the slice
-    xgrid = np.zeros((nN, nE))
-    ygrid = np.zeros((nN, nE))
-    zgrid = np.zeros((nN, nE))
-
-    imid = int(nN // 2)
-    jmid = int(nE // 2)
-
-    for i in range(nN):
-        for j in range(nE):
-            xgrid[i, j] = xc + (i - imid) * resN * north_vector[0] + (j - jmid) * resE * east_vector[0]
-            ygrid[i, j] = yc + (i - imid) * resN * north_vector[1] + (j - jmid) * resE * east_vector[1]
-            zgrid[i, j] = zc + (i - imid) * resN * north_vector[2] + (j - jmid) * resE * east_vector[2]
-
-
-    # Compute the projection
-    proj = np.zeros((nN, nE), dtype=field[0].dtype)
-    res_worst = max(resN, resE)
-    lmax = np.clip(np.log2((size/nmax)/res_worst).astype('int32'),0,nl)#+1
     levels = tools.create_vector_levels(npatch)
 
-    for i in tqdm(range(nN), disable=not use_tqdm):
-        for j in range(nE):
-            xij = xgrid[i, j]
-            yij = ygrid[i, j]
-            zij = zgrid[i, j]
+    #print('NCORES=', get_num_threads())
 
-            if not interpolate:
-                ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=0)
-                if not kept_patches[ip]:
-                    raise ValueError("Patch not read!!!")
+    # Compute the grid
+    # Notation: x, y, z are the coordinates in the simulation box, while N, E are the coordinates in the slice
+    @njit(parallel=True)
+    def parallelize(nN, nE, xc, yc, zc, resN, resE, north_vector, east_vector, size, nmax, levels, kept_patches, field):
+        xgrid = np.zeros((nN, nE))
+        ygrid = np.zeros((nN, nE))
+        zgrid = np.zeros((nN, nE))
 
-                proj[i, j] = field[ip][ix, jy, kz]
-            else:
-                ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=1)
-                if not kept_patches[ip]:
-                    raise ValueError("Patch not read!!!")
+        imid = int(nN // 2)
+        jmid = int(nE // 2)
+        
+        for i in prange(nN):
+            for j in range(nE):
+                xgrid[i, j] = xc + (i - imid) * resN * north_vector[0] + (j - jmid) * resE * east_vector[0]
+                ygrid[i, j] = yc + (i - imid) * resN * north_vector[1] + (j - jmid) * resE * east_vector[1]
+                zgrid[i, j] = zc + (i - imid) * resN * north_vector[2] + (j - jmid) * resE * east_vector[2]
 
-                ll=levels[ip]
-                dxx=(xij-(patchrx[ip]+(ix-0.5)*(size/nmax/2**ll)))/(size/nmax/2**ll)
-                dyy=(yij-(patchry[ip]+(jy-0.5)*(size/nmax/2**ll)))/(size/nmax/2**ll)
-                dzz=(zij-(patchrz[ip]+(kz-0.5)*(size/nmax/2**ll)))/(size/nmax/2**ll)
 
-                if ip==0 and (ix<=0 or jy<=0 or kz<=0 or ix>=nmax-1 or jy>=nmax-1 or kz>=nmax-1):
-                    proj[i,j] = field[ip][(ix  )%nmax,(jy  )%nmax,(kz  )%nmax] *(1-dxx)*(1-dyy)*(1-dzz) \
-                              + field[ip][(ix  )%nmax,(jy  )%nmax,(kz+1)%nmax] *(1-dxx)*(1-dyy)*  dzz   \
-                              + field[ip][(ix  )%nmax,(jy+1)%nmax,(kz  )%nmax] *(1-dxx)*  dyy  *(1-dzz) \
-                              + field[ip][(ix  )%nmax,(jy+1)%nmax,(kz+1)%nmax] *(1-dxx)*  dyy  *  dzz   \
-                              + field[ip][(ix+1)%nmax,(jy  )%nmax,(kz  )%nmax] *  dxx  *(1-dyy)*(1-dzz) \
-                              + field[ip][(ix+1)%nmax,(jy  )%nmax,(kz+1)%nmax] *  dxx  *(1-dyy)*  dzz   \
-                              + field[ip][(ix+1)%nmax,(jy+1)%nmax,(kz  )%nmax] *  dxx  *  dyy  *(1-dzz) \
-                              + field[ip][(ix+1)%nmax,(jy+1)%nmax,(kz+1)%nmax] *  dxx  *  dyy  *  dzz  
+        # Compute the projection
+        proj = np.zeros((nN, nE), dtype=field[0].dtype)
+        res_worst = max(resN, resE)
+        #lmax = np.clip(np.log2((size/nmax)/res_worst).astype('int32'),0,nl)#+1
+        lmax = int(np.log2((size/nmax)/res_worst))
+        nl = levels.max()
+        if lmax>nl:
+            lmax = nl
+        if lmax<0:
+            lmax = 0
+        
+
+        #for i in tqdm(range(nN), disable=not use_tqdm):
+        for i in prange(nN):
+            for j in range(nE):
+                xij = xgrid[i, j]
+                yij = ygrid[i, j]
+                zij = zgrid[i, j]
+
+                if not interpolate:
+                    ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=0)
+                    if not kept_patches[ip]:
+                        raise ValueError("Patch not read!!!")
+
+                    proj[i, j] = field[ip][ix, jy, kz]
                 else:
-                    proj[i,j] = field[ip][ix  , jy  , kz  ] *(1-dxx)*(1-dyy)*(1-dzz) \
-                              + field[ip][ix  , jy  , kz+1] *(1-dxx)*(1-dyy)*  dzz   \
-                              + field[ip][ix  , jy+1, kz  ] *(1-dxx)*  dyy  *(1-dzz) \
-                              + field[ip][ix  , jy+1, kz+1] *(1-dxx)*  dyy  *  dzz   \
-                              + field[ip][ix+1, jy  , kz  ] *  dxx  *(1-dyy)*(1-dzz) \
-                              + field[ip][ix+1, jy  , kz+1] *  dxx  *(1-dyy)*  dzz   \
-                              + field[ip][ix+1, jy+1, kz  ] *  dxx  *  dyy  *(1-dzz) \
-                              + field[ip][ix+1, jy+1, kz+1] *  dxx  *  dyy  *  dzz  
+                    ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=1)
+                    if not kept_patches[ip]:
+                        raise ValueError("Patch not read!!!")
 
-    # reorient the projection array: east is the first index increasing, north is the second index increasing
-    proj = np.transpose(proj)
-    proj = np.flipud(proj)
+                    ll=levels[ip]
+                    dxx=(xij-(patchrx[ip]+(ix-0.5)*(size/nmax/2**ll)))/(size/nmax/2**ll)
+                    dyy=(yij-(patchry[ip]+(jy-0.5)*(size/nmax/2**ll)))/(size/nmax/2**ll)
+                    dzz=(zij-(patchrz[ip]+(kz-0.5)*(size/nmax/2**ll)))/(size/nmax/2**ll)
+
+                    if ip==0 and (ix<=0 or jy<=0 or kz<=0 or ix>=nmax-1 or jy>=nmax-1 or kz>=nmax-1):
+                        proj[i,j] = field[ip][(ix  )%nmax,(jy  )%nmax,(kz  )%nmax] *(1-dxx)*(1-dyy)*(1-dzz) \
+                                + field[ip][(ix  )%nmax,(jy  )%nmax,(kz+1)%nmax] *(1-dxx)*(1-dyy)*  dzz   \
+                                + field[ip][(ix  )%nmax,(jy+1)%nmax,(kz  )%nmax] *(1-dxx)*  dyy  *(1-dzz) \
+                                + field[ip][(ix  )%nmax,(jy+1)%nmax,(kz+1)%nmax] *(1-dxx)*  dyy  *  dzz   \
+                                + field[ip][(ix+1)%nmax,(jy  )%nmax,(kz  )%nmax] *  dxx  *(1-dyy)*(1-dzz) \
+                                + field[ip][(ix+1)%nmax,(jy  )%nmax,(kz+1)%nmax] *  dxx  *(1-dyy)*  dzz   \
+                                + field[ip][(ix+1)%nmax,(jy+1)%nmax,(kz  )%nmax] *  dxx  *  dyy  *(1-dzz) \
+                                + field[ip][(ix+1)%nmax,(jy+1)%nmax,(kz+1)%nmax] *  dxx  *  dyy  *  dzz  
+                    else:
+                        proj[i,j] = field[ip][ix  , jy  , kz  ] *(1-dxx)*(1-dyy)*(1-dzz) \
+                                + field[ip][ix  , jy  , kz+1] *(1-dxx)*(1-dyy)*  dzz   \
+                                + field[ip][ix  , jy+1, kz  ] *(1-dxx)*  dyy  *(1-dzz) \
+                                + field[ip][ix  , jy+1, kz+1] *(1-dxx)*  dyy  *  dzz   \
+                                + field[ip][ix+1, jy  , kz  ] *  dxx  *(1-dyy)*(1-dzz) \
+                                + field[ip][ix+1, jy  , kz+1] *  dxx  *(1-dyy)*  dzz   \
+                                + field[ip][ix+1, jy+1, kz  ] *  dxx  *  dyy  *(1-dzz) \
+                                + field[ip][ix+1, jy+1, kz+1] *  dxx  *  dyy  *  dzz  
+
+        # reorient the projection array: east is the first index increasing, north is the second index increasing
+        proj = np.transpose(np.flipud(proj))
+        xgrid = np.transpose(np.flipud(xgrid))
+        ygrid = np.transpose(np.flipud(ygrid))
+        zgrid = np.transpose(np.flipud(zgrid))
+
+        return proj, xgrid, ygrid, zgrid
+
+    proj, xgrid, ygrid, zgrid = parallelize(nN, nE, xc, yc, zc, resN, resE, north_vector, east_vector, size, nmax, levels, kept_patches, 
+                                            List([f if ki else np.zeros((2,2,2), dtype=field[0].dtype, order='F') for f,ki in zip(field, kept_patches)]))
 
     return_vars = [proj]
 
@@ -606,6 +628,9 @@ def slice_map(field, normal_vector, north_vector,
     if return_grid:
         Ngrid = np.zeros(nN)
         Egrid = np.zeros(nE)
+
+        imid = int(nN // 2)
+        jmid = int(nE // 2)
 
         for i in range(nN):
             Ngrid[i] = (i - imid) * resN
