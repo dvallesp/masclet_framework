@@ -19,6 +19,9 @@ except ImportError:
         return iterator
 from scipy.spatial import KDTree
 from scipy.integrate import cumulative_trapezoid
+from scipy.interpolate import interp1d
+from scipy.stats import gaussian_kde
+from astropy.stats import biweight_location
 
 @jit(nopython=True, fastmath=True)
 def locate_point(x,y,z,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,nl,buf=1,
@@ -274,9 +277,6 @@ def radial_profile(field,cx,cy,cz,
         - rrr: radial bins
     """
 
-    if average not in ["mean", "median", "geometric"]:
-        raise ValueError('Wrong specification of average')
-
     dir_profiles, rrr, vec_costheta, vec_phi = dir_profile(field,cx,cy,cz,
                                                            npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,
                                                            binsr=binsr,dex_rbins=dex_rbins,delta_rbins=delta_rbins,rmin=rmin,rmax=rmax,
@@ -289,6 +289,9 @@ def radial_profile(field,cx,cy,cz,
         profile=np.median(dir_profiles,axis=(0,1))
     elif average=="geometric":
         profile=np.exp(np.mean(np.log(dir_profiles),axis=(0,1)))
+    elif type(average) is list or type(average) is np.ndarray: # list of percentiles
+        assert all([0<=p<=100 for p in average]), "Percentiles must be between 0 and 100"
+        profile={'perc'+str(p): np.percentile(dir_profiles, p, axis=(0,1)) for p in average}
     else:
         raise ValueError('Wrong specification of average')
 
@@ -493,8 +496,6 @@ def radial_profile_particles(particles_field, cx,cy,cz,size, tree=None,
         - profile: radially-averaged profile
         - rrr: radial bins
     """
-    if average not in ["mean", "median", "geometric"]:
-        raise ValueError('Wrong specification of average')
 
     dir_profiles, rrr, vec_costheta, vec_phi = dir_profile_particles(particles_field, cx, cy, cz, size, tree=tree,
                 binsr=binsr, rmin=rmin, rmax=rmax, dex_rbins=dex_rbins, delta_rbins=delta_rbins,
@@ -508,6 +509,9 @@ def radial_profile_particles(particles_field, cx,cy,cz,size, tree=None,
         profile=np.median(dir_profiles,axis=(0,1))
     elif average=="geometric":
         profile=np.exp(np.mean(np.log(dir_profiles),axis=(0,1)))
+    elif type(average) is list or type(average) is np.ndarray: # list of percentiles
+        assert all([0<=p<=100 for p in average]), "Percentiles must be between 0 and 100"
+        profile={'perc'+str(p): np.percentile(dir_profiles, p, axis=(0,1)) for p in average}
     else:
         raise ValueError('Wrong specification of average')
 
@@ -580,3 +584,85 @@ def average_from_profile(rprof, prof, prof_weight=None, rmin=None, rmax=None, cu
             num[0] = num[1]/den[1] #?
 
     return num / den
+
+
+def stack_profiles(list_r, list_profiles, stacking_method='median', rmin=None, rmax=None, nbins=None, logbins=True, logloginterp=True, logstack=False,
+                   return_list_profiles=False):
+    """ 
+    Stack profiles using a specified method (mean, median, biweight, mode), taking 
+    care of resampling the profiles to a common grid.
+
+    Args:
+        - list_r: list of radial grids
+        - list_profiles: list of profiles to stack
+        - stacking_method: method to stack the profiles. Can be 'mean', 'median', 'biweight' or 'mode'.
+        - rmin: minimum radius (default: maximum of the minimums of the input radial grids)
+        - rmax: maximum radius (default: minimum of the maximums of the input radial grids)
+        - nbins: number of bins in the common grid (default: length of the input radial grids, where all
+                 are assumed to be the same)
+        - logbins: whether the common grid should be logarithmic or not
+        - logloginterp: whether to interpolate in log-log space or not
+        - logstack: whether to stack in log space or not
+        - return_list_profiles: instead of stacking, return the list of resampled profiles
+
+    Returns:
+        - r: common radial grid
+        - stacked_profile: stacked profile
+            If return_list_profiles is True, instead of the stacked profile, the list of resampled profiles is returned.
+    """ 
+
+    # interpolate profiles to a common grid
+    if rmin is None:
+        rmin = max([min(r) for r in list_r])
+    if rmax is None:
+        rmax = min([max(r) for r in list_r])
+    if nbins is None:
+        nbins = len(list_r[0])
+
+    if logbins:
+        r = np.logspace(np.log10(rmin), np.log10(rmax), nbins)
+    else:
+        r = np.linspace(rmin, rmax, nbins)
+
+    #print(rmin, rmax, r)
+
+    for i in range(len(list_profiles)):
+        rprof = list_r[i]
+        prof = list_profiles[i]
+        if logloginterp:
+            rprof = np.log10(rprof)
+            prof = np.log10(prof)
+        interpolant = interp1d(rprof, prof, bounds_error=False, fill_value=(prof[0], prof[-1]))
+        
+        if logloginterp:
+            prof_interp = 10**interpolant(np.log10(r))
+        else:
+            prof_interp = interpolant(r)
+
+        list_profiles[i] = prof_interp
+
+    if return_list_profiles:
+        return r, list_profiles
+
+    #print(list_profiles)
+    if logstack:
+        list_profiles = [np.log10(p) for p in list_profiles]
+
+    if stacking_method == 'mean':
+        stacked_profile = np.mean(list_profiles, axis=0)
+    elif stacking_method == 'median':
+        stacked_profile = np.median(list_profiles, axis=0)
+    elif stacking_method == 'biweight':
+        stacked_profile = biweight_location(list_profiles, axis=0)
+    elif stacking_method == 'mode':
+        stacked_profile = np.zeros_like(list_profiles[0])
+        for i in range(len(list_profiles[0])):
+            vals = [x[i] for x in list_profiles]
+            testvals = np.linspace(min(vals), max(vals), 1000)
+            kde = gaussian_kde(vals)
+            stacked_profile[i] = testvals[np.argmax(kde(testvals))]
+
+    if logstack:
+        stacked_profile = 10**stacked_profile
+        
+    return r, stacked_profile
