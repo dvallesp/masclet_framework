@@ -100,9 +100,9 @@ def R_from_M(M, delta=200, norm='m', z=0., units_r='comoving',
 
     return R
 
-def T(M, delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6):
+def T(M, delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6, units_out='keV'):
     """ 
-    Computes temperature (times kB; in keV) from mass (in Msun) for a 
+    Computes temperature (times kB; in keV; or in K) from mass (in Msun) for a 
         given overdensity delta (either normalised to the critical density 
         ['c'] or to the background density ['m']).
 
@@ -115,6 +115,7 @@ def T(M, delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6):
         h: dimensionless Hubble constant (float)
         omega_m: matter density parameter, at z=0 (float)
         mu: mean molecular weight (float)
+        units_out: units of the temperature (either 'keV' or 'K')
 
     Returns:
         temperature (times kB; in keV) corresponding to the given mass and 
@@ -135,7 +136,12 @@ def T(M, delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6):
     elif norm == 'm':
         T = 0.93211 * (delta/200)**(1/3) * (h/0.678)**(2/3) * (1+z) * (mu/0.6) * (M/1e14)**(2/3)
 
-    return T
+    if units_out == 'keV':
+        return T 
+    elif units_out == 'K':
+        return T * (units.keV_to_J / units.kB_isu)
+    else:
+        raise ValueError("units_out must be either 'keV' or 'K'")
 
 def n(delta=200, norm='m', z=0., h=0.678, omega_m=0.31, mu=0.6, fb=0.155):
     """ 
