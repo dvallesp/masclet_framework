@@ -596,6 +596,7 @@ def stack_profiles(list_r, list_profiles, stacking_method='median', rmin=None, r
         - list_r: list of radial grids
         - list_profiles: list of profiles to stack
         - stacking_method: method to stack the profiles. Can be 'mean', 'median', 'biweight' or 'mode'.
+            Also, a list of percentiles can be specified.
         - rmin: minimum radius (default: maximum of the minimums of the input radial grids)
         - rmax: maximum radius (default: minimum of the maximums of the input radial grids)
         - nbins: number of bins in the common grid (default: length of the input radial grids, where all
@@ -609,6 +610,7 @@ def stack_profiles(list_r, list_profiles, stacking_method='median', rmin=None, r
         - r: common radial grid
         - stacked_profile: stacked profile
             If return_list_profiles is True, instead of the stacked profile, the list of resampled profiles is returned.
+            If stacking_method is a list of percentiles, a dictionary with the percentiles is returned.
     """ 
 
     # interpolate profiles to a common grid
@@ -648,6 +650,7 @@ def stack_profiles(list_r, list_profiles, stacking_method='median', rmin=None, r
     if logstack:
         list_profiles = [np.log10(p) for p in list_profiles]
 
+    output_is_dict = False
     if stacking_method == 'mean':
         stacked_profile = np.mean(list_profiles, axis=0)
     elif stacking_method == 'median':
@@ -661,8 +664,14 @@ def stack_profiles(list_r, list_profiles, stacking_method='median', rmin=None, r
             testvals = np.linspace(min(vals), max(vals), 1000)
             kde = gaussian_kde(vals)
             stacked_profile[i] = testvals[np.argmax(kde(testvals))]
+    elif type(stacking_method) is list or type(stacking_method) is np.ndarray:
+        assert all([0<=p<=100 for p in stacking_method]), "Percentiles must be between 0 and 100"
+        stacked_profile = {'perc'+str(p): np.percentile(list_profiles, p, axis=0) for p in stacking_method}
+        output_is_dict = True
 
     if logstack:
         stacked_profile = 10**stacked_profile
+        if output_is_dict:
+            stacked_profile = {k: 10**v for k,v in stacked_profile.items()}
         
     return r, stacked_profile
