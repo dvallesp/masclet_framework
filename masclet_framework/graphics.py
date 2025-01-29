@@ -28,7 +28,7 @@ from matplotlib.colors import ListedColormap
 import math
 from scipy.stats import gaussian_kde
 from tqdm import tqdm
-from numba import jit, njit, prange, get_num_threads
+from numba import jit, njit, prange, get_num_threads, set_num_threads
 from numba.typed import List
 
 # MASCLET FRAMEWORK MODULES
@@ -541,7 +541,7 @@ def slice_map(field, normal_vector, north_vector,
 
     # Compute the grid
     # Notation: x, y, z are the coordinates in the simulation box, while N, E are the coordinates in the slice
-    @njit(parallel=True)
+    @njit(parallel=True, fastmath=True)
     def parallelize(nN, nE, xc, yc, zc, resN, resE, north_vector, east_vector, size, nmax, levels, kept_patches, field):
         xgrid = np.zeros((nN, nE))
         ygrid = np.zeros((nN, nE))
