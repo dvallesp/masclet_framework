@@ -408,7 +408,7 @@ def MCMC_get_autocorrelationtime(sampler):
     return sampler.get_autocorr_time()
 
 
-def MCMC_parameter_estimation(sampler, parameter_type='mean', uncertainty_type='std'):
+def MCMC_parameter_estimation(sampler, parameter_type='mean', uncertainty_type='std', marginalize_over_variables=None):
     """
     Given the sampler, compute the parameter estimation and uncertainties.
 
@@ -417,12 +417,18 @@ def MCMC_parameter_estimation(sampler, parameter_type='mean', uncertainty_type='
         parameter_type: the way to compute the parameter. Options are 'mean' or 'mode'.
         uncertainty_type: the type of uncertainty to compute. 
             'std' for standard deviation, [q1, q2] for quantiles q1 and q2 (per 1.)
+        marginalize_over_variables: list of variables (indices) to marginalize over. 
+            If None, no marginalization is performed.
 
     Returns:
         theta: the parameter estimation (np.array)
         (low, high): the lower and upper thresholds (tuple of np.arrays)
     """
     samples = MCMC_get_samples(sampler)
+
+    if marginalize_over_variables is not None:
+        samples = np.delete(samples, marginalize_over_variables, axis=1)
+
     if parameter_type == 'mean':
         theta = np.mean(samples, axis=0)
     elif parameter_type == 'mode':
@@ -519,7 +525,7 @@ def MCMC_cornerplot(sampler, nsamples_plot=1000, thin=1, varnames=None, units=No
     
     fig, axes = graphics.cornerplot(samples, varnames=varnames, units=units, figsize=figsize, labelsize=labelsize, ticksize=ticksize, title=title,
                                 s=s, color=color, kde=kde, cmap_kde=cmap_kde, filled_kde=filled_kde, kde_plot_outliers=kde_plot_outliers, kde_quantiles=kde_quantiles,
-                                axes_limits=axes_limits)
+                                axes_limits=axes_limits, logscale=logscale)
 
     if annotate_best:
         theta, (low, high) = MCMC_parameter_estimation(sampler, parameter_type=parameter_type, uncertainty_type=uncertainty_type)
