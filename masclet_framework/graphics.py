@@ -21,6 +21,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.colors as colors
 import matplotlib.cm as cm
+from matplotlib.gridspec import GridSpec
 import seaborn as sns
 import matplotlib.ticker as mticker
 from matplotlib.ticker import MaxNLocator
@@ -137,6 +138,139 @@ def colormap2d(z, x=np.array([]), y=np.array([]), xlabel='', ylabel='', cbarlabe
     return ax
 
 
+def colormap2d_bicolored(proj_hue, proj_lightness, xg=None, yg=None, huevar_min=None, huevar_max=None, lightvar_min=None, lightvar_max=None, huevar_log=True, lightvar_log=True, 
+                        cmap='coolwarm', nhue=100, nlight=100, xlabel='', ylabel='', huelabel='', lightlabel='', title='', remove_xy_ticks=False, axisfont=18, ticksfont=16, titlefont=18, 
+                        xticks=None, yticks=None, hueticks=None, lightticks=None, figsize=(10,12)):
+    """ 
+    Plots a 2D colormap with two variables: one for hue and one for lightness (e.g., temperature and density).
+
+    Args:
+        proj_hue: 2D numpy array with the hue values
+        proj_lightness: 2D numpy array with the lightness values
+        xg: 1D numpy array with the x-axis values
+        yg: 1D numpy array with the y-axis values
+        huevar_min: minimum value of the hue variable to be represented. Values below this will be clipped.
+        huevar_max: maximum value of the hue variable to be represented. Values above this will be clipped.
+        lightvar_min: minimum value of the lightness variable to be represented. Values below this will be clipped.
+        lightvar_max: maximum value of the lightness variable to be represented. Values above this will be clipped.
+        huevar_log: if True, the hue variable will be plotted in log scale
+        lightvar_log: if True, the lightness variable will be plotted in log scale
+        cmap: colormap for the hue variable. Can be a string with the name of the colormap or a matplotlib colormap object.
+        nhue: number of colors for the hue variable colormap
+        nlight: number of colors for the lightness variable colormap
+        xlabel: label for the x-axis (spatial)
+        ylabel: label for the y-axis (spatial)
+        huelabel: label for the hue colorbar 
+        lightlabel: label for the lightness colorbar
+        title: title of the plot
+        remove_xy_ticks: if True, it will remove the x and y ticks from the plot
+        axisfont: fontsize of the axis labels
+        ticksfont: fontsize of the ticks
+        titlefont: fontsize of the title
+        xticks: list of x-axis ticks. If None, it will use the default ticks
+        yticks: list of y-axis ticks. If None, it will use the default ticks
+        hueticks: list of hue colorbar ticks. If None, it will use the default ticks
+        lightticks: list of lightness colorbar ticks. If None, it will use the default ticks
+        figsize: size of the figure
+
+    Returns:
+        figure object and list of axis objects with the plot
+    """
+    fig = plt.figure(figsize=figsize)
+    gs = GridSpec(6, 5, figure=fig)
+
+    ax = fig.add_subplot(gs[0:5, 0:5])
+    ax.set_aspect(1)
+    axcol = fig.add_subplot(gs[5, 1:4])
+
+    if huevar_log:
+        huevar = np.log10(proj_hue)
+    else:
+        huevar = proj_hue.copy()
+    
+    if lightvar_log:
+        lightvar = np.log10(proj_lightness)
+    else:
+        lightvar = proj_lightness.copy()
+
+    if xg is None:
+        xg = np.arange(proj_hue.shape[0])
+    if yg is None:
+        yg = np.arange(proj_hue.shape[1])
+
+    if huevar_min is None:
+        huevar_min = huevar.min()
+    if huevar_max is None:
+        huevar_max = huevar.max()
+    if lightvar_min is None:
+        lightvar_min = lightvar.min()
+    if lightvar_max is None:
+        lightvar_max = lightvar.max()
+
+    if type(cmap) is str:
+        cmap = cm.get_cmap(cmap)
+
+    hue_scale = np.linspace(huevar_min, huevar_max, nhue)
+    light_scale = np.linspace(lightvar_min, lightvar_max, nlight)
+
+    huevar = np.clip((huevar - huevar_min) / (huevar_max-huevar_min), 0, 1)
+    lightvar = np.clip((lightvar - lightvar_min) / (lightvar_max-lightvar_min), 0, 1)
+
+    hue = cmap(huevar)[:,:,:3]
+    light = lightvar
+
+    colored_map = hue * light[..., None]
+
+    ax.imshow(colored_map, origin='lower', extent=[xg.min(), xg.max(), yg.min(), yg.max()])
+
+    # set labels
+    ax.set_xlabel(xlabel, fontsize=axisfont)
+    ax.set_ylabel(ylabel, fontsize=axisfont)
+    ax.set_title(title, fontsize=titlefont)
+    ax.tick_params(axis='both', which='major', labelsize=ticksfont)
+
+    if remove_xy_ticks:
+        ax.set_xticks([])
+        ax.set_yticks([])
+    else:
+        if xticks is not None:
+            ax.set_xticks(xticks)
+        if yticks is not None:
+            ax.set_yticks(yticks)
+
+
+    # plot the 2d colorbar below 
+    hue_cvals = np.linspace(huevar_min, huevar_max, nhue)
+    light_cvals = np.linspace(lightvar_min, lightvar_max, nlight)
+
+    hue_cvar = np.clip((hue_cvals - huevar_min) / (huevar_max-huevar_min), 0, 1)
+    light_cvar = np.clip((light_cvals - lightvar_min) / (lightvar_max-lightvar_min), 0, 1)
+    hue_cvar, light_cvar = np.meshgrid(hue_cvar, light_cvar)
+
+    hue_c = cm.get_cmap(cmap)(hue_cvar)[:,:,:3]
+    light_c = light_cvar
+
+    colored_cmap = hue_c * light_c[..., None]
+
+    axcol.imshow(colored_cmap, origin='lower', extent=[huevar_min, huevar_max, lightvar_min, lightvar_max])
+    axcol.set_aspect('auto')
+
+    if hueticks is not None:
+        axcol.set_xticks(hueticks)
+    if lightticks is not None:
+        axcol.set_yticks(lightticks)
+
+    # set labels
+    axcol.set_xlabel(huelabel, fontsize=axisfont)
+    axcol.set_ylabel(lightlabel, fontsize=axisfont)
+    axcol.tick_params(axis='both', which='major', labelsize=ticksfont)
+
+    # prevent axes colliding 
+    fig.tight_layout()
+
+    return fig, [ax, axcol]
+
+
 def compute_projection(matrix, axis=2, slicepositions=None):
     """
     Computes the projection of a 3d numpy matrix along a principal axis.
@@ -206,6 +340,7 @@ def format_uncertainty(median, lower_err, upper_err):
 
         formatted = f"$({rounded_median:.{precision}f}^{{+{rounded_upper:.{precision}f}}}_{{-{rounded_lower:.{precision}f}}}) \\times 10^{{{median_order}}}$"
     else:
+        precision = max(0, precision)
         formatted = f"${rounded_median:.{precision}f}^{{+{rounded_upper:.{precision}f}}}_{{-{rounded_lower:.{precision}f}}}$"
 
 
