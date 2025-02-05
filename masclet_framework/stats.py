@@ -19,6 +19,9 @@ from scipy.interpolate import UnivariateSpline
 import emcee
 from masclet_framework import graphics
 from multiprocessing import Pool
+from scipy.stats import gaussian_kde
+import statsmodels.api as sm
+from sklearn.preprocessing import PolynomialFeatures
 
 def biweight_statistic(array, nmaxiter=100, tol=1e-4):
     '''
@@ -419,6 +422,7 @@ def MCMC_parameter_estimation(sampler, parameter_type='mean', uncertainty_type='
             'std' for standard deviation, [q1, q2] for quantiles q1 and q2 (per 1.)
         marginalize_over_variables: list of variables (indices) to marginalize over. 
             If None, no marginalization is performed.
+            NOTE: this is not working properly yet.
 
     Returns:
         theta: the parameter estimation (np.array)
@@ -434,6 +438,11 @@ def MCMC_parameter_estimation(sampler, parameter_type='mean', uncertainty_type='
     elif parameter_type == 'mode':
         logprob = sampler.get_log_prob(flat=True)
         idx = np.argmax(logprob)
+
+        # with KDE 
+        #kde = gaussian_kde(samples.T)
+        #idx = np.argmax(kde(samples.T))
+
         theta = samples[idx]
     else:
         raise ValueError('Unknown parameter type')
@@ -540,3 +549,111 @@ def MCMC_cornerplot(sampler, nsamples_plot=1000, thin=1, varnames=None, units=No
 
     return fig, axes
 
+
+def polyfit(x, y, ey, pval_thr=0.05, verbose=False, max_degree=None, xisqred_thr=None, 
+            return_model=False, fix_degree=None):
+    """
+    Fit a polynomial to the data (x, y) using statsmodels WLS.
+    It fits the polynomial of the lowest degree that satisfies the p-value and chi2 criteria.
+        I.e., the order of the polynomial is increased until the p-value of the last coefficient is below pval_thr,
+        (indicating that the coefficient is not significant) or the chi2 is below xisqred_thr (indicating a good fit 
+        and the onset of overfitting).
+
+    Args:
+        x: the x values (1d np.array)
+        y: the y values (1d np.array)
+        ey: the uncertainty in y (1d np.array)
+        pval_thr: the p-value threshold for the coefficients (float)
+        verbose: if True, print the results of the fit (bool)
+        max_degree: the maximum degree of the polynomial to fit (int)
+        xisqred_thr: the chi2 threshold for the fit (float)
+        return_model: if True, return the statsmodels model object (bool)
+        fix_degree: if not None, fix the degree of the polynomial to this value (int)
+    
+    Returns:
+        params: the parameters of the polynomial fit (np.array)
+        model: the statsmodels model object (optional)
+    """
+
+    one_less=False
+    two_less=False
+    try_extra=False
+    
+    w = 1/np.array(ey)**2
+    
+    if fix_degree is None:
+        if max_degree is None:
+            max_degree=x.size-2
+
+        for deg in range(max_degree+1):
+            polynomial_features= PolynomialFeatures(degree=deg)
+            xp = polynomial_features.fit_transform(x.reshape(-1, 1))
+
+            model = sm.WLS(y, xp, weights=w).fit()
+            ypred = model.predict(xp)
+            xisqred = ((ypred-y)**2/ey**2).sum() / (y.size-deg-1)
+
+            if verbose:
+                print(deg, model.pvalues[-1], xisqred)
+
+            if xisqred_thr is not None:  
+                if xisqred<xisqred_thr:
+                    if one_less:
+                        two_less=True
+                        one_less=False
+                    else:
+                        two_less=False
+                        one_less=True
+                    break
+
+            if model.pvalues[-1] > pval_thr:
+                if try_extra:
+                    two_less=True
+                    one_less=False
+                    break
+                else:
+                    one_less=True
+                    try_extra=True
+            else:
+                try_extra=False
+                one_less=False #### added 18jul 2022
+                two_less=False
+
+        if one_less:
+            deg-=1
+        if two_less:
+            deg-=2
+
+        if deg<0:
+            deg=0
+    else:
+        deg=fix_degree
+    
+    polynomial_features= PolynomialFeatures(degree=deg)
+    xp = polynomial_features.fit_transform(x.reshape(-1, 1))
+
+    model = sm.WLS(y, xp, weights=w).fit()
+    
+    if return_model:
+        return model.params, model
+    else:
+        return model.params
+
+
+def get_CIs_model(model, x, CI=0.32):
+    """ 
+    Compute the confidence intervals of the model at the given x values.
+
+    Args:
+        model: the statsmodels model object
+        x: the x values (1d np.array)
+        CI: the confidence interval (float)
+
+    Returns:
+        CIs: the confidence intervals (np.array)
+    """
+
+    degree=len(model.params)-1
+    polynomial_features= PolynomialFeatures(degree=degree)
+    xp = polynomial_features.fit_transform(x.reshape(-1, 1))
+    return model.get_prediction(xp).conf_int(alpha=CI)
