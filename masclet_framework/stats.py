@@ -14,7 +14,7 @@ Created by David Vallés
 
 import numpy as np
 import astropy.stats
-from scipy.stats import spearmanr
+from scipy.stats import spearmanr, t
 from scipy.interpolate import UnivariateSpline
 import emcee
 from masclet_framework import graphics
@@ -22,6 +22,9 @@ from multiprocessing import Pool
 from scipy.stats import gaussian_kde
 import statsmodels.api as sm
 from sklearn.preprocessing import PolynomialFeatures
+from scipy import odr
+import uncertainties as unc
+import uncertainties.unumpy as unp
 
 def biweight_statistic(array, nmaxiter=100, tol=1e-4):
     '''
@@ -657,3 +660,178 @@ def get_CIs_model(model, x, CI=0.32):
     polynomial_features= PolynomialFeatures(degree=degree)
     xp = polynomial_features.fit_transform(x.reshape(-1, 1))
     return model.get_prediction(xp).conf_int(alpha=CI)
+
+
+def fit_with_odr(x, y, xerr, yerr, f, initial_guess, xplot=None):
+    """ 
+    Fit a model to the data (x, y) using the orthogonal distance regression method.
+
+    Args:
+        x: the x values (1d np.array)
+        y: the y values (1d np.array)
+        xerr: the uncertainty in x (1d np.array)
+        yerr: the uncertainty in y (1d np.array)
+        f: the model function to fit (callable). 
+            The function should have the form f(params, x).
+                params is a list of parameters to fit.
+                x is the independent variable.
+            The function should return the model prediction for x given params.
+        initial_guess: the initial guess for the parameters (list)
+        xplot: the x values to evaluate the model and obtain confidence intervals
+
+    Returns:
+        dictionary with the fit parameters and the fit plot data (x, y, yerr [symmetric])
+    """
+    model = odr.Model(f)
+    data = odr.RealData(x, y, sx=xerr, sy=yerr)
+    odr_instance = odr.ODR(data, model, beta0=initial_guess)
+    out = odr_instance.run()
+    
+    params = unc.correlated_values(out.beta, out.cov_beta)
+    nominal_values = unp.nominal_values(params)
+    std_devs = unp.std_devs(params)
+
+    if xplot is None:
+        xplot = np.linspace(x.min(), x.max(), 100)
+    yplot = f(params, xplot)
+    yplot_nominal = unp.nominal_values(yplot)
+    yplot_std_dev = unp.std_devs(yplot)
+    
+    return {'fit_params': {'values': nominal_values,
+                          'std_devs': std_devs},
+            'fit_plot': {'x': xplot, 'y': yplot_nominal, 'yerr': yplot_std_dev},
+            'model': out}
+
+def polyfit_odr(x, y, xerr, yerr, max_degree=None, xisqred_thr=1.0, pval_thr=0.05,
+                 fix_degree=None, xplot=None, verbose=False):
+    """
+    Fit a polynomial to the data (x, y) using orthogonal distance regression.
+    It fits the polynomial of the lowest degree that satisfies the chi2 criteria.
+        I.e., the order of the polynomial is increased until the chi2 is below 
+        xisqred_thr (indicating a good fit and the onset of overfitting), or the 
+        p-value of the last coefficient is above pval_thr (indicating that the
+        coefficient is not significant).
+
+    NOTE: the way the coefficients are computed is the opposite to polyval.
+        That's to say, there the coefficient [0] is the highest degree, and here is the lowest.
+        In this (our) way, the i-th coefficient is the coefficient of the i-th degree.
+        To evaluate with polyval, the coefficients should be reversed: np.polyval(coefs[::-1], x)
+
+    Args:
+        x: the x values (1d np.array)
+        y: the y values (1d np.array)
+        xerr: the uncertainty in x (1d np.array)
+        yerr: the uncertainty in y (1d np.array)
+        max_degree: the maximum degree of the polynomial to fit (int)
+        xisqred_thr: the chi2 threshold for the fit (float)
+        pval_thr: the p-value threshold for the highest order coefficients (float)
+        fix_degree: if not None, fix the degree of the polynomial to this value (int)
+        xplot: the x values to evaluate the model and obtain confidence intervals
+        verbose: if True, print the results of the fit (bool)
+
+    Returns:
+        dictionary with the fit parameters and the fit plot data (x, y, yerr [symmetric])
+    """
+
+    one_less=False
+    two_less=False
+    try_extra=False
+
+
+    if max_degree is None:
+        max_degree=x.size-2
+
+    if fix_degree is not None:
+        max_degree=fix_degree
+
+    chisq = {}
+    models = {}
+    pvals = {}
+
+    # degree 0
+    deg = 0 
+    def f(B, x):
+        return np.polyval(B[::-1], x)
+    initial = np.mean(y)
+    model = fit_with_odr(x, y, xerr, yerr, f, [initial], xplot=xplot)
+    chisq[deg] = model['model'].res_var
+    models[deg] = model
+
+    tval = model['model'].beta / model['model'].sd_beta
+    dof = x.size - deg - 1
+    pval = 2 * (1 - t.cdf(np.abs(tval), dof))
+    pvals[deg] = pval[-1] # higher order term
+
+    # pvals[deg] = 
+
+    if verbose:
+        print('---')
+        print(deg, chisq[deg])
+        print(models[deg]['fit_params']['values'])
+        print(models[deg]['fit_params']['std_devs'])
+        print(pvals[deg])
+
+    for deg in range(1,max_degree+1):
+        def f(params, x):
+            return np.polyval(params[::-1], x)
+        initial = list(models[deg-1]['fit_params']['values']) + [0.]
+        model = fit_with_odr(x, y, xerr, yerr, f, initial, xplot=xplot)
+        chisq[deg] = model['model'].res_var
+        models[deg] = model
+
+        tval = model['model'].beta / model['model'].sd_beta
+        dof = x.size - deg - 1
+        pval = 2 * (1 - t.cdf(np.abs(tval), dof))
+        pvals[deg] = pval[-1] # higher order term
+
+        if verbose:
+            print('---')
+            print(deg, chisq[deg])
+            print(models[deg]['fit_params']['values'])
+            print(models[deg]['fit_params']['std_devs'])
+            print(pvals[deg])
+
+        if xisqred_thr is not None:  
+            if chisq[deg]<xisqred_thr:
+                if one_less:
+                    two_less=True
+                    one_less=False
+                else:
+                    two_less=False
+                    one_less=True
+                if fix_degree is None:
+                    break
+
+        if pvals[deg] > pval_thr:
+            if try_extra:
+                two_less=True
+                one_less=False
+                if fix_degree is None:
+                    break
+            else:
+                one_less=True
+                try_extra=True
+        else:
+            try_extra=False
+            one_less=False #### added 18jul 2022
+            two_less=False
+
+    if one_less:
+        deg-=1
+    if two_less:
+        deg-=2
+
+    if deg<0:
+        deg=0
+
+    if fix_degree is not None:
+        deg=fix_degree
+  
+    if verbose:
+        print('---')
+        print('Best degree:', deg)
+        print('---')
+
+    return models[deg]
+
+        
