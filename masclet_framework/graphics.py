@@ -28,9 +28,11 @@ from matplotlib.ticker import MaxNLocator
 from matplotlib.colors import ListedColormap
 import math
 from scipy.stats import gaussian_kde
+from scipy.ndimage import gaussian_filter
 from tqdm import tqdm
 from numba import jit, njit, prange, get_num_threads, set_num_threads
 from numba.typed import List
+
 
 # MASCLET FRAMEWORK MODULES
 from masclet_framework.profiles import locate_point
@@ -269,6 +271,187 @@ def colormap2d_bicolored(proj_hue, proj_lightness, xg=None, yg=None, huevar_min=
     fig.tight_layout()
 
     return fig, [ax, axcol]
+
+
+def colormap2d_RGB(proj_R, proj_G, proj_B, 
+                   xg=None, yg=None, 
+                   Rlog=True, Rmin=None, Rmax=None, Rscale=1., Rcolor=[1.,0.,0.], sigma_R=0., Rlabel='', Rticks=None,
+                   Glog=True, Gmin=None, Gmax=None, Gscale=1., Gcolor=[0.,1.,0.], sigma_G=0., Glabel='', Gticks=None,
+                   Blog=True, Bmin=None, Bmax=None, Bscale=1., Bcolor=[0.,0.,1.], sigma_B=0., Blabel='', Bticks=None,
+                   xlabel='', ylabel='', title='', remove_xy_ticks=False, axisfont=18, ticksfont=16, titlefont=18, 
+                   xticks=None, yticks=None, figsize=(10,14)):
+    """
+    Plots a 2D colormap with three variables as R, G and B channels (or other three color channels).
+
+    Args:
+        proj_R, proj_G, proj_B: thre 2D numpy arrays with the R, G and B channel variables 
+        xg, yg: 1D numpy arrays with the x, and y-axis values. If None, it will use pixel coordinates.
+        Rlog, Glog, Blog: if True, the R, G and B variables will be plotted in log scale, respectively
+        Rmin, Gmin, Bmin: minimum value of the R, G and B variables to be represented. Values below this will be clipped.
+            These values correspond to black in the colormap.
+        Rmax, Gmax, Bmax: maximum value of the R, G and B variables to be represented. Values above this will be clipped.
+            These values correspond to Rcolor, Gcolor and Bcolor in the colormap, times Rscale, Gscale and Bscale.
+        Rscale, Gscale, Bscale: scaling factor for the R, G and B variables, so that the color does not saturate.
+        Rcolor, Gcolor, Bcolor: color of the R, G and B variables. Defaults to red, green and blue.
+        sigma_R, sigma_G, sigma_B: width of the 2d gaussian filter for the R, G and B variables. Defaults to 0 (no smoothing)
+        Rlabel, Glabel, Blabel: label for the R, G and B colorbars
+        Rticks, Gticks, Bticks: list of ticks for the R, G and B colorbars. If None, it will use the default ticks
+        xlabel: label for the x-axis (spatial)
+        ylabel: label for the y-axis (spatial)
+        title: title of the plot
+        remove_xy_ticks: if True, it will remove the x and y ticks from the plot
+        axisfont: fontsize of the axis labels
+        ticksfont: fontsize of the ticks
+        titlefont: fontsize of the title
+        xticks: list of x-axis ticks. If None, it will use the default ticks
+        yticks: list of y-axis ticks. If None, it will use the default ticks
+        figsize: size of the figure
+        
+    Returns:
+        figure object and list of axis objects with the plot
+    """
+    fig = plt.figure(figsize=figsize)
+    gs = GridSpec(21, 15, figure=fig)
+
+    ax = fig.add_subplot(gs[0:15, 0:15])
+    ax.set_aspect(1)
+    axcbar_R = fig.add_subplot(gs[16, 2:13])
+    axcbar_G = fig.add_subplot(gs[18, 2:13])
+    axcbar_B = fig.add_subplot(gs[20, 2:13])
+
+    if xg is None:
+        xg = np.arange(proj_R.shape[0])
+    if yg is None:
+        yg = np.arange(proj_R.shape[1])
+
+    if Rlog:
+        proj_R = np.log10(proj_R)
+    if Glog:
+        proj_G = np.log10(proj_G)
+    if Blog:
+        proj_B = np.log10(proj_B)
+
+    if Rmin is None:
+        Rmin = proj_R.min()
+    if Rmax is None:
+        Rmax = proj_R.max()
+    if Gmin is None:
+        Gmin = proj_G.min()
+    if Gmax is None:
+        Gmax = proj_G.max()
+    if Bmin is None:
+        Bmin = proj_B.min()
+    if Bmax is None:
+        Bmax = proj_B.max()
+
+    proj_R = np.clip((proj_R - Rmin) / (Rmax-Rmin), 0, 1) * Rscale
+    proj_G = np.clip((proj_G - Gmin) / (Gmax-Gmin), 0, 1) * Gscale
+    proj_B = np.clip((proj_B - Bmin) / (Bmax-Bmin), 0, 1) * Bscale
+
+    if sigma_R > 0:
+        proj_R = gaussian_filter(proj_R, sigma=sigma_R)
+    if sigma_G > 0:
+        proj_G = gaussian_filter(proj_G, sigma=sigma_G)
+    if sigma_B > 0:
+        proj_B = gaussian_filter(proj_B, sigma=sigma_B)
+
+    proj_RGBA = np.zeros((*proj_R.shape, 4))
+    proj_RGBA[:,:,3]=1. # alpha channel
+
+    proj_RGBA[:,:,0] = proj_R * Rcolor[0] + proj_G * Gcolor[0] + proj_B * Bcolor[0]
+    proj_RGBA[:,:,1] = proj_R * Rcolor[1] + proj_G * Gcolor[1] + proj_B * Bcolor[1]
+    proj_RGBA[:,:,2] = proj_R * Rcolor[2] + proj_G * Gcolor[2] + proj_B * Bcolor[2]
+
+    proj_RGBA = np.clip(proj_RGBA, 0, 1)
+
+    ax.imshow(proj_RGBA, origin='lower', extent=[xg.min(), xg.max(), yg.min(), yg.max()])
+    ax.set_aspect('auto')
+
+    # set labels
+    ax.set_xlabel(xlabel, fontsize=axisfont)
+    ax.set_ylabel(ylabel, fontsize=axisfont)
+    ax.set_title(title, fontsize=titlefont)
+    ax.tick_params(axis='both', which='major', labelsize=ticksfont)
+
+    if remove_xy_ticks:
+        ax.set_xticks([])
+        ax.set_yticks([])
+    else:
+        if xticks is not None:
+            ax.set_xticks(xticks)
+        if yticks is not None:
+            ax.set_yticks(yticks)
+
+    # plot the 3 1d colorbars below
+
+    # R colorbar
+    array = np.linspace(Rmin, Rmax, 100)
+
+
+    image = np.zeros((1, 100, 4))
+    image[0,:,0] = np.clip((array - Rmin) / (Rmax-Rmin), 0, 1) * Rscale * Rcolor[0]
+    image[0,:,1] = np.clip((array - Rmin) / (Rmax-Rmin), 0, 1) * Rscale * Rcolor[1]
+    image[0,:,2] = np.clip((array - Rmin) / (Rmax-Rmin), 0, 1) * Rscale * Rcolor[2]
+    image[0,:,3] = 1.
+
+    axcbar_R.imshow(image, origin='lower', extent=[Rmin, Rmax, 0, 1])
+    axcbar_R.set_aspect('auto')
+
+    if Rticks is not None:
+        axcbar_R.set_xticks(Rticks)
+
+    axcbar_R.set_xlabel(Rlabel, fontsize=axisfont)
+    axcbar_R.set_yticks([])
+    axcbar_R.tick_params(axis='both', which='major', labelsize=ticksfont)
+
+    # G colorbar
+    array = np.linspace(Gmin, Gmax, 100)
+
+
+    image = np.zeros((1, 100, 4))
+    image[0,:,0] = np.clip((array - Gmin) / (Gmax-Gmin), 0, 1) * Gscale * Gcolor[0]
+    image[0,:,1] = np.clip((array - Gmin) / (Gmax-Gmin), 0, 1) * Gscale * Gcolor[1]
+    image[0,:,2] = np.clip((array - Gmin) / (Gmax-Gmin), 0, 1) * Gscale * Gcolor[2]
+    image[0,:,3] = 1.
+
+    axcbar_G.imshow(image, origin='lower', extent=[Gmin, Gmax, 0, 1])
+    axcbar_G.set_aspect('auto')
+
+    if Gticks is not None:
+        axcbar_G.set_xticks(Gticks)
+
+    axcbar_G.set_xlabel(Glabel, fontsize=axisfont)
+    axcbar_G.set_yticks([])
+    axcbar_G.tick_params(axis='both', which='major', labelsize=ticksfont)
+
+    # B colorbar
+    array = np.linspace(Bmin, Bmax, 100)
+
+    image = np.zeros((1, 100, 4))
+    image[0,:,0] = np.clip((array - Bmin) / (Bmax-Bmin), 0, 1) * Bscale * Bcolor[0]
+    image[0,:,1] = np.clip((array - Bmin) / (Bmax-Bmin), 0, 1) * Bscale * Bcolor[1]
+    image[0,:,2] = np.clip((array - Bmin) / (Bmax-Bmin), 0, 1) * Bscale * Bcolor[2]
+    image[0,:,3] = 1.
+
+    axcbar_B.imshow(image, origin='lower', extent=[Bmin, Bmax, 0, 1])
+    axcbar_B.set_aspect('auto')
+
+    if Bticks is not None:
+        axcbar_B.set_xticks(Bticks)
+    
+    axcbar_B.set_xlabel(Blabel, fontsize=axisfont)
+    axcbar_B.set_yticks([])
+    axcbar_B.tick_params(axis='both', which='major', labelsize=ticksfont)
+
+    # prevent axes colliding
+    fig.tight_layout()
+    fig.subplots_adjust(hspace=1)
+
+    return fig, [ax, axcbar_R, axcbar_G, axcbar_B]
+
+
+
+
 
 
 def compute_projection(matrix, axis=2, slicepositions=None):
