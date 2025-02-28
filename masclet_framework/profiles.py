@@ -172,8 +172,7 @@ def dir_profile(field, cx,cy,cz,
             rrr = np.linspace(rmin,rmax,num_bins)
     else:
         raise ValueError('Wrong specification of binsr') 
-        
-        
+    
 
     levels=tools.create_vector_levels(npatch)
     nl=levels.max()
@@ -412,6 +411,9 @@ def dir_profile_particles(particles_field, cx,cy,cz,size, tree=None,
     # Check tree is properly specified
     if type(tree) is not KDTree:
         raise ValueError('Wrong specification of tree')
+
+    if force_resol is None:
+        force_resol = 0. # Irrelevant for computations
 
     # Initialize profile
     dir_profiles = np.zeros((Ncostheta,Nphi,num_bins))
