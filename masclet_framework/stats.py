@@ -849,4 +849,85 @@ def polyfit_odr(x, y, xerr, yerr, max_degree=None, xisqred_thr=1.0, pval_thr=0.0
 
     return models[deg]
 
+
+def weighted_median(x, w, axes=None, interpolate=True):
+    """
+    Compute the weighted median of the data.
+
+    Args:
+        x: the data (n-d np.array)
+        w: the weights (n-d np.array)
+        axes: the axes along which to compute the median (int or list of ints)
+            If None, the median is computed over the flattened array.
+            If list of ints, the median is computed over the specified axes flattened array.
+        interpolate: if True, interpolate the weighted median between the two closest
+
+    Returns:
+        the weighted median (np.array)
+    """
+    if axes is None:
+        xflat = x.flatten()
+        wflat = w.flatten()
+    elif isinstance(axes, list) or isinstance(axes, tuple) or isinstance(axes, np.ndarray) or isinstance(axes, int):
+        if isinstance(axes, int):
+            axes = [axes]
+
+        original_shape = np.array(x.shape)
         
+        # to flatten the array we put the axes to flatten at the beginning
+        all_axes = list(range(x.ndim))
+        non_flatten_axes = [a for a in all_axes if a not in axes]
+        new_order = axes + non_flatten_axes
+
+        # We move the axes in the order we want to flatten
+        xflat = np.moveaxis(x, new_order, range(len(new_order)))
+        wflat = np.moveaxis(w, new_order, range(len(new_order))) 
+
+        # Compute the flatten shape 
+        flattened_size = np.prod(original_shape[axes])
+        new_shape = (flattened_size,) + tuple(original_shape[a] for a in non_flatten_axes)
+
+        # Flatten the arrays
+        xflat = xflat.reshape(new_shape)
+        wflat = wflat.reshape(new_shape)
+    else:
+        raise ValueError('Unknown axes specification')
+
+    # Sort the data
+    idx = np.argsort(xflat, axis=0)
+    # sort 1d vector (along 0-th axis) according to the corresponding idx 
+    xflat = np.take_along_axis(xflat, idx, axis=0)
+    wflat = np.take_along_axis(wflat, idx, axis=0)
+
+    # Compute the cumulative sum of the weights
+    wflat = np.cumsum(wflat, axis=0)
+    half = wflat[-1] / 2
+    wflat = np.concatenate((np.zeros((1,) + wflat.shape[1:]), wflat), axis=0)
+    wflat = 0.5*(wflat[1:] + wflat[:-1])
+    
+    # Find the first index where wflat > half, along each of the elements of the axes other than the first
+    idx = np.argmax(wflat > half, axis=0)
+    # If all are False, idx will be 0, so we need to check this case
+    idx = np.where(idx > 0, idx, wflat.shape[0]-1)
+
+
+    if not interpolate:
+        return np.take_along_axis(xflat, idx[None, :], axis=0).squeeze()
+    else:
+        # Interpolate between the two closest
+        idx1 = np.maximum(idx-1, 0)
+        idx2 = np.minimum(idx, wflat.shape[0]-1)
+        x1 = np.take_along_axis(xflat, idx1[None, :], axis=0).squeeze()
+        x2 = np.take_along_axis(xflat, idx2[None, :], axis=0).squeeze()
+        w1 = np.take_along_axis(wflat, idx1[None, :], axis=0).squeeze()
+        w2 = np.take_along_axis(wflat, idx2[None, :], axis=0).squeeze()
+        half = wflat[-1] / 2
+        w1 = half - w1
+        w2 = w2 - half
+
+        if (w1+w2).min() == 0:
+            logging.warning('The weighted median is not well defined at least in one of the array elements. '+ 
+                                'Returning the average of the two closest values. Proceed with caution.')
+            return 0.5*(x1+x2)
+
+        return (x1*w2 + x2*w1) / (w1 + w2)
