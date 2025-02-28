@@ -940,6 +940,10 @@ def slice_map(field, normal_vector, north_vector,
     proj, xgrid, ygrid, zgrid = parallelize(nN, nE, xc, yc, zc, resN, resE, north_vector, east_vector, size, nmax, levels, kept_patches, 
                                             List([f if ki else np.zeros((2,2,2), dtype=field[0].dtype, order='F') for f,ki in zip(field, kept_patches)]))
 
+
+    # mirror proj 
+    proj = np.flip(proj)
+
     return_vars = [proj]
 
 
@@ -964,4 +968,5 @@ def slice_map(field, normal_vector, north_vector,
         return_vars.append(zgrid)
 
     return tuple(return_vars)
+
 
