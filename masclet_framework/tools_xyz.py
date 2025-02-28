@@ -159,6 +159,9 @@ def mask_sphere(R, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz, kept_patch
     Returns:
         Field containing the mask as described.
     """
+    if kept_patches is None:
+        kept_patches = np.ones(len(cellsrx), dtype=bool)
+
     mask = [(cx - clusrx) ** 2 + (cy - clusry) ** 2 + (cz - clusrz) ** 2 < R ** 2 if ki else False
             for cx, cy, cz, ki in zip(cellsrx, cellsry, cellsrz, kept_patches)]
 
@@ -200,7 +203,8 @@ def mass_inside(R, clusrx, clusry, clusrz, density, cellsrx, cellsry, cellsrz, n
 
 
 def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins, cellsrx, cellsry,
-                      cellsrz, cr0amr, solapst, npatch, size, nmax, up_to_level=1000, verbose=False):
+                      cellsrz, cr0amr, solapst, npatch, size, nmax, up_to_level=1000, verbose=False,
+                      kept_patches=None):
     """
     Computes a (volume-weighted) radial profile of the quantity given in the "field" argument, taking center in
     (clusrx, clusry, clusrz).
@@ -221,12 +225,16 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
         nmax: cells at base level
         up_to_level: maximum AMR level to be considered for the profile
         verbose: if True, prints the patch being opened at a time
+        kept_patches: 1d boolean array, True if the patch is kept, False if not. If None, all patches are kept.
 
     Returns:
         Two lists. One of them contains the center of each radial cell. The other contains the value of the field
         averaged across all the cells of the shell.
 
     """
+    if kept_patches is None:
+        kept_patches = np.ones(len(cellsrx), dtype=bool)
+
     # getting the bins
     try:
         assert (rmax > rmin)
@@ -256,7 +264,7 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
     field_vw = [f * cv for f, cv in zip(field, cell_volume)]
 
     if rmin > 0:
-        cells_outer = mask_sphere(rmin, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz)
+        cells_outer = mask_sphere(rmin, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz, kept_patches=kept_patches)
     else:
         cells_outer = [np.zeros(patch.shape, dtype='bool') for patch in field]
 
@@ -264,8 +272,8 @@ def radial_profile_vw(field, clusrx, clusry, clusrz, rmin, rmax, nbins, logbins,
         if verbose:
             print('Working at outer radius {} Mpc'.format(r_out))
         cells_inner = cells_outer
-        cells_outer = mask_sphere(r_out, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz)
-        shell_mask = [inner ^ outer for inner, outer in zip(cells_inner, cells_outer)]
+        cells_outer = mask_sphere(r_out, clusrx, clusry, clusrz, cellsrx, cellsry, cellsrz, kept_patches=kept_patches)
+        shell_mask = [inner ^ outer if ki else 0 for inner, outer, ki in zip(cells_inner, cells_outer, kept_patches)]
         shell_mask = tools.clean_field(shell_mask, cr0amr, solapst, npatch, up_to_level=up_to_level)
 
         sum_field_vw = sum([(fvw * sm).sum() for fvw, sm in zip(field_vw, shell_mask)])
