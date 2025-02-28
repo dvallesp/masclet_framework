@@ -25,6 +25,7 @@ from sklearn.preprocessing import PolynomialFeatures
 from scipy import odr
 import uncertainties as unc
 import uncertainties.unumpy as unp
+import logging
 
 def biweight_statistic(array, nmaxiter=100, tol=1e-4):
     '''
@@ -733,10 +734,13 @@ def polyfit_odr(x, y, xerr, yerr, max_degree=None, xisqred_thr=1.0, pval_thr=0.0
         dictionary with the fit parameters and the fit plot data (x, y, yerr [symmetric])
     """
 
+    # p-value things
     one_less=False
     two_less=False
     try_extra=False
 
+    # chi2 things 
+    attempt=0
 
     if max_degree is None:
         max_degree=x.size-2
@@ -793,13 +797,18 @@ def polyfit_odr(x, y, xerr, yerr, max_degree=None, xisqred_thr=1.0, pval_thr=0.0
 
         if xisqred_thr is not None:  
             if chisq[deg]<xisqred_thr:
-                if one_less:
-                    two_less=True
-                    one_less=False
+                #if one_less:
+                #    two_less=True
+                #    one_less=False
+                #else:
+                #    two_less=False
+                #    one_less=True
+                #if fix_degree is None:
+                #    break
+                if attempt==0:
+                    attempt=1
                 else:
-                    two_less=False
-                    one_less=True
-                if fix_degree is None:
+                    attempt=2 
                     break
 
         if pvals[deg] > pval_thr:
@@ -816,10 +825,16 @@ def polyfit_odr(x, y, xerr, yerr, max_degree=None, xisqred_thr=1.0, pval_thr=0.0
             one_less=False #### added 18jul 2022
             two_less=False
 
+    if verbose:
+        print('-->', deg, one_less, two_less, attempt)
+
     if one_less:
         deg-=1
-    if two_less:
+    elif two_less:
         deg-=2
+    elif attempt > 0:
+        deg-=(attempt-1)
+
 
     if deg<0:
         deg=0
