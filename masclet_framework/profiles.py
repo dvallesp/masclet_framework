@@ -677,3 +677,64 @@ def stack_profiles(list_r, list_profiles, stacking_method='median', rmin=None, r
             stacked_profile = {k: 10**v for k,v in stacked_profile.items()}
         
     return r, stacked_profile
+
+
+def project_profile_extensive(prof3d, r3d, R2d=None):
+    """ 
+    Project an extensive (additive) profile to a 2D plane, by integrating the profile along the line of sight.
+
+    prof2d(R2d) = \int_{r3d} prof3d(r3d) * 2 * r3d * dr3d / sqrt(r3d^2 - R2d^2)
+
+    Args:
+        - prof3d: 3D profile to project
+        - r3d: 3D radial grid
+        - R2d: 2D radial grid. If None, the 2D grid is assumed to be the same as the 3D grid.
+
+    Returns:
+        - prof2d: 2D projected profile
+    """
+    if R2d is None:
+        R2d = r3d.copy()
+
+    prof2d = np.zeros_like(R2d, dtype=prof3d.dtype)
+
+    # Compute the radial bin widths (dr)
+    delta_r = np.concatenate([[r3d[1]-r3d[0]], (r3d[1:]-r3d[:-1])/2, [r3d[-1]-r3d[-2]]]) 
+
+    # Upper summation limit
+    Jmax = prof3d.size
+    r3dmax = r3d.max()
+
+    for i in range(prof2d.size):
+        Ri = R2d[i]
+        if Ri >= r3dmax:
+            prof2d[i] = 0
+            continue
+        Jmin = np.where(r3d > Ri)[0][0]
+        prof2d[i] = 2 * (prof3d[Jmin:Jmax] * r3d[Jmin:Jmax] * delta_r[Jmin:Jmax] / np.sqrt(r3d[Jmin:Jmax]**2 - Ri**2)).sum()
+
+    return prof2d
+
+def project_profile_intensive(prof3d, r3d, R2d, weight3d=None):
+    """
+    Project an intensive (non-additive) profile to a 2D plane, by integrating the profile along the line of sight using a weighting field.
+
+    prof2d(R2d) = \int_{r3d} prof3d(r3d) * weight3d(r3d) * 2 * r3d * dr3d / sqrt(r3d^2 - R2d^2) / \int_{r3d} weight3d(r3d) * 2 * r3d * dr3d / sqrt(r3d^2 - R2d^2)
+
+    Args:
+        - prof3d: 3D profile to project
+        - r3d: 3D radial grid
+        - R2d: 2D radial grid
+        - weight3d: weighting field. If None, the integration is unweighted (length-weighted).
+
+    Returns:
+        - prof2d: 2D projected profile
+    """
+
+    if weight3d is None:
+        weight3d = np.ones_like(prof3d)
+
+    num = project_profile_extensive(prof3d * weight3d, r3d, R2d)
+    den = project_profile_extensive(weight3d, r3d, R2d)
+
+    return num / den
