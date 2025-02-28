@@ -970,3 +970,536 @@ def slice_map(field, normal_vector, north_vector,
     return tuple(return_vars)
 
 
+from masclet_framework import tools 
+from masclet_framework.profiles import locate_point
+from numba import njit, prange
+from numba.typed import List
+
+def projection_map(field, normal_vector, north_vector, 
+              xc, yc, zc, projection_region,
+              npatch,patchnx,patchny,patchnz,patchrx,patchry,patchrz,size,nmax,nl,
+              weight_field=None,
+              widthN=None, widthE=None, res=None, resN=None, resE=None, nN=None, nE=None,
+              width_normal=None, res_normal=None, n_normal=None,
+              kept_patches=None,
+              interpolate=True,
+              return_grid=False, return_grid_3d=False,
+              use_tqdm=True):
+    """ 
+    Obtain a projection of a 3D AMR field along a line of sight defined by a normal vector, with a centre and a north vector.
+
+    Args:
+        field: field to be computed at the uniform grid, in the usual MASCLET style (list of 3d np.arrays). MUST BE UNCLEANED!!
+        normal_vector (3-element list or 1d np.array): The normal vector to the plane. Points towards the observer.
+        north_vector (3-element list or 1d np.array): The vector pointing north in the plane.
+        xc, yc, zc (float): The coordinates of the center of the slice.
+        projection_region: The region to be projected. Can be:
+            - a sphere: ("sphere", radius)
+            - a box/cylinder: ("cylinder"). The projection span is set then by width_normal
+
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+                                   (and Y and Z)
+        size: comoving side of the simulation box
+        nmax: cells at base level
+        nl: number of AMR levels (max AMR level to be considered)
+
+        weight_field: field to be used as weight in the projection. If None, the projection will be unweighted, i.e. 
+                        the quantity will be averaged over the line of sight: \int field dl / \int dl.
+                    - If a field is given, then the quantity will be weighted as \int field * weight_field dl / \int weight_field dl
+
+        Two of the following three must be specified:
+            - widthN, widthE (float): The width of the slice in the north and east directions, respectively. Must be in the same units as the coordinates.
+            - res (float), or resN and resE: The resolution of the slice. Must be in the same units as the coordinates.
+            - nN, nE (int): The number of points in the north and east directions, respectively.
+        
+        width_normal (float): The width of the projection region in the normal direction. Must be in the same units as the coordinates.
+            This is only used if projection_region is "cylinder".
+        
+        One of the following two must be specified:
+            - res_normal (float): The resolution of the projection region in the normal direction. Must be in the same units as the coordinates.
+            - n_normal (int): The number of points in the normal direction
+
+        kept_patches: list of patches that are read. If None, all patches are assumed to be present
+        interpolate (bool): If True, the slice will be interpolated. If False, the slice will be a plane.
+        return_grid (bool): If True, the function will return the grid of the slice (2d: east and north directions).
+        return_grid_3d (bool): If True, the function will return the simulation coordinates of the slice pixels (3d: x, y, z).
+        use_tqdm (bool): If True, a progress bar will be shown.
+
+    Returns:
+        2D numpy array with the computed projection.
+        If return_grid is True, it will return two 1D numpy arrays with the coordinates of the grid (E and N directions).
+    """
+    if return_grid_3d:
+        return NotImplementedError("return_grid_3d not implemented yet, probably never will")
+
+    # Check the projection region:
+    projection_volume = projection_region[0]
+    is_sphere=False
+    if projection_volume == "sphere":
+        is_sphere=True
+        radius = projection_region[1]
+        width_normal = 2*radius
+        radius2 = radius**2
+    elif projection_volume == "cylinder":
+        if width_normal is None:
+            raise ValueError("The width_normal must be given for a cylinder projection region")
+    else:
+        raise ValueError("The projection region must be either 'sphere' or 'cylinder'")
+
+    if res_normal is not None:
+        n_normal = int(width_normal // res_normal)
+    elif n_normal is not None:
+        res_normal = width_normal / n_normal
+    else:
+        raise ValueError("Exactly one of res_normal and n_normal must be given")
+
+    # Check the weight field: 
+    if weight_field is None:
+        weight_field = [np.ones_like(f) if isinstance(f, np.ndarray) else 0 for f in field]
+
+    # Vectors to np array
+    if type(normal_vector) is list:
+        normal_vector = np.array(normal_vector)
+    if type(north_vector) is list:
+        north_vector = np.array(north_vector)
+
+    # normalize vectors
+    normal_vector = normal_vector / np.linalg.norm(normal_vector)
+    north_vector = north_vector / np.linalg.norm(north_vector)
+
+    if np.dot(normal_vector, north_vector) != 0:
+        raise ValueError("The normal and north vectors must be orthogonal")
+    east_vector = np.cross(normal_vector, north_vector)
+
+    if res is not None:
+        resN = res 
+        resE = res
+
+    # Check enough information is given
+    if (widthN is None) + (resN is None) + (nN is None) != 1:
+        raise ValueError("Exactly two of widthN, resN (or res) and nN must be given")
+
+    if widthN is None:
+        widthN = res * nN
+    elif resN is None:
+        resN = widthN / nN
+    else:
+        nN = int(widthN // resN)
+
+    if (widthE is None) + (resE is None) + (nE is None) != 1:
+        raise ValueError("Exactly two of widthE, resE (or res) and nE must be given")
+
+    if widthE is None:
+        widthE = res * nE
+    elif resE is None:
+        resE = widthE / nE
+    else:
+        nE = int(widthE // resE)
+
+    if kept_patches is None:
+        kept_patches = np.ones(npatch.sum()+1, dtype=bool)
+
+    levels = tools.create_vector_levels(npatch)
+
+    # Compute the grid
+    # Notation: x, y, z are the coordinates in the simulation box, while N, E are the coordinates in the slice
+    @njit(parallel=True, fastmath=True)
+    def parallelize(nN, nE, xc, yc, zc, resN, resE, north_vector, east_vector, size, nmax, levels, kept_patches, field, wfield,
+                    normal_vector, res_normal):
+        # weight the field without affecting the original field in the outer scope
+        field = [f * w for f, w in zip(field, wfield)]
+
+        imid = int(nN // 2)
+        jmid = int(nE // 2)
+        kmid = int(n_normal // 2)
+
+        # Compute the projection
+        proj = np.zeros((nN, nE), dtype=field[0].dtype)
+        proj_weight = np.zeros((nN, nE), dtype=wfield[0].dtype)
+        res_worst = max(resN, resE, res_normal)
+        #lmax = np.clip(np.log2((size/nmax)/res_worst).astype('int32'),0,nl)#+1
+        lmax = int(np.log2((size/nmax)/res_worst))
+        #print(lmax)
+        nl = levels.max()
+        if lmax>nl:
+            lmax = nl
+        if lmax<0:
+            lmax = 0
+        
+
+        for i in prange(nN):
+            for j in range(nE):
+                for k in range(n_normal):
+                    xij = xc + (i - imid) * resN * north_vector[0] + (j - jmid) * resE * east_vector[0] + (k - kmid) * res_normal * normal_vector[0]
+                    yij = yc + (i - imid) * resN * north_vector[1] + (j - jmid) * resE * east_vector[1] + (k - kmid) * res_normal * normal_vector[1]
+                    zij = zc + (i - imid) * resN * north_vector[2] + (j - jmid) * resE * east_vector[2] + (k - kmid) * res_normal * normal_vector[2]
+
+                    if is_sphere:
+                        if (xij-xc)**2 + (yij-yc)**2 + (zij-zc)**2 > radius2:
+                            continue
+
+                    
+
+                    if not interpolate:
+                        ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=0)
+                        if not kept_patches[ip]:
+                            raise ValueError("Patch not read!!!")
+
+                        proj[i, j] += field[ip][ix, jy, kz] 
+                        proj_weight[i, j] += wfield[ip][ix, jy, kz]
+                    else:
+                        ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=1)
+                        if not kept_patches[ip]:
+                            raise ValueError("Patch not read!!!")
+
+                        ll=levels[ip]
+                        dx_l = size/nmax/2**ll
+                        dxx=(xij-(patchrx[ip]+(ix-0.5)*dx_l))/dx_l
+                        dyy=(yij-(patchry[ip]+(jy-0.5)*dx_l))/dx_l
+                        dzz=(zij-(patchrz[ip]+(kz-0.5)*dx_l))/dx_l
+
+                        if ip==0 and (ix<=0 or jy<=0 or kz<=0 or ix>=nmax-1 or jy>=nmax-1 or kz>=nmax-1):
+                            proj[i,j] += field[ip][(ix  )%nmax,(jy  )%nmax,(kz  )%nmax] *(1-dxx)*(1-dyy)*(1-dzz) \
+                                    + field[ip][(ix  )%nmax,(jy  )%nmax,(kz+1)%nmax] *(1-dxx)*(1-dyy)*  dzz   \
+                                    + field[ip][(ix  )%nmax,(jy+1)%nmax,(kz  )%nmax] *(1-dxx)*  dyy  *(1-dzz) \
+                                    + field[ip][(ix  )%nmax,(jy+1)%nmax,(kz+1)%nmax] *(1-dxx)*  dyy  *  dzz   \
+                                    + field[ip][(ix+1)%nmax,(jy  )%nmax,(kz  )%nmax] *  dxx  *(1-dyy)*(1-dzz) \
+                                    + field[ip][(ix+1)%nmax,(jy  )%nmax,(kz+1)%nmax] *  dxx  *(1-dyy)*  dzz   \
+                                    + field[ip][(ix+1)%nmax,(jy+1)%nmax,(kz  )%nmax] *  dxx  *  dyy  *(1-dzz) \
+                                    + field[ip][(ix+1)%nmax,(jy+1)%nmax,(kz+1)%nmax] *  dxx  *  dyy  *  dzz  
+                            proj_weight[i,j] += wfield[ip][(ix  )%nmax,(jy  )%nmax,(kz  )%nmax] *(1-dxx)*(1-dyy)*(1-dzz) \
+                                              + wfield[ip][(ix  )%nmax,(jy  )%nmax,(kz+1)%nmax] *(1-dxx)*(1-dyy)*  dzz   \
+                                              + wfield[ip][(ix  )%nmax,(jy+1)%nmax,(kz  )%nmax] *(1-dxx)*  dyy  *(1-dzz) \
+                                              + wfield[ip][(ix  )%nmax,(jy+1)%nmax,(kz+1)%nmax] *(1-dxx)*  dyy  *  dzz   \
+                                              + wfield[ip][(ix+1)%nmax,(jy  )%nmax,(kz  )%nmax] *  dxx  *(1-dyy)*(1-dzz) \
+                                              + wfield[ip][(ix+1)%nmax,(jy  )%nmax,(kz+1)%nmax] *  dxx  *(1-dyy)*  dzz   \
+                                              + wfield[ip][(ix+1)%nmax,(jy+1)%nmax,(kz  )%nmax] *  dxx  *  dyy  *(1-dzz) \
+                                              + wfield[ip][(ix+1)%nmax,(jy+1)%nmax,(kz+1)%nmax] *  dxx  *  dyy  *  dzz  
+                        else:
+                            proj[i,j] += field[ip][ix  , jy  , kz  ] *(1-dxx)*(1-dyy)*(1-dzz) \
+                                    + field[ip][ix  , jy  , kz+1] *(1-dxx)*(1-dyy)*  dzz   \
+                                    + field[ip][ix  , jy+1, kz  ] *(1-dxx)*  dyy  *(1-dzz) \
+                                    + field[ip][ix  , jy+1, kz+1] *(1-dxx)*  dyy  *  dzz   \
+                                    + field[ip][ix+1, jy  , kz  ] *  dxx  *(1-dyy)*(1-dzz) \
+                                    + field[ip][ix+1, jy  , kz+1] *  dxx  *(1-dyy)*  dzz   \
+                                    + field[ip][ix+1, jy+1, kz  ] *  dxx  *  dyy  *(1-dzz) \
+                                    + field[ip][ix+1, jy+1, kz+1] *  dxx  *  dyy  *  dzz  
+                            proj_weight[i,j] += wfield[ip][ix  , jy  , kz  ] *(1-dxx)*(1-dyy)*(1-dzz) \
+                                              + wfield[ip][ix  , jy  , kz+1] *(1-dxx)*(1-dyy)*  dzz   \
+                                              + wfield[ip][ix  , jy+1, kz  ] *(1-dxx)*  dyy  *(1-dzz) \
+                                              + wfield[ip][ix  , jy+1, kz+1] *(1-dxx)*  dyy  *  dzz   \
+                                              + wfield[ip][ix+1, jy  , kz  ] *  dxx  *(1-dyy)*(1-dzz) \
+                                              + wfield[ip][ix+1, jy  , kz+1] *  dxx  *(1-dyy)*  dzz   \
+                                              + wfield[ip][ix+1, jy+1, kz  ] *  dxx  *  dyy  *(1-dzz) \
+                                              + wfield[ip][ix+1, jy+1, kz+1] *  dxx  *  dyy  *  dzz  
+
+        #proj_weight[proj_weight==0] = 1
+        proj /= proj_weight
+        
+        # reorient the projection array: east is the first index increasing, north is the second index increasing
+        proj = np.transpose(np.flipud(proj))
+
+        return proj
+
+    proj = parallelize(nN, nE, xc, yc, zc, resN, resE, north_vector, east_vector, size, nmax, levels, kept_patches, 
+                                            List([f if ki else np.zeros((2,2,2), dtype=field[0].dtype, order='F') for f,ki in zip(field, kept_patches)]),
+                                            List([f if ki else np.zeros((2,2,2), dtype=field[0].dtype, order='F') for f,ki in zip(weight_field, kept_patches)]),
+                                            normal_vector, res_normal)
+
+
+    # mirror proj 
+    proj = np.flip(proj)
+
+    return_vars = [proj]
+
+
+    if return_grid:
+        Ngrid = np.zeros(nN)
+        Egrid = np.zeros(nE)
+
+        imid = int(nN // 2)
+        jmid = int(nE // 2)
+
+        for i in range(nN):
+            Ngrid[i] = (i - imid) * resN
+        for j in range(nE):
+            Egrid[j] = (j - jmid) * resE
+
+        return_vars.append(Egrid)
+        return_vars.append(Ngrid)
+
+    return tuple(return_vars)
+
+
+
+def projection_map_polars(field, normal_vector, north_vector, 
+              xc, yc, zc, projection_region,
+              npatch,patchnx,patchny,patchnz,patchrx,patchry,patchrz,size,nmax,nl,
+              weight_field=None,
+              binsr=None, rmin=None, rmax=None, dex_rbins=None, delta_rbins=None,
+              binsphi=None, Nphi=None, east_vector=None,
+              width_normal=None, res_normal=None, n_normal=None,
+              kept_patches=None,
+              interpolate=True,
+              return_grid=False, return_grid_3d=False,
+              use_tqdm=True):
+    """ 
+    Obtain a projection of a 3D AMR field along a line of sight defined by a normal vector, with a centre.
+    Unlike projection_map, this function will return a polar projection, with the radial bins defined by the user.
+    This is especially useful, for instance, if one wants to get logarithmically spaced radial bins, where a cartesian
+    projection would be inefficient.
+
+    Args:
+        field: field to be computed at the uniform grid, in the usual MASCLET style (list of 3d np.arrays). MUST BE UNCLEANED!!
+        normal_vector (3-element list or 1d np.array): The normal vector to the plane. Points towards the observer.
+        north_vector (3-element list or 1d np.array): The vector pointing north in the plane.
+        xc, yc, zc (float): The coordinates of the center of the slice.
+        projection_region: The region to be projected. Can be:
+            - a sphere: ("sphere", radius)
+            - a box/cylinder: ("cylinder"). The projection span is set then by width_normal
+
+        npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
+        patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
+        patchrx, patchry, patchrz: physical position of the center of each patch first ¡l-1! cell
+                                   (and Y and Z)
+        size: comoving side of the simulation box
+        nmax: cells at base level
+        nl: number of AMR levels (max AMR level to be considered)
+
+        weight_field: field to be used as weight in the projection. If None, the projection will be unweighted, i.e. 
+                        the quantity will be averaged over the line of sight: \int field dl / \int dl.
+                    - If a field is given, then the quantity will be weighted as \int field * weight_field dl / \int weight_field dl
+
+        There are several ways to specify the radial bins:
+            - binsr: numpy vector specifying the radial bin edges
+            - rmin, rmax, dex_rbins: minimum and maximum radius, and logarithmic bin size
+            - rmin, rmax, delta_rbins: minimum and maximum radius, and linear bin size
+
+        Likewise, there are several ways to specify the angular bins:
+            - binsphi: numpy vector specifying the angular bin edges
+            - Nphi: number of angular bins
+
+        east_vector: The vector pointing east in the plane. If None, it will be chosen arbitrarily.
+        
+        width_normal (float): The width of the projection region in the normal direction. Must be in the same units as the coordinates.
+            This is only used if projection_region is "cylinder".
+        
+        One of the following two must be specified:
+            - res_normal (float): The resolution of the projection region in the normal direction. Must be in the same units as the coordinates.
+            - n_normal (int): The number of points in the normal direction
+
+        kept_patches: list of patches that are read. If None, all patches are assumed to be present
+        interpolate (bool): If True, the slice will be interpolated. If False, the slice will be a plane.
+        return_grid (bool): If True, the function will return the grid of the slice (2d: east and north directions).
+        return_grid_3d (bool): If True, the function will return the simulation coordinates of the slice pixels (3d: x, y, z).
+        use_tqdm (bool): If True, a progress bar will be shown.
+
+    Returns:
+        2D numpy array with the computed projection.
+        If return_grid is True, it will return two 1D numpy arrays with the coordinates of the grid (E and N directions).
+    """
+    if return_grid_3d:
+        return NotImplementedError("return_grid_3d not implemented yet, probably never will")
+
+    # Check the projection region:
+    projection_volume = projection_region[0]
+    is_sphere=False
+    if projection_volume == "sphere":
+        is_sphere=True
+        radius = projection_region[1]
+        width_normal = 2*radius
+        radius2 = radius**2
+    elif projection_volume == "cylinder":
+        if width_normal is None:
+            raise ValueError("The width_normal must be given for a cylinder projection region")
+    else:
+        raise ValueError("The projection region must be either 'sphere' or 'cylinder'")
+
+    if res_normal is not None:
+        n_normal = int(width_normal // res_normal)
+    elif n_normal is not None:
+        res_normal = width_normal / n_normal
+    else:
+        raise ValueError("Exactly one of res_normal and n_normal must be given")
+
+    # Check the weight field: 
+    if weight_field is None:
+        weight_field = [np.ones_like(f) if isinstance(f, np.ndarray) else 0 for f in field]
+
+    # Normal vector to np array
+    if type(normal_vector) is list:
+        normal_vector = np.array(normal_vector)
+    # normalize vector
+    normal_vector = normal_vector / np.linalg.norm(normal_vector)
+
+
+    # Check r bins are properly specified
+    if type(binsr) is np.ndarray or type(binsr) is list:
+        nR=len(binsr)
+        if type(binsr) is list:
+            binsr=np.array(binsr)
+    elif (rmin is not None) and (rmax is not None) and ((dex_rbins is not None) or (delta_rbins is not None)) and ((dex_rbins is None) or (delta_rbins is None)):
+        if dex_rbins is not None:
+            nR=int(np.log10(rmax/rmin)/dex_rbins/2)*2+1 # guarantee it is odd
+            binsr = np.logspace(np.log10(rmin),np.log10(rmax),nR)
+        else:
+            nR=int((rmax-rmin)/delta_rbins/2)*2+1 # guarantee it is odd
+            binsr = np.linspace(rmin,rmax,nR)
+    else:
+        raise ValueError('Wrong specification of binsr') 
+
+    # Check phi bins are properly specified
+    if type(binsphi) is np.ndarray or type(binsphi) is list:
+        nPhi=len(binsphi)
+        if type(binsphi) is list:
+            binsphi=np.array(binsphi)
+    elif Nphi is not None:
+        nPhi=Nphi
+        binsphi=np.linspace(0,2*np.pi,nPhi+1)
+    else:
+        raise ValueError('Wrong specification of binsphi')
+
+    # Vectors to np array
+    if type(east_vector) is list:
+        east_vector = np.array(east_vector)
+        if np.dot(normal_vector, east_vector) != 0:
+            raise ValueError("The normal and east vectors must be orthogonal")
+    elif east_vector is None:
+        # we have to make it up, from a vector orthogonal to the normal vector
+        east_vector = np.cross(normal_vector, np.array([1,0,0]))
+        if np.linalg.norm(east_vector) == 0:
+            east_vector = np.cross(normal_vector, np.array([0,1,0]))
+        east_vector = east_vector / np.linalg.norm(east_vector)
+
+    north_vector = np.cross(east_vector, normal_vector)
+
+    if kept_patches is None:
+        kept_patches = np.ones(npatch.sum()+1, dtype=bool)
+
+    levels = tools.create_vector_levels(npatch)
+
+    # Compute the grid
+    # Notation: x, y, z are the coordinates in the simulation box, while N, E are the coordinates in the slice
+    @njit(parallel=True, fastmath=True)
+    def parallelize(xc, yc, zc, binsr, binsphi, north_vector, east_vector, size, nmax, levels, kept_patches, field, wfield,
+                    normal_vector, res_normal):
+        # weight the field without affecting the original field in the outer scope
+        field = [f * w for f, w in zip(field, wfield)]
+
+        nR = len(binsr)
+        nPhi = len(binsphi)
+
+        kmid = int(n_normal // 2)
+
+        # Compute the projection
+        proj = np.zeros((nPhi, nR), dtype=field[0].dtype)
+        proj_weight = np.zeros((nPhi, nR), dtype=wfield[0].dtype)
+        
+
+        drrr = np.concatenate((np.array([binsr[1]-binsr[0]]), np.diff(binsr)))
+        #drrr = np.clip(drrr, res_normal, np.inf) # resolution is at best res_normal
+        drr[drr < res_normal] = res_normal
+        nl = levels.max()
+        lev_integral = np.log2((size/nmax)/drrr).astype(np.int32)
+        lev_integral[lev_integral>nl] = nl
+        lev_integral[lev_integral<0] = 0
+        
+        for i in prange(nPhi):
+            phi = binsphi[i]
+            for j in range(nR):
+                r = binsr[j]
+                lmax = lev_integral[j]
+
+                xijplane = xc + r * np.cos(phi) * east_vector[0] + r * np.sin(phi) * north_vector[0]
+                yijplane = yc + r * np.cos(phi) * east_vector[1] + r * np.sin(phi) * north_vector[1]
+                zijplane = zc + r * np.cos(phi) * east_vector[2] + r * np.sin(phi) * north_vector[2]
+
+                for k in range(n_normal):
+                    xij = xijplane + (k - kmid) * res_normal * normal_vector[0]
+                    yij = yijplane + (k - kmid) * res_normal * normal_vector[1]
+                    zij = zijplane + (k - kmid) * res_normal * normal_vector[2]
+
+                    if is_sphere:
+                        if (xij-xc)**2 + (yij-yc)**2 + (zij-zc)**2 > radius2:
+                            continue
+
+                    if not interpolate:
+                        ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=0)
+                        if not kept_patches[ip]:
+                            raise ValueError("Patch not read!!!")
+
+                        proj[i, j] += field[ip][ix, jy, kz]
+                        proj_weight[i, j] += wfield[ip][ix, jy, kz]
+                    else:
+                        ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=1)
+                        if not kept_patches[ip]:
+                            raise ValueError("Patch not read!!!")
+
+                        ll=levels[ip]
+                        dx_l = size/nmax/2**ll
+                        dxx=(xij-(patchrx[ip]+(ix-0.5)*dx_l))/dx_l
+                        dyy=(yij-(patchry[ip]+(jy-0.5)*dx_l))/dx_l
+                        dzz=(zij-(patchrz[ip]+(kz-0.5)*dx_l))/dx_l
+
+                        if ip==0 and (ix<=0 or jy<=0 or kz<=0 or ix>=nmax-1 or jy>=nmax-1 or kz>=nmax-1):
+                            proj[i,j] += field[ip][(ix  )%nmax,(jy  )%nmax,(kz  )%nmax] *(1-dxx)*(1-dyy)*(1-dzz) \
+                                    + field[ip][(ix  )%nmax,(jy  )%nmax,(kz+1)%nmax] *(1-dxx)*(1-dyy)*  dzz   \
+                                    + field[ip][(ix  )%nmax,(jy+1)%nmax,(kz  )%nmax] *(1-dxx)*  dyy  *(1-dzz) \
+                                    + field[ip][(ix  )%nmax,(jy+1)%nmax,(kz+1)%nmax] *(1-dxx)*  dyy  *  dzz   \
+                                    + field[ip][(ix+1)%nmax,(jy  )%nmax,(kz  )%nmax] *  dxx  *(1-dyy)*(1-dzz) \
+                                    + field[ip][(ix+1)%nmax,(jy  )%nmax,(kz+1)%nmax] *  dxx  *(1-dyy)*  dzz   \
+                                    + field[ip][(ix+1)%nmax,(jy+1)%nmax,(kz  )%nmax] *  dxx  *  dyy  *(1-dzz) \
+                                    + field[ip][(ix+1)%nmax,(jy+1)%nmax,(kz+1)%nmax] *  dxx  *  dyy  *  dzz  
+                            proj_weight[i,j] += wfield[ip][(ix  )%nmax,(jy  )%nmax,(kz  )%nmax] *(1-dxx)*(1-dyy)*(1-dzz) \
+                                              + wfield[ip][(ix  )%nmax,(jy  )%nmax,(kz+1)%nmax] *(1-dxx)*(1-dyy)*  dzz   \
+                                              + wfield[ip][(ix  )%nmax,(jy+1)%nmax,(kz  )%nmax] *(1-dxx)*  dyy  *(1-dzz) \
+                                              + wfield[ip][(ix  )%nmax,(jy+1)%nmax,(kz+1)%nmax] *(1-dxx)*  dyy  *  dzz   \
+                                              + wfield[ip][(ix+1)%nmax,(jy  )%nmax,(kz  )%nmax] *  dxx  *(1-dyy)*(1-dzz) \
+                                              + wfield[ip][(ix+1)%nmax,(jy  )%nmax,(kz+1)%nmax] *  dxx  *(1-dyy)*  dzz   \
+                                              + wfield[ip][(ix+1)%nmax,(jy+1)%nmax,(kz  )%nmax] *  dxx  *  dyy  *(1-dzz) \
+                                              + wfield[ip][(ix+1)%nmax,(jy+1)%nmax,(kz+1)%nmax] *  dxx  *  dyy  *  dzz  
+                        else:
+                            proj[i,j] += field[ip][ix  , jy  , kz  ] *(1-dxx)*(1-dyy)*(1-dzz) \
+                                    + field[ip][ix  , jy  , kz+1] *(1-dxx)*(1-dyy)*  dzz   \
+                                    + field[ip][ix  , jy+1, kz  ] *(1-dxx)*  dyy  *(1-dzz) \
+                                    + field[ip][ix  , jy+1, kz+1] *(1-dxx)*  dyy  *  dzz   \
+                                    + field[ip][ix+1, jy  , kz  ] *  dxx  *(1-dyy)*(1-dzz) \
+                                    + field[ip][ix+1, jy  , kz+1] *  dxx  *(1-dyy)*  dzz   \
+                                    + field[ip][ix+1, jy+1, kz  ] *  dxx  *  dyy  *(1-dzz) \
+                                    + field[ip][ix+1, jy+1, kz+1] *  dxx  *  dyy  *  dzz  
+                            proj_weight[i,j] += wfield[ip][ix  , jy  , kz  ] *(1-dxx)*(1-dyy)*(1-dzz) \
+                                              + wfield[ip][ix  , jy  , kz+1] *(1-dxx)*(1-dyy)*  dzz   \
+                                              + wfield[ip][ix  , jy+1, kz  ] *(1-dxx)*  dyy  *(1-dzz) \
+                                              + wfield[ip][ix  , jy+1, kz+1] *(1-dxx)*  dyy  *  dzz   \
+                                              + wfield[ip][ix+1, jy  , kz  ] *  dxx  *(1-dyy)*(1-dzz) \
+                                              + wfield[ip][ix+1, jy  , kz+1] *  dxx  *(1-dyy)*  dzz   \
+                                              + wfield[ip][ix+1, jy+1, kz  ] *  dxx  *  dyy  *(1-dzz) \
+                                              + wfield[ip][ix+1, jy+1, kz+1] *  dxx  *  dyy  *  dzz  
+
+        #proj_weight[proj_weight==0] = 1
+        proj /= proj_weight
+        
+        # reorient the projection array: east is the first index increasing, north is the second index increasing
+        proj = np.transpose(np.flipud(proj))
+
+        return proj
+
+    proj = parallelize(xc, yc, zc, binsr, binsphi, north_vector, east_vector, size, nmax, levels, kept_patches, 
+                                            List([f if ki else np.zeros((2,2,2), dtype=field[0].dtype, order='F') for f,ki in zip(field, kept_patches)]),
+                                            List([f if ki else np.zeros((2,2,2), dtype=field[0].dtype, order='F') for f,ki in zip(weight_field, kept_patches)]),
+                                            normal_vector, res_normal)
+
+
+    # mirror proj 
+    #proj = np.flip(proj)
+
+    return_vars = [proj]
+
+
+    if return_grid:
+        return_vars.append(binsphi)
+        return_vars.append(binsr)
+
+    return tuple(return_vars)
