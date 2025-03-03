@@ -850,21 +850,26 @@ def polyfit_odr(x, y, xerr, yerr, max_degree=None, xisqred_thr=1.0, pval_thr=0.0
     return models[deg]
 
 
-def weighted_median(x, w, axes=None, interpolate=True):
+def weighted_percentile(x, w, p=50, axes=None, interpolate=True):
     """
-    Compute the weighted median of the data.
+    Compute the weighted percentile of the data.
 
     Args:
         x: the data (n-d np.array)
         w: the weights (n-d np.array)
-        axes: the axes along which to compute the median (int or list of ints)
-            If None, the median is computed over the flattened array.
-            If list of ints, the median is computed over the specified axes flattened array.
-        interpolate: if True, interpolate the weighted median between the two closest
+        p: the percentile to compute (float, 0-100). Default is 50 (median)
+        axes: the axes along which to compute the percentile (int or list of ints)
+            If None, the percentile is computed over the flattened array.
+            If list of ints, the percentile is computed over the specified axes flattened array.
+        interpolate: if True, interpolate the weighted percentile between the two closest
 
     Returns:
-        the weighted median (np.array)
+        the weighted percentile (np.array)
     """
+    # Check the percentile
+    if p < 0 or p > 100:
+        raise ValueError('The percentile must be between 0 and 100')
+
     if axes is None:
         xflat = x.flatten()
         wflat = w.flatten()
@@ -901,15 +906,14 @@ def weighted_median(x, w, axes=None, interpolate=True):
 
     # Compute the cumulative sum of the weights
     wflat = np.cumsum(wflat, axis=0)
-    half = wflat[-1] / 2
     wflat = np.concatenate((np.zeros((1,) + wflat.shape[1:]), wflat), axis=0)
     wflat = 0.5*(wflat[1:] + wflat[:-1])
+    half = wflat[-1] * (p / 100)
     
     # Find the first index where wflat > half, along each of the elements of the axes other than the first
     idx = np.argmax(wflat > half, axis=0)
     # If all are False, idx will be 0, so we need to check this case
-    idx = np.where(idx > 0, idx, wflat.shape[0]-1)
-
+    idx = np.where(idx > 0, idx, 0)#wflat.shape[0]-1)
 
     if not interpolate:
         return np.take_along_axis(xflat, idx[None, :], axis=0).squeeze()
@@ -917,17 +921,40 @@ def weighted_median(x, w, axes=None, interpolate=True):
         # Interpolate between the two closest
         idx1 = np.maximum(idx-1, 0)
         idx2 = np.minimum(idx, wflat.shape[0]-1)
+
         x1 = np.take_along_axis(xflat, idx1[None, :], axis=0).squeeze()
         x2 = np.take_along_axis(xflat, idx2[None, :], axis=0).squeeze()
         w1 = np.take_along_axis(wflat, idx1[None, :], axis=0).squeeze()
         w2 = np.take_along_axis(wflat, idx2[None, :], axis=0).squeeze()
-        half = wflat[-1] / 2
+
         w1 = half - w1
         w2 = w2 - half
 
-        if (w1+w2).min() == 0:
-            logging.warning('The weighted median is not well defined at least in one of the array elements. '+ 
+        w1[w1 < 0] = 0. 
+        w2[w2 < 0] = 0.
+        
+        print(idx1,'\n'*2,idx2,'\n'*2,x1,'\n'*2,x2,'\n'*2,w1,'\n'*2,w2,'\n'*2,half)
+
+        if w1.min() < 0 or w2.min() < 0 or (w1+w2).min()<=0:
+            logging.warning('The weighted percentile is not well defined at least in one of the array elements. '+ 
                                 'Returning the average of the two closest values. Proceed with caution.')
             return 0.5*(x1+x2)
 
         return (x1*w2 + x2*w1) / (w1 + w2)
+
+def weighted_median(x, w, axes=None, interpolate=True):
+    """
+    Compute the weighted median of the data.
+
+    Args:
+        x: the data (n-d np.array)
+        w: the weights (n-d np.array)
+        axes: the axes along which to compute the median (int or list of ints)
+            If None, the median is computed over the flattened array.
+            If list of ints, the median is computed over the specified axes flattened array.
+        interpolate: if True, interpolate the weighted median between the two closest
+
+    Returns:
+        the weighted median (np.array)
+    """
+    return weighted_percentile(x, w, p=50, axes=axes, interpolate=interpolate)
