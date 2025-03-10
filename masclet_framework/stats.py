@@ -876,6 +876,10 @@ def weighted_percentile(x, w, p=50, axes=None, interpolate=True):
     elif isinstance(axes, list) or isinstance(axes, tuple) or isinstance(axes, np.ndarray) or isinstance(axes, int):
         if isinstance(axes, int):
             axes = [axes]
+        if isinstance(axes, tuple):
+            axes = list(axes)
+        if isinstance(axes, np.ndarray):
+            axes = axes.tolist()
 
         original_shape = np.array(x.shape)
         
@@ -933,7 +937,7 @@ def weighted_percentile(x, w, p=50, axes=None, interpolate=True):
         w1[w1 < 0] = 0. 
         w2[w2 < 0] = 0.
         
-        print(idx1,'\n'*2,idx2,'\n'*2,x1,'\n'*2,x2,'\n'*2,w1,'\n'*2,w2,'\n'*2,half)
+        #print(idx1,'\n'*2,idx2,'\n'*2,x1,'\n'*2,x2,'\n'*2,w1,'\n'*2,w2,'\n'*2,half)
 
         if w1.min() < 0 or w2.min() < 0 or (w1+w2).min()<=0:
             logging.warning('The weighted percentile is not well defined at least in one of the array elements. '+ 
