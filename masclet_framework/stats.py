@@ -962,3 +962,17 @@ def weighted_median(x, w, axes=None, interpolate=True):
         the weighted median (np.array)
     """
     return weighted_percentile(x, w, p=50, axes=axes, interpolate=interpolate)
+
+
+def rank(array):
+    """
+    Computes the rank of the elements in the array.
+
+    Args:
+        array: the input array (1d np.array)
+
+    Returns:
+        the rank of the elements (1d np.array)
+        This is so that the smallest element has rank 0, the next smallest has rank 1, etc.
+    """
+    return np.argsort(np.argsort(array))
