@@ -997,12 +997,12 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
         for ipatch in range(npatch[0:l + 1].sum(), npatch[0:l].sum(), -1):
             if not kept_patches[ipatch]:
                 continue
-            i1 = intt(((vertices_patches[ipatch, 0] + dx) - bxmin) / uniform_cellsize + 0.5)
-            j1 = intt(((vertices_patches[ipatch, 2] + dx) - bymin) / uniform_cellsize + 0.5)
-            k1 = intt(((vertices_patches[ipatch, 4] + dx) - bzmin) / uniform_cellsize + 0.5)
-            i2 = i1 + reduction * (patchnx[ipatch] - 2)
-            j2 = j1 + reduction * (patchny[ipatch] - 2)
-            k2 = k1 + reduction * (patchnz[ipatch] - 2)
+            i1 = intt(((vertices_patches[ipatch, 0]) - bxmin) / uniform_cellsize + 0.5)
+            j1 = intt(((vertices_patches[ipatch, 2]) - bymin) / uniform_cellsize + 0.5)
+            k1 = intt(((vertices_patches[ipatch, 4]) - bzmin) / uniform_cellsize + 0.5)
+            i2 = i1 + reduction * (patchnx[ipatch]) - 1
+            j2 = j1 + reduction * (patchny[ipatch]) - 1
+            k2 = k1 + reduction * (patchnz[ipatch]) - 1
             if i2 > -1 and i1 < uniform_size_x and \
                     j2 > -1 and j1 < uniform_size_y and \
                     k2 > -1 and k1 < uniform_size_z:
@@ -1024,8 +1024,8 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
             for j in range(uniform_size_y):
                 for k in range(uniform_size_z):
                     x, y, z = fine_coordinates[0][i], fine_coordinates[1][j], fine_coordinates[2][k]
-
                     ipatch = cell_patch[i, j, k]
+                    n1, n2, n3 = patchnx[ipatch], patchny[ipatch], patchnz[ipatch]
                     l = levels[ipatch]
                     dx = coarse_cellsize / 2 ** l
 
@@ -1035,23 +1035,52 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
                         uniform[i, j, k] = field[ipatch][ii, jj, kk]
                     else:
                         xx, yy, zz = vertices_patches[ipatch, 0], vertices_patches[ipatch, 2], vertices_patches[ipatch, 4]
-                        ii, jj, kk = int((x - xx) / dx - 0.5), int((y - yy) / dx - 0.5), int((z - zz) / dx - 0.5)
+                        ii, jj, kk = int((x - xx) / dx), int((y - yy) / dx), int((z - zz) / dx )
                         xbas, ybas, zbas = xx + (ii + 0.5) * dx, yy + (jj + 0.5) * dx, zz + (kk + 0.5) * dx
                         xbas, ybas, zbas = (x - xbas) / dx, (y - ybas) / dx, (z - zbas) / dx
 
-                        ubas = field[ipatch][ii:ii + 2, jj:jj + 2, kk:kk + 2]
+                        # ii, jj, kk are the indices of the cell containing xx, yy, zz 
+                        # if we want to interpolate and if the cell is not at the edge of the patch, 
+                        # we will need to displace or not by one cell --> ii2, jj2, kk2 indices
+                        # if we just copy (ngp), these are the correct indices (ii, jj, kk)
                         if interpolate:
-                            c00 = ubas[0, 0, 0] * (1 - xbas) + ubas[1, 0, 0] * xbas
-                            c01 = ubas[0, 0, 1] * (1 - xbas) + ubas[1, 0, 1] * xbas
-                            c10 = ubas[0, 1, 0] * (1 - xbas) + ubas[1, 1, 0] * xbas
-                            c11 = ubas[0, 1, 1] * (1 - xbas) + ubas[1, 1, 1] * xbas
+                            ii2 = ii
+                            if xbas < 0.:
+                                xbas += 1 
+                                ii2 -= 1
 
-                            c0 = c00 * (1 - ybas) + c10 * ybas
-                            c1 = c01 * (1 - ybas) + c11 * ybas
+                            jj2 = jj
+                            if ybas < 0.:
+                                ybas += 1
+                                jj2 -= 1
 
-                            uniform[i, j, k] = c0 * (1 - zbas) + c1 * zbas
+                            kk2 = kk
+                            if zbas < 0.:
+                                zbas += 1
+                                kk2 -= 1
+
+                            #if ii2 != 0 and ii2 != n1 - 1 and \
+                            #   jj2 != 0 and jj2 != n2 - 1 and \
+                            #   kk2 != 0 and kk2 != n3 - 1:   
+                            if ii2 >= 0 and ii2 != n1 - 1 and \
+                               jj2 >= 0 and jj2 != n2 - 1 and \
+                               kk2 >= 0 and kk2 != n3 - 1 and \
+                               abs(xbas) <= 1. and abs(ybas) <= 1. and abs(zbas) <= 1.:   
+                                ubas = field[ipatch][ii2:ii2 + 2, jj2:jj2 + 2, kk2:kk2 + 2]
+
+                                c00 = ubas[0, 0, 0] * (1 - xbas) + ubas[1, 0, 0] * xbas
+                                c01 = ubas[0, 0, 1] * (1 - xbas) + ubas[1, 0, 1] * xbas
+                                c10 = ubas[0, 1, 0] * (1 - xbas) + ubas[1, 1, 0] * xbas
+                                c11 = ubas[0, 1, 1] * (1 - xbas) + ubas[1, 1, 1] * xbas
+
+                                c0 = c00 * (1 - ybas) + c10 * ybas
+                                c1 = c01 * (1 - ybas) + c11 * ybas
+
+                                uniform[i, j, k] = c0 * (1 - zbas) + c1 * zbas
+                            else:
+                                uniform[i, j, k] = field[ipatch][ii, jj, kk]
                         else:
-                            uniform[i, j, k] = ubas[0 if xbas<=0.5 else 1, 0 if ybas<=0.5 else 1, 0 if zbas<=0.5 else 1]
+                            uniform[i, j, k] = field[ipatch][ii, jj, kk]
         return uniform
 
     uniform=parallelize(uniform_size_x, uniform_size_y, uniform_size_z, fine_coordinates, cell_patch, vertices_patches,
