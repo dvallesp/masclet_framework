@@ -1077,6 +1077,36 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
                                 c1 = c01 * (1 - ybas) + c11 * ybas
 
                                 uniform[i, j, k] = c0 * (1 - zbas) + c1 * zbas
+                            #elif ii2 == n1 -1 or jj2 == n2 - 1 or kk2 == n3 - 1 and \
+                            #    abs(xbas) <= 1. and abs(ybas) <= 1. and abs(zbas) <= 1.:   
+                            #    # at least we interpolate in the directions it's possible 
+                            #    ubas = np.zeros((2, 2, 2), dtype=field[0].dtype)
+                            #    for ix in range(2):
+                            #        ix2 = ix 
+                            #        if ii2 + ix2 == n1:
+                            #            ix2 = 0 
+                            #        
+                            #        for jy in range(2):
+                            #            jy2 = jy 
+                            #            if jj2 + jy2 == n2:
+                            #                jy2 = 0 
+#
+                            #            for kz in range(2):
+                            #                kz2 = kz 
+                            #                if kk2 + kz2 == n3:
+                            #                    kz2 = 0 
+#
+                            #                ubas[ix, jy, kz] = field[ipatch][ii2 + ix2, jj2 + jy2, kk2 + kz2]
+#
+                            #    c00 = ubas[0, 0, 0] * (1 - xbas) + ubas[1, 0, 0] * xbas
+                            #    c01 = ubas[0, 0, 1] * (1 - xbas) + ubas[1, 0, 1] * xbas
+                            #    c10 = ubas[0, 1, 0] * (1 - xbas) + ubas[1, 1, 0] * xbas
+                            #    c11 = ubas[0, 1, 1] * (1 - xbas) + ubas[1, 1, 1] * xbas
+#
+                            #    c0 = c00 * (1 - ybas) + c10 * ybas
+                            #    c1 = c01 * (1 - ybas) + c11 * ybas
+#
+                            #    uniform[i, j, k] = c0 * (1 - zbas) + c1 * zbas
                             else:
                                 uniform[i, j, k] = field[ipatch][ii, jj, kk]
                         else:
