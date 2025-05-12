@@ -885,6 +885,7 @@ def slice_map(field, normal_vector, north_vector,
             lmax = nl
         if lmax<0:
             lmax = 0
+        cellsizes = size/nmax/2**levels
         
 
         #for i in tqdm(range(nN), disable=not use_tqdm):
@@ -894,21 +895,27 @@ def slice_map(field, normal_vector, north_vector,
                 yij = ygrid[i, j]
                 zij = zgrid[i, j]
 
-                if not interpolate:
-                    ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=0)
-                    if not kept_patches[ip]:
+                ip2, ix2, jy2, kz2 = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=0,no_interp=True)
+
+                interpolate_this = interpolate 
+                if interpolate_this:
+                    ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=0.5)
+                    if levels[ip2] > levels[ip]:
+                        interpolate_this = False
+
+                if not interpolate_this:
+                    if not kept_patches[ip2]:
                         raise ValueError("Patch not read!!!")
 
-                    proj[i, j] = field[ip][ix, jy, kz]
+                    proj[i, j] = field[ip2][ix2, jy2, kz2]
                 else:
-                    ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=1)
                     if not kept_patches[ip]:
                         raise ValueError("Patch not read!!!")
 
-                    ll=levels[ip]
-                    dxx=(xij-(patchrx[ip]+(ix-0.5)*(size/nmax/2**ll)))/(size/nmax/2**ll)
-                    dyy=(yij-(patchry[ip]+(jy-0.5)*(size/nmax/2**ll)))/(size/nmax/2**ll)
-                    dzz=(zij-(patchrz[ip]+(kz-0.5)*(size/nmax/2**ll)))/(size/nmax/2**ll)
+                    dxip = cellsizes[ip]
+                    dxx=(xij-(patchrx[ip]+(ix-0.5)*dxip))/dxip
+                    dyy=(yij-(patchry[ip]+(jy-0.5)*dxip))/dxip
+                    dzz=(zij-(patchrz[ip]+(kz-0.5)*dxip))/dxip
 
                     if ip==0 and (ix<=0 or jy<=0 or kz<=0 or ix>=nmax-1 or jy>=nmax-1 or kz>=nmax-1):
                         proj[i,j] = field[ip][(ix  )%nmax,(jy  )%nmax,(kz  )%nmax] *(1-dxx)*(1-dyy)*(1-dzz) \
@@ -1127,6 +1134,7 @@ def projection_map(field, normal_vector, north_vector,
             lmax = nl
         if lmax<0:
             lmax = 0
+        cellsizes = size/nmax/2**levels
         
 
         for i in prange(nN):
@@ -1140,22 +1148,25 @@ def projection_map(field, normal_vector, north_vector,
                         if (xij-xc)**2 + (yij-yc)**2 + (zij-zc)**2 > radius2:
                             continue
 
-                    
+                    ip2, ix2, jy2, kz2 = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=0,no_interp=True)
 
-                    if not interpolate:
-                        ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=0)
+                    interpolate_this = interpolate 
+                    if interpolate_this:
+                        ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=0.5)
+                        if levels[ip2] > levels[ip]:
+                            interpolate_this = False
+
+                    if not interpolate_this:
                         if not kept_patches[ip]:
                             raise ValueError("Patch not read!!!")
 
-                        proj[i, j] += field[ip][ix, jy, kz] 
-                        proj_weight[i, j] += wfield[ip][ix, jy, kz]
+                        proj[i, j] += field[ip2][ix2, jy2, kz2] 
+                        proj_weight[i, j] += wfield[ip2][ix2, jy2, kz2]
                     else:
-                        ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=1)
                         if not kept_patches[ip]:
                             raise ValueError("Patch not read!!!")
 
-                        ll=levels[ip]
-                        dx_l = size/nmax/2**ll
+                        dx_l = cellsizes[ip]
                         dxx=(xij-(patchrx[ip]+(ix-0.5)*dx_l))/dx_l
                         dyy=(yij-(patchry[ip]+(jy-0.5)*dx_l))/dx_l
                         dzz=(zij-(patchrz[ip]+(kz-0.5)*dx_l))/dx_l
@@ -1405,6 +1416,7 @@ def projection_map_polars(field, normal_vector,
         lev_integral = np.log2((size/nmax)/drrr).astype(np.int32)
         lev_integral[lev_integral>nl] = nl
         lev_integral[lev_integral<0] = 0
+        cellsizes = size/nmax/2**levels
         
         for i in prange(nPhi):
             phi = binsphi[i]
@@ -1425,20 +1437,25 @@ def projection_map_polars(field, normal_vector,
                         if (xij-xc)**2 + (yij-yc)**2 + (zij-zc)**2 > radius2:
                             continue
 
+                    ip2, ix2, jy2, kz2 = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=0,no_interp=True)
+
+                    interpolate_this = interpolate 
+                    if interpolate_this:
+                        ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=0.5)
+                        if levels[ip2] > levels[ip]:
+                            interpolate_this = False
+
                     if not interpolate:
-                        ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=0)
                         if not kept_patches[ip]:
                             raise ValueError("Patch not read!!!")
 
-                        proj[i, j] += field[ip][ix, jy, kz]
-                        proj_weight[i, j] += wfield[ip][ix, jy, kz]
+                        proj[i, j] += field[ip2][ix2, jy2, kz2]
+                        proj_weight[i, j] += wfield[ip2][ix2, jy2, kz2]
                     else:
-                        ip, ix, jy, kz = locate_point(xij,yij,zij,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,lmax,buf=1)
                         if not kept_patches[ip]:
                             raise ValueError("Patch not read!!!")
 
-                        ll=levels[ip]
-                        dx_l = size/nmax/2**ll
+                        dx_l = cellsizes[ip]
                         dxx=(xij-(patchrx[ip]+(ix-0.5)*dx_l))/dx_l
                         dyy=(yij-(patchry[ip]+(jy-0.5)*dx_l))/dx_l
                         dzz=(zij-(patchrz[ip]+(kz-0.5)*dx_l))/dx_l
