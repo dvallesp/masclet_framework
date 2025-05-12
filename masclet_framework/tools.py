@@ -25,6 +25,8 @@ from numba import jit, njit, prange
 from numba.typed import List
 import warnings
 
+from scipy.interpolate import LinearNDInterpolator
+
 # from masclet_framework import cosmo_tools, units
 
 # from scipy import optimize
@@ -997,6 +999,7 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
         for ipatch in range(npatch[0:l + 1].sum(), npatch[0:l].sum(), -1):
             if not kept_patches[ipatch]:
                 continue
+
             i1 = intt(((vertices_patches[ipatch, 0]) - bxmin) / uniform_cellsize + 0.5)
             j1 = intt(((vertices_patches[ipatch, 2]) - bymin) / uniform_cellsize + 0.5)
             k1 = intt(((vertices_patches[ipatch, 4]) - bzmin) / uniform_cellsize + 0.5)
@@ -1077,45 +1080,57 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
                                 c1 = c01 * (1 - ybas) + c11 * ybas
 
                                 uniform[i, j, k] = c0 * (1 - zbas) + c1 * zbas
-                            #elif ii2 == n1 -1 or jj2 == n2 - 1 or kk2 == n3 - 1 and \
-                            #    abs(xbas) <= 1. and abs(ybas) <= 1. and abs(zbas) <= 1.:   
-                            #    # at least we interpolate in the directions it's possible 
-                            #    ubas = np.zeros((2, 2, 2), dtype=field[0].dtype)
-                            #    for ix in range(2):
-                            #        ix2 = ix 
-                            #        if ii2 + ix2 == n1:
-                            #            ix2 = 0 
-                            #        
-                            #        for jy in range(2):
-                            #            jy2 = jy 
-                            #            if jj2 + jy2 == n2:
-                            #                jy2 = 0 
-#
-                            #            for kz in range(2):
-                            #                kz2 = kz 
-                            #                if kk2 + kz2 == n3:
-                            #                    kz2 = 0 
-#
-                            #                ubas[ix, jy, kz] = field[ipatch][ii2 + ix2, jj2 + jy2, kk2 + kz2]
-#
-                            #    c00 = ubas[0, 0, 0] * (1 - xbas) + ubas[1, 0, 0] * xbas
-                            #    c01 = ubas[0, 0, 1] * (1 - xbas) + ubas[1, 0, 1] * xbas
-                            #    c10 = ubas[0, 1, 0] * (1 - xbas) + ubas[1, 1, 0] * xbas
-                            #    c11 = ubas[0, 1, 1] * (1 - xbas) + ubas[1, 1, 1] * xbas
-#
-                            #    c0 = c00 * (1 - ybas) + c10 * ybas
-                            #    c1 = c01 * (1 - ybas) + c11 * ybas
-#
-                            #    uniform[i, j, k] = c0 * (1 - zbas) + c1 * zbas
+                            elif ii2 == n1 -1 or jj2 == n2 - 1 or kk2 == n3 - 1 and \
+                                abs(xbas) <= 1. and abs(ybas) <= 1. and abs(zbas) <= 1.:   
+                                # at least we interpolate in the directions it's possible 
+                                ubas = np.zeros((2, 2, 2), dtype=field[0].dtype)
+                                for ix in range(2):
+                                    ix2 = ix 
+                                    if ii2 + ix2 == n1:
+                                        ix2 = 0 
+                                    
+                                    for jy in range(2):
+                                        jy2 = jy 
+                                        if jj2 + jy2 == n2:
+                                            jy2 = 0 
+
+                                        for kz in range(2):
+                                            kz2 = kz 
+                                            if kk2 + kz2 == n3:
+                                                kz2 = 0 
+
+                                            ubas[ix, jy, kz] = field[ipatch][ii2 + ix2, jj2 + jy2, kk2 + kz2]
+
+                                c00 = ubas[0, 0, 0] * (1 - xbas) + ubas[1, 0, 0] * xbas
+                                c01 = ubas[0, 0, 1] * (1 - xbas) + ubas[1, 0, 1] * xbas
+                                c10 = ubas[0, 1, 0] * (1 - xbas) + ubas[1, 1, 0] * xbas
+                                c11 = ubas[0, 1, 1] * (1 - xbas) + ubas[1, 1, 1] * xbas
+
+                                c0 = c00 * (1 - ybas) + c10 * ybas
+                                c1 = c01 * (1 - ybas) + c11 * ybas
+
+                                uniform[i, j, k] = c0 * (1 - zbas) + c1 * zbas
+
+                                # Idea (final) --> this does fix the left boundaries. Maybe what I can do is
+                                # to just do a loop from 0 to 1, and then I fill the cells. if the one i need to 
+                                # look for is < 0, then put 0, just as I do with the N case. And this avoids the 
+                                # necessity to have the else below.
                             else:
-                                uniform[i, j, k] = field[ipatch][ii, jj, kk]
+                                uniform[i, j, k] = field[ipatch][ii, jj, kk] # I want to find a better way to do this...
+                                # Leaving NaN and refilling, but that's slow...
                         else:
                             uniform[i, j, k] = field[ipatch][ii, jj, kk]
+                        
         return uniform
 
     uniform=parallelize(uniform_size_x, uniform_size_y, uniform_size_z, fine_coordinates, cell_patch, vertices_patches,
                         List([f if ki else np.zeros((2,2,2), dtype=field[0].dtype, order='F') for f,ki in zip(field, kept_patches)]),
                         interpolate,verbose)
+    
+
+    
+
+
 
     if return_coords:
         return uniform, fine_coordinates
