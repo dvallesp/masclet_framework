@@ -11,7 +11,7 @@ Created by David Vallés
 
 from numba import jit
 import numpy as np
-from masclet_framework import tools
+from masclet_framework import tools, stats
 try:
     from tqdm import tqdm
 except ImportError:
@@ -96,6 +96,7 @@ def locate_point(x,y,z,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,si
 def dir_profile(field, cx,cy,cz,
                 npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,
                 binsphi=None, binscostheta=None, binsr=None, rmin=None, rmax=None, dex_rbins=None, delta_rbins=None,
+                maxl=None,
                 interpolate=True,
                 use_tqdm=False):
     """
@@ -124,6 +125,7 @@ def dir_profile(field, cx,cy,cz,
             - binsr: numpy vector specifying the radial bins
             - rmin, rmax, dex_rbins: minimum and maximum radius, and logarithmic bin size
             - rmin, rmax, delta_rbins: minimum and maximum radius, and linear bin size
+        - maxl: maximum level to be considered. If None, all levels are considered.
         - interpolate: if True, the profile is computed by averaging the values of the cells in each bin. If False, the profile is computed by nearest neighbour interpolation.
         - use_tqdm (default: False): whether a tqdm progressbar should be displayed.
 
@@ -176,6 +178,9 @@ def dir_profile(field, cx,cy,cz,
 
     levels=tools.create_vector_levels(npatch)
     nl=levels.max()
+
+    if maxl is not None:
+        nl = min(nl,maxl)
         
     drrr=np.concatenate([[rrr[1]-rrr[0]], np.diff(rrr)])
     lev_integral = np.clip(np.log2((size/nmax)/drrr).astype('int32'),0,nl)#+1
@@ -236,7 +241,7 @@ def dir_profile(field, cx,cy,cz,
                 zzz=cz+rrr*costheta
 
                 for kbin,(xi,yi,zi,li) in enumerate(zip(xxx,yyy,zzz,lev_integral)):
-                    ip,i,j,k=locate_point(xi,yi,zi,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,li)
+                    ip,i,j,k=locate_point(xi,yi,zi,npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,li,buf=0,no_interp=True)
                     if ip != 0:
                         dir_profiles[itheta,jphi,kbin]=field[ip][i,j,k]
                     else:
@@ -247,7 +252,9 @@ def dir_profile(field, cx,cy,cz,
 
 def radial_profile(field,cx,cy,cz,
                    npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,
+                   weight_field=None,
                    binsr=None,dex_rbins=None,delta_rbins=None,rmin=None,rmax=None,
+                   maxl=None,
                    interpolate=True, average="mean", Ncostheta=20, Nphi=20, use_tqdm=False):
     """
     Computes the radially-average profile of a field around a given center (cx,cy,cz).
@@ -262,6 +269,7 @@ def radial_profile(field,cx,cy,cz,
         - field: field to compute the profile of
         - cx,cy,cz: center of the profile
         - npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax: patch information
+        - weight_field (optional): weighting field to use to normalize the profile
         One and only one of these sets of arguments must be specified:
             - binsr: numpy vector specifying the radial bins
             - rmin, rmax, dex_rbins: minimum and maximum radius, and logarithmic bin size
@@ -271,6 +279,7 @@ def radial_profile(field,cx,cy,cz,
         - Ncostheta: number of bins in the cos(theta) direction
         - Nphi: number of bins in the phi direction
         - use_tqdm: whether to use tqdm to display a progress bar or not
+        - maxl: maximum level to be considered. If None, all levels are considered.
     Returns:
         - profile: radially-averaged profile
         - rrr: radial bins
@@ -279,20 +288,43 @@ def radial_profile(field,cx,cy,cz,
     dir_profiles, rrr, vec_costheta, vec_phi = dir_profile(field,cx,cy,cz,
                                                            npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,
                                                            binsr=binsr,dex_rbins=dex_rbins,delta_rbins=delta_rbins,rmin=rmin,rmax=rmax,
-                                                           interpolate=interpolate, binscostheta=Ncostheta, binsphi=Nphi, use_tqdm=use_tqdm)
+                                                           interpolate=interpolate, 
+                                                           maxl=maxl,
+                                                           binscostheta=Ncostheta, binsphi=Nphi, use_tqdm=use_tqdm)
+
+    if weight_field is not None:
+        dir_profiles_weight, rrr, vec_costheta, vec_phi = dir_profile(weight_field,cx,cy,cz,
+                                                            npatch,patchrx,patchry,patchrz,patchnx,patchny,patchnz,size,nmax,
+                                                            binsr=binsr,dex_rbins=dex_rbins,delta_rbins=delta_rbins,rmin=rmin,rmax=rmax,
+                                                            interpolate=interpolate, 
+                                                            maxl=maxl,
+                                                            binscostheta=Ncostheta, binsphi=Nphi, use_tqdm=use_tqdm)
 
     # Combine directional profiles
-    if average=="mean":
-        profile=np.mean(dir_profiles,axis=(0,1))
-    elif average=="median":
-        profile=np.median(dir_profiles,axis=(0,1))
-    elif average=="geometric":
-        profile=np.exp(np.mean(np.log(dir_profiles),axis=(0,1)))
-    elif type(average) is list or type(average) is np.ndarray: # list of percentiles
-        assert all([0<=p<=100 for p in average]), "Percentiles must be between 0 and 100"
-        profile={'perc'+str(p): np.percentile(dir_profiles, p, axis=(0,1)) for p in average}
-    else:
-        raise ValueError('Wrong specification of average')
+    if weight_field is None:
+        if average=="mean":
+            profile=np.mean(dir_profiles,axis=(0,1))
+        elif average=="median":
+            profile=np.median(dir_profiles,axis=(0,1))
+        elif average=="geometric":
+            profile=np.exp(np.mean(np.log(dir_profiles),axis=(0,1)))
+        elif type(average) is list or type(average) is np.ndarray: # list of percentiles
+            assert all([0<=p<=100 for p in average]), "Percentiles must be between 0 and 100"
+            profile={'perc'+str(p): np.percentile(dir_profiles, p, axis=(0,1)) for p in average}
+        else:
+            raise ValueError('Wrong specification of average')
+    else: # weight_field is not None --> weighted average
+        if average=="mean":
+            profile = np.mean(dir_profiles * dir_profiles_weight, axis=(0,1)) / np.mean(dir_profiles_weight, axis=(0,1))
+        elif average=="median":
+            profile = stats.weighted_median(dir_profiles, dir_profiles_weight, axes=(0,1))
+        elif average=="geometric":
+            profile = np.exp(np.mean(np.log(dir_profiles * dir_profiles_weight), axis=(0,1)) / np.mean(np.log(dir_profiles_weight), axis=(0,1)))
+        elif type(average) is list or type(average) is np.ndarray: # list of percentiles
+            assert all([0<=p<=100 for p in average]), "Percentiles must be between 0 and 100"
+            profile={'perc'+str(p): stats.weighted_percentile(dir_profiles, dir_profiles_weight, p, axes=(0,1)) for p in average}
+        else:
+            raise ValueError('Wrong specification of average')
 
     return profile, rrr
 
