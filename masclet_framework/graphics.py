@@ -1234,7 +1234,7 @@ def projection_map(field, normal_vector, north_vector,
 
 
 
-def projection_map_polars(field, normal_vector, north_vector, 
+def projection_map_polars(field, normal_vector,
               xc, yc, zc, projection_region,
               npatch,patchnx,patchny,patchnz,patchrx,patchry,patchrz,size,nmax,nl,
               weight_field=None,
@@ -1254,11 +1254,11 @@ def projection_map_polars(field, normal_vector, north_vector,
     Args:
         field: field to be computed at the uniform grid, in the usual MASCLET style (list of 3d np.arrays). MUST BE UNCLEANED!!
         normal_vector (3-element list or 1d np.array): The normal vector to the plane. Points towards the observer.
-        north_vector (3-element list or 1d np.array): The vector pointing north in the plane.
         xc, yc, zc (float): The coordinates of the center of the slice.
         projection_region: The region to be projected. Can be:
             - a sphere: ("sphere", radius)
-            - a box/cylinder: ("cylinder"). The projection span is set then by width_normal
+            - a box/cylinder: ("cylinder", width_normal). The projection span is set then by width_normal.
+                The parameter here overrides the width_normal parameter below.
 
         npatch: number of patches in each level, starting in l=0 (numpy vector of NLEVELS integers)
         patchnx, patchny, patchnz: x-extension of each patch (in level l cells) (and Y and Z)
@@ -1298,7 +1298,7 @@ def projection_map_polars(field, normal_vector, north_vector,
 
     Returns:
         2D numpy array with the computed projection.
-        If return_grid is True, it will return two 1D numpy arrays with the coordinates of the grid (E and N directions).
+        If return_grid is True, it will return two 1D numpy arrays with the coordinates of the grid (phi and r directions).
     """
     if return_grid_3d:
         return NotImplementedError("return_grid_3d not implemented yet, probably never will")
@@ -1306,14 +1306,14 @@ def projection_map_polars(field, normal_vector, north_vector,
     # Check the projection region:
     projection_volume = projection_region[0]
     is_sphere=False
+
     if projection_volume == "sphere":
         is_sphere=True
         radius = projection_region[1]
         width_normal = 2*radius
         radius2 = radius**2
     elif projection_volume == "cylinder":
-        if width_normal is None:
-            raise ValueError("The width_normal must be given for a cylinder projection region")
+        width_normal = projection_region[1]
     else:
         raise ValueError("The projection region must be either 'sphere' or 'cylinder'")
 
