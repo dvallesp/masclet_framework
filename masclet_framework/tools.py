@@ -1000,6 +1000,31 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
             if not kept_patches[ipatch]:
                 continue
 
+            i1 = intt(((vertices_patches[ipatch, 0]+0.5*dx) - bxmin) / uniform_cellsize + 0.5)
+            j1 = intt(((vertices_patches[ipatch, 2]+0.5*dx) - bymin) / uniform_cellsize + 0.5)
+            k1 = intt(((vertices_patches[ipatch, 4]+0.5*dx) - bzmin) / uniform_cellsize + 0.5)
+            i2 = i1 + reduction * (patchnx[ipatch]-1) - 1
+            j2 = j1 + reduction * (patchny[ipatch]-1) - 1
+            k2 = k1 + reduction * (patchnz[ipatch]-1) - 1
+            if i2 > -1 and i1 < uniform_size_x and \
+                    j2 > -1 and j1 < uniform_size_y and \
+                    k2 > -1 and k1 < uniform_size_z:
+                i1 = max([i1, 0])
+                j1 = max([j1, 0])
+                k1 = max([k1, 0])
+                i2 = min([i2, uniform_size_x - 1])
+                j2 = min([j2, uniform_size_y - 1])
+                k2 = min([k2, uniform_size_z - 1])
+                cell_patch[i1:i2 + 1, j1:j2 + 1, k1:k2 + 1] = ipatch
+
+    # 2. try to increase level using boundaries
+    for l in range(1, up_to_level + 1, 1):
+        reduction = 2 ** (up_to_level - l)
+        dx = uniform_cellsize * reduction
+        for ipatch in range(npatch[0:l + 1].sum(), npatch[0:l].sum(), -1):
+            if not kept_patches[ipatch]:
+                continue
+
             i1 = intt(((vertices_patches[ipatch, 0]) - bxmin) / uniform_cellsize + 0.5)
             j1 = intt(((vertices_patches[ipatch, 2]) - bymin) / uniform_cellsize + 0.5)
             k1 = intt(((vertices_patches[ipatch, 4]) - bzmin) / uniform_cellsize + 0.5)
@@ -1015,7 +1040,7 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
                 i2 = min([i2, uniform_size_x - 1])
                 j2 = min([j2, uniform_size_y - 1])
                 k2 = min([k2, uniform_size_z - 1])
-                cell_patch[i1:i2 + 1, j1:j2 + 1, k1:k2 + 1] = ipatch
+                cell_patch[i1:i2 + 1, j1:j2 + 1, k1:k2 + 1] = np.where(l > levels[np.abs(cell_patch[i1:i2 + 1, j1:j2 + 1, k1:k2 + 1])], -ipatch, cell_patch[i1:i2 + 1, j1:j2 + 1, k1:k2 + 1])
 
     @njit(parallel=True)
     def parallelize(uniform_size_x, uniform_size_y, uniform_size_z, fine_coordinates, cell_patch, vertices_patches,
@@ -1028,6 +1053,13 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
                 for k in range(uniform_size_z):
                     x, y, z = fine_coordinates[0][i], fine_coordinates[1][j], fine_coordinates[2][k]
                     ipatch = cell_patch[i, j, k]
+                    
+                    # sign = 1 --> interpolate; sign = -1 --> copy
+                    sign = 1
+                    if ipatch < 0:
+                        ipatch = -ipatch
+                        sign = -1
+
                     n1, n2, n3 = patchnx[ipatch], patchny[ipatch], patchnz[ipatch]
                     l = levels[ipatch]
                     dx = coarse_cellsize / 2 ** l
@@ -1046,7 +1078,7 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
                         # if we want to interpolate and if the cell is not at the edge of the patch, 
                         # we will need to displace or not by one cell --> ii2, jj2, kk2 indices
                         # if we just copy (ngp), these are the correct indices (ii, jj, kk)
-                        if interpolate:
+                        if interpolate and sign == 1:
                             ii2 = ii
                             if xbas < 0.:
                                 xbas += 1 
