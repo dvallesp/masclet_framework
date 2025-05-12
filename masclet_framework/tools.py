@@ -1041,6 +1041,7 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
                 j2 = min([j2, uniform_size_y - 1])
                 k2 = min([k2, uniform_size_z - 1])
                 cell_patch[i1:i2 + 1, j1:j2 + 1, k1:k2 + 1] = np.where(l > levels[np.abs(cell_patch[i1:i2 + 1, j1:j2 + 1, k1:k2 + 1])], -ipatch, cell_patch[i1:i2 + 1, j1:j2 + 1, k1:k2 + 1])
+                # if we can map it to a higher level, even though we cannot interpolate, we do it.
 
     @njit(parallel=True)
     def parallelize(uniform_size_x, uniform_size_y, uniform_size_z, fine_coordinates, cell_patch, vertices_patches,
@@ -1081,17 +1082,17 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
                         if interpolate and sign == 1:
                             ii2 = ii
                             if xbas < 0.:
-                                xbas += 1 
+                                xbas += 1.
                                 ii2 -= 1
 
                             jj2 = jj
                             if ybas < 0.:
-                                ybas += 1
+                                ybas += 1.
                                 jj2 -= 1
 
                             kk2 = kk
                             if zbas < 0.:
-                                zbas += 1
+                                zbas += 1.
                                 kk2 -= 1
 
                             #if ii2 != 0 and ii2 != n1 - 1 and \
@@ -1112,44 +1113,8 @@ def uniform_grid_zoom_interpolate(field, box_limits, up_to_level, npatch, patchn
                                 c1 = c01 * (1 - ybas) + c11 * ybas
 
                                 uniform[i, j, k] = c0 * (1 - zbas) + c1 * zbas
-                            elif ii2 == n1 -1 or jj2 == n2 - 1 or kk2 == n3 - 1 and \
-                                abs(xbas) <= 1. and abs(ybas) <= 1. and abs(zbas) <= 1.:   
-                                # at least we interpolate in the directions it's possible 
-                                ubas = np.zeros((2, 2, 2), dtype=field[0].dtype)
-                                for ix in range(2):
-                                    ix2 = ix 
-                                    if ii2 + ix2 == n1:
-                                        ix2 = 0 
-                                    
-                                    for jy in range(2):
-                                        jy2 = jy 
-                                        if jj2 + jy2 == n2:
-                                            jy2 = 0 
-
-                                        for kz in range(2):
-                                            kz2 = kz 
-                                            if kk2 + kz2 == n3:
-                                                kz2 = 0 
-
-                                            ubas[ix, jy, kz] = field[ipatch][ii2 + ix2, jj2 + jy2, kk2 + kz2]
-
-                                c00 = ubas[0, 0, 0] * (1 - xbas) + ubas[1, 0, 0] * xbas
-                                c01 = ubas[0, 0, 1] * (1 - xbas) + ubas[1, 0, 1] * xbas
-                                c10 = ubas[0, 1, 0] * (1 - xbas) + ubas[1, 1, 0] * xbas
-                                c11 = ubas[0, 1, 1] * (1 - xbas) + ubas[1, 1, 1] * xbas
-
-                                c0 = c00 * (1 - ybas) + c10 * ybas
-                                c1 = c01 * (1 - ybas) + c11 * ybas
-
-                                uniform[i, j, k] = c0 * (1 - zbas) + c1 * zbas
-
-                                # Idea (final) --> this does fix the left boundaries. Maybe what I can do is
-                                # to just do a loop from 0 to 1, and then I fill the cells. if the one i need to 
-                                # look for is < 0, then put 0, just as I do with the N case. And this avoids the 
-                                # necessity to have the else below.
                             else:
-                                uniform[i, j, k] = field[ipatch][ii, jj, kk] # I want to find a better way to do this...
-                                # Leaving NaN and refilling, but that's slow...
+                                raise ValueError('Interpolation failed, where it shouldnt. Please check or call your closest interpolator on-call...')
                         else:
                             uniform[i, j, k] = field[ipatch][ii, jj, kk]
                         
