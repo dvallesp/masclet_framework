@@ -907,6 +907,21 @@ def slice_map(field, normal_vector, north_vector,
                     if not kept_patches[ip2]:
                         raise ValueError("Patch not read!!!")
 
+                    n1,n2,n3 = patchnx[ip2],patchny[ip2],patchnz[ip2]
+                    #if ix2 < 0 or ix2 >= n1 or jy2 < 0 or jy2 >= n2 or kz2 < 0 or kz2 >= n3:
+                    #    dxpa = cellsizes[ip2]
+                    #    print("outside the patch!", ip2, n1,n2,n3, ix2, jy2, kz2, 'x',xij,patchrx[ip2]-dxpa,patchrx[ip2]+(n1-1)*dxpa, 'y',yij,patchry[ip2]-dxpa,patchry[ip2]+(n2-1)*dxpa, 'z',zij,patchrz[ip2]-dxpa,patchrz[ip2]+(n3-1)*dxpa)
+                    #    raise ValueError("outside the patch!")
+                    if ix2 == n1: 
+                        ix2 = n1 - 1
+                    if jy2 == n2:
+                        jy2 = n2 - 1
+                    if kz2 == n3:
+                        kz2 = n3 - 1
+                    if ix2 < 0 or ix2 >= n1 or jy2 < 0 or jy2 >= n2 or kz2 < 0 or kz2 >= n3:
+                        dxpa = cellsizes[ip2]
+                        print("outside the patch!", ip2, n1,n2,n3, ix2, jy2, kz2, 'x',xij,patchrx[ip2]-dxpa,patchrx[ip2]+(n1-1)*dxpa, 'y',yij,patchry[ip2]-dxpa,patchry[ip2]+(n2-1)*dxpa, 'z',zij,patchrz[ip2]-dxpa,patchrz[ip2]+(n3-1)*dxpa)
+                        raise ValueError("outside the patch!")
                     proj[i, j] = field[ip2][ix2, jy2, kz2]
                 else:
                     if not kept_patches[ip]:
