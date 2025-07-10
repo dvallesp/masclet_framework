@@ -26,7 +26,7 @@ def stellar_mass_function(it, path='', L = 40.,
                           color = 'deepskyblue', label = '', linewidth = 3, scatter = False, size = 10, error = False,
                           alpha = 0.7, axlabelsize = 'large',
                           tickmajor_length = 6, tickminor_length = 3, spines_width = 1.5,
-                          plot_fit = True, nsigma = 1):
+                          plot_fit = True, nsigma = 1, box = None, bin_info = False):
     '''
     Plots the stellar mass function of the simulation at a given iteration, given
     the pyHALMA halo finder output. it and path can also be a list of iterations and paths, 
@@ -35,7 +35,7 @@ def stellar_mass_function(it, path='', L = 40.,
     Args:
         it: MASCLET iteration, can be a list to plot multiple simulations
         path: path to PyHALMA output, can be a list to plot multiple simulations
-        L: simulation box size in cMpc
+        L: simulation box size in cMpc, can be a list to plot multiple simulations
         figsize: figure size
         ylim: y-axis limits
         dpi: dots per inch
@@ -59,6 +59,9 @@ def stellar_mass_function(it, path='', L = 40.,
         spines_width: width of the ax spines
         plot_fit: if True, plots the fit from Ilbert et al A&A 2013
         nsigma: number of sigma for the Poissonian error
+        box: if None, all haloes considered, if (x_min, x_max, y_min, y_max, z_min, z_max) in Mpc
+                only haloes within the box are considered
+        bin_info: if True, prints the bin information in the plot
 
 
     Returns:
@@ -196,7 +199,7 @@ def stellar_mass_function(it, path='', L = 40.,
     ax.set_xlabel('$M_{\star}$ [$M_{\odot}$]', fontsize = axlabelsize)
     ax.set_ylabel('$\phi$ [Mpc]$^{-3}$ [dex]$^{-1}$', fontsize = axlabelsize)
     
-    #Check if it and path are lists 
+    #Check if it, path and L are lists 
     if type(it) is not list:
         its = [it]
     else:
@@ -206,6 +209,11 @@ def stellar_mass_function(it, path='', L = 40.,
         paths = [path]
     else:
         paths = path
+
+    if type(L) is not list:
+        Ls = [L]
+    else:
+        Ls = L
 
     assert type(its) is list or type(paths) is list, 'it and path should be both lists or both scalars of the same lenght'
 
@@ -221,21 +229,30 @@ def stellar_mass_function(it, path='', L = 40.,
     else:
         labels = label
 
-    assert len(its) == len(paths) == len(colors) == len(labels), 'it, path, color and label should have the same lenght'
+    assert len(its) == len(paths) == len(colors) == len(labels) == len(Ls), 'it, path, color, label and L should have the same lenght'
 
     # Assume the fit at z = z[first it]
     _, zeta_fit = read_halma.read_stellar_catalogue(it = its[0], path=paths[0], output_redshift=True, output_format='arrays')
 
     #Plot all the SMFs
-    for it2, path2, color2, label2 in zip(its, paths, colors, labels):
+    for it2, path2, color2, label2, L2 in zip(its, paths, colors, labels, Ls):
 
         #Load data
-        haloes, zeta = read_halma.read_stellar_catalogue(it = it2, path=path2, output_redshift=True, output_format='arrays')
+        if box is not None:
+            haloes, zeta = read_halma.read_stellar_catalogue(it = it2, path=path2, output_redshift=True, output_format='arrays',
+                                                             box = box)
+            box_vol = (box[1] - box[0]) * (box[3] - box[2]) * (box[5] - box[4])
+            
+        else:
+            haloes, zeta = read_halma.read_stellar_catalogue(it = it2, path=path2, output_redshift=True, output_format='arrays')
+            box_vol = L2**3
+
+        #masses
         logM_haloes = np.log10(haloes['M'])
 
         if all_bins_populated:
             #Estimate the number of bins using the "sqrt" method
-            Nbins = 20 + int(np.sqrt(logM_haloes.shape[0]))
+            Nbins = 20 + 2*int(np.sqrt(logM_haloes.shape[0]))
             #Find optimal binning
             bin_empty = True
             while bin_empty:
@@ -296,8 +313,8 @@ def stellar_mass_function(it, path='', L = 40.,
         err_phi = nsigma*np.sqrt(phi_intervals)
 
         #Normalize by volume and bin width
-        phi_intervals /= (L**3 * dlogM)
-        err_phi /= (L**3 * dlogM)
+        phi_intervals /= (box_vol * dlogM)
+        err_phi /= (box_vol * dlogM)
 
         ###### Plot
         #Limits
@@ -335,8 +352,17 @@ def stellar_mass_function(it, path='', L = 40.,
         ax.plot(M_fit, phi, color = 'black', label = label)
 
         #Poissonian error for the fit
-        err_fit = nsigma*np.sqrt(phi*L**3 * dlogM) / (L**3 * dlogM)
+        err_fit = nsigma*np.sqrt(phi*box_vol * dlogM) / (box_vol * dlogM)
         ax.fill_between(M_fit, phi - err_fit, phi + err_fit, color = 'black', alpha = 0.15)
+
+    if bin_info:
+        #Plot lower left corner the bin width
+        ax.text(0.05, 0.075, f'Bin width: {dlogM:.2f} dex', transform=ax.transAxes, fontsize=6, color='black')
+
+        #Plot number of haloes in each bin
+        for i, (m, p) in enumerate(zip(Mbins, phi_intervals)):
+            if p > 0:
+                ax.text(10**m, 1.3*ylim[0], f'{int(p*box_vol*dlogM):d}', fontsize=4.5, color='black', ha='center', va='bottom')
 
     ax.set_xscale('log')
     ax.set_yscale('log')
@@ -364,7 +390,7 @@ def cosmic_SFR_density(init_it, final_it, step, path='', L = 40.,
         final_it: final MASCLET iteration, can be a list to plot multiple simulations
         step: step between iterations
         path: path to MASCLET output, can be a list to plot multiple simulations
-        L: simulation box size in cMpc
+        L: simulation box size in cMpc, can be a list to plot multiple simulations
         figsize: figure size
         xlim: x-axis limits
         ylim: y-axis limits
@@ -422,6 +448,11 @@ def cosmic_SFR_density(init_it, final_it, step, path='', L = 40.,
     else:
         paths = path
 
+    if type(L) is not list:
+        Ls = [L]
+    else:
+        Ls = L
+
     assert type(init_its) is list or type(final_its) is list or type(paths) is list, \
           'init_it, final_it and path should be both lists or both scalars of the same lenght'
 
@@ -437,11 +468,11 @@ def cosmic_SFR_density(init_it, final_it, step, path='', L = 40.,
     else:
         labels = label
 
-    assert len(init_its) == len(final_its) == len(paths) == len(colors) == len(labels), \
+    assert len(init_its) == len(final_its) == len(paths) == len(colors) == len(labels) == len(Ls), \
             'init_it, final_it, path, color and label should have the same lenght'
 
     # Plot all the SFRDs
-    for init_it2, final_it2, path2, color2, label2 in zip(init_its, final_its, paths, colors, labels):
+    for init_it2, final_it2, path2, color2, label2, L2 in zip(init_its, final_its, paths, colors, labels, Ls):
 
         SFRdens = np.zeros(int((final_it2 - init_it2)/step + 1))
         z_array = np.zeros(int((final_it2 - init_it2)/step + 1))
@@ -477,7 +508,7 @@ def cosmic_SFR_density(init_it, final_it, step, path='', L = 40.,
             time_condition = st_age > (cosmo_time-1.1*dt)
 
             #SFR density in M_sun/yr/cMpc^3
-            SFRdens[i] = np.sum(st_mass[time_condition]) / (dt * L**3) / units.time_to_yr 
+            SFRdens[i] = np.sum(st_mass[time_condition]) / (dt * L2**3) / units.time_to_yr 
 
 
         if scatter:
@@ -494,6 +525,7 @@ def cosmic_SFR_density(init_it, final_it, step, path='', L = 40.,
     # z data
     z_madau = [0]*27
     z_oesch = [0]*2
+    z_harikane = [0]*3
 
     z_madau[0] = [0.01, 0.1]
     z_madau[1] = [0.2, 0.4]
@@ -526,9 +558,15 @@ def cosmic_SFR_density(init_it, final_it, step, path='', L = 40.,
     z_oesch[0] = [9.0, 9.0]
     z_oesch[1] = [10.0, 10.0]
 
+    z_harikane[0] = [8.90, 8.90]
+    z_harikane[1] = [10.04, 10.04]
+    z_harikane[2] = [11.97, 11.97]
+
+
     # SFRD data
     SFRD_madau = [0]*27
     SFRD_oesch = [0]*2
+    SFRD_harikane = [0]*3
 
     SFRD_madau[0] = [-1.82, 0.09, 0.02]
     SFRD_madau[1] = [-1.50, 0.05, 0.05]
@@ -561,10 +599,13 @@ def cosmic_SFR_density(init_it, final_it, step, path='', L = 40.,
     SFRD_oesch[0] = [-2.86, 0.19, 0.21]
     SFRD_oesch[1] = [-3.7, 0.7, 0.9]
 
+    SFRD_harikane[0] = [-2.94, 0.27, 0.23]
+    SFRD_harikane[1] = [-3.38, 0.39, 0.38]
+    SFRD_harikane[2] = [-3.59, 0.31, 0.23]
+
     #to numpy.array
     SFRD_madau = np.array(SFRD_madau)
     err_madau = np.zeros((len(SFRD_madau), 2))
-
     z_madau = np.array(z_madau)
     z_center = np.zeros(len(z_madau))
     z_err = np.zeros((len(SFRD_madau), 2))
@@ -588,27 +629,48 @@ def cosmic_SFR_density(init_it, final_it, step, path='', L = 40.,
         z_err_oesch[i,0] = abs(z_oesch[i,0]-z_center_oesch[i])
         z_err_oesch[i,1] = abs(z_oesch[i,1]-z_center_oesch[i])
 
+    SFRD_harikane = np.array(SFRD_harikane)
+    err_harikane = np.zeros((len(SFRD_harikane),2))
+    z_harikane = np.array(z_harikane)
+    z_center_harikane = np.zeros(len(z_harikane))
+    z_err_harikane = np.zeros((len(SFRD_harikane),2))
+    for i in range(len(z_harikane)):
+        z_center_harikane[i] = (z_harikane[i][0] + z_harikane[i][1])/2
+        err_harikane[i,0] = SFRD_harikane[i, 1]
+        err_harikane[i,1] = SFRD_harikane[i, 2]
+        z_err_harikane[i,0] = abs(z_harikane[i,0]-z_center_harikane[i])
+        z_err_harikane[i,1] = abs(z_harikane[i,1]-z_center_harikane[i])
 
-    ####################################################################
-    # Madau & Dickinson 2014 Obs. Data and Oesch et al 2014
-    ####################################################################
+
+    ##########################################################################
+    # Madau & Dickinson 2014 Obs. Data and Oesch et al 2014 and Harikane+2024
+    ##########################################################################
     if plot_obs:
         ax.errorbar(z_center, SFRD_madau.T[0], xerr = z_err.T, 
                     yerr = err_madau.T, fmt = '.', color = 'black', linewidth = 1, capsize = 3)
         ax.errorbar(z_center_oesch, SFRD_oesch.T[0], xerr = z_err_oesch.T, 
                     yerr = err_oesch.T, fmt = 's', color = 'fuchsia', linewidth = 1,label = 'Oesch+2014', capsize = 3)
+        ax.scatter(z_center_harikane, SFRD_harikane.T[0], marker = 10, color = 'red', linewidth = 1, label = 'Harikane+2024')
 
-    ##################################
-    # Madau & Dickinson 2014 Fit
-    ##################################
+    ##############################################
+    # Madau & Dickinson 2014 Fit and Harikane+2024
+    ##############################################
     if plot_fit:
-        def rho(z):
+        def rho_madau(z):
             return 0.015*(1+z)**2.7 / (1 + ((1+z)/2.9)**5.6)
 
-        z_fit = np.linspace(0, 10, 1000)
-        rho_fit = rho(z_fit)
+        def rho_harikane(z):
+            return 1/(61.7*(1+z)**-3.13 + 1.*10**(0.22*(1+z)) + 2.4*10**(0.5*(1+z) - 3.))
+        
+        z_fit_madau = np.linspace(0, 12, 1000)
+        rho_fit_madau = rho_madau(z_fit_madau)
 
-        ax.plot(z_fit, np.log10(rho_fit), color = 'black', label = 'Madau & Dickinson 2014', linestyle= 'dotted', linewidth = 2)
+        z_fit_harikane = np.linspace(0, 12, 1000)
+        rho_fit_harikane = rho_harikane(z_fit_harikane)
+
+        ax.plot(z_fit_madau, np.log10(rho_fit_madau), color = 'black', label = 'Madau & Dickinson 2014', linestyle= 'dotted', linewidth = 2)
+        ax.plot(z_fit_harikane, np.log10(rho_fit_harikane), color = 'black', label = 'Harikane+2022', linestyle= '--', linewidth = 2)
+
     ##################################
 
     ax.legend(fontsize = 'small', loc = 'best')
