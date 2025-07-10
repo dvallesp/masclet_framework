@@ -63,18 +63,21 @@ def read_void_catalogue(it, path='', output_format = 'dictionaries', read_region
             levels = []
             for ilev in range(nlev):
                 this_level = {}
-                lev, ncubes, nvoids, nparents, FF = void_catalogue.readline().split()
+                lev, ncubes, nvoids, nparents, FF, meandens = void_catalogue.readline().split()
                 lev = int(lev)
                 ncubes = int(ncubes)
                 nvoids = int(nvoids)
                 nparents = int(nparents)
                 FF = float(FF)
+                meandens = float(meandens)
+                
                 this_level['level'] = lev
                 this_level['ncubes'] = ncubes
                 this_level['nvoids'] = nvoids
                 this_level['nparents'] = nparents
                 this_level['FF'] = FF
-                
+                this_level['meandens'] = meandens
+             
                 # read region
                 if read_region is not None:
                     # array marking cells in voids
@@ -305,7 +308,7 @@ def read_void_map(it, path='', output_marca=True, output_deltaTot=True, output_d
     nlev = void_details['nlev']
     levmin = void_details['levmin']
     levmax = void_details['levmax']
-    nmax = void_details['nmax'] #l = 0 grid size !!!
+    nmax = void_details['nmax'] #levmin grid size !!!
     nmay = void_details['nmay']
     nmaz = void_details['nmaz']
     L0 = void_details['L0']
@@ -318,23 +321,23 @@ def read_void_map(it, path='', output_marca=True, output_deltaTot=True, output_d
         div = []
 
     with FF(os.path.join(path, f'map{it:05d}')) as f:
-        for ilev in range(levmin, levmax+1):
-            nx_lev = int(nmax * 2**(ilev-levmin))
-            ny_lev = int(nmay * 2**(ilev-levmin))
-            nz_lev = int(nmaz * 2**(ilev-levmin))
+        for ilev in range(nlev):
+            nx_lev = int(nmax * 2**ilev)
+            ny_lev = int(nmay * 2**ilev)
+            nz_lev = int(nmaz * 2**ilev)
             if output_marca:
-                marca.append(f.read_ints('i4').reshape((nx_lev, ny_lev, nz_lev)).T)
+                marca.append(f.read_ints('i4').reshape((nx_lev, ny_lev, nz_lev), order='F'))
             else:
                 f.read_ints('i4')
 
             if output_deltaTot:
-                deltaTot.append(f.read_reals('f4').reshape((nx_lev, ny_lev, nz_lev)).T)
+                deltaTot.append(f.read_reals('f4').reshape((nx_lev, ny_lev, nz_lev), order='F'))
             else:
                 f.read_reals('f4')
 
 
             if output_div:
-                div.append(f.read_reals('f4').reshape((nx_lev, ny_lev, nz_lev)).T)
+                div.append(f.read_reals('f4').reshape((nx_lev, ny_lev, nz_lev), order='F'))
             else:
                 f.read_reals('f4')
                 
