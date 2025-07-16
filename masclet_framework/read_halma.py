@@ -18,7 +18,8 @@ import numpy as np
 import os
 
 # FUNCTIONS DEFINED IN THIS MODULE
-def read_stellar_catalogue(it, path='', output_format = 'dictionaries', output_redshift = False, min_mass = None):
+def read_stellar_catalogue(it, path='', output_format = 'dictionaries', output_redshift = False, 
+                           min_mass = None, ret_it_data = False, box = None):
     """
     Reads the stellar_haloes files, containing the stellar haloes catalogue of the pyHALMA halo finder.
     
@@ -29,6 +30,9 @@ def read_stellar_catalogue(it, path='', output_format = 'dictionaries', output_r
         - output_redshift: whether to output the redshift of the snapshot, 
                            after the halo catalogue (bool)
         - min_mass: minimum mass of the haloes to be output (float)
+        - ret_it_data: whether to return the iteration data (bool)
+        - box: if None, all haloes considered, if (x_min, x_max, y_min, y_max, z_min, z_max) 
+                only haloes within the box are considered (in Mpc)
 
     Returns:
         - if output_format='dictionaries': list of dictionaries, one per halo
@@ -51,6 +55,10 @@ def read_stellar_catalogue(it, path='', output_format = 'dictionaries', output_r
         nhal = int(nhal)
         nparhal = int(nparhal)
         halma_catalogue.readline()
+
+        it_data = {'it_halma': it_halma, 'it_masclet': it_masclet, 
+                   'zeta': zeta, 'cosmo_time': cosmo_time, 'nhal': nhal,
+                   'nparhal': nparhal}
 
         # Halo data
         halma_catalogue.readline()
@@ -80,86 +88,97 @@ def read_stellar_catalogue(it, path='', output_format = 'dictionaries', output_r
             halo['Mhotgas'] = data_line[15]
             halo['Mcoldgas'] = data_line[16]
             halo['Msfr'] = data_line[17]
-            halo['Rmax'] = data_line[18]
-            halo['R'] = data_line[19]
-            halo['R_1d'] = data_line[20]
-            halo['R_1dx'] = data_line[21]
-            halo['R_1dy'] = data_line[22]
-            halo['R_1dz'] = data_line[23]
-            halo['sigma_v'] = data_line[24]
-            halo['sigma_v_1d'] = data_line[25]
-            halo['sigma_v_1dx'] = data_line[26]
-            halo['sigma_v_1dy'] = data_line[27]
-            halo['sigma_v_1dz'] = data_line[28]
-            halo['L'] = data_line[29]
-            halo['vx'] = data_line[30]
-            halo['vy'] = data_line[31]
-            halo['vz'] = data_line[32]
-            halo['father1'] = int(data_line[33])
-            halo['father2'] = int(data_line[34])
-            halo['nmerg'] = int(data_line[35])
-            halo['mergType'] = int(data_line[36])
-            halo['age_m'] = data_line[37]
-            halo['age'] = data_line[38]
-            halo['Z_m'] = data_line[39]
-            halo['Z'] = data_line[40]
-            halo['Vsigma'] = data_line[41]
-            halo['lambda'] = data_line[42]
-            halo['kin_morph'] = data_line[43]
-            halo['v_TF'] = data_line[44]
-            halo['a'] = data_line[45]
-            halo['b'] = data_line[46]
-            halo['c'] = data_line[47]
-            halo['sersic'] = data_line[48]
-            halo['lum_u'] = data_line[49]
-            halo['lum_g'] = data_line[50]
-            halo['lum_r'] = data_line[51]
-            halo['lum_i'] = data_line[52]
-            halo['sb_u'] = data_line[53]
-            halo['sb_g'] = data_line[54]
-            halo['sb_r'] = data_line[55]
-            halo['sb_i'] = data_line[56]
-            halo['ur_color'] = data_line[57]
-            halo['gr_color'] = data_line[58]
-            halo['bh_mass'] = data_line[59]
-            halo['asohf_ID'] = int(data_line[60])
-            halo['asohf_mass'] = data_line[61]
-            halo['asohf_Rvir'] = data_line[62]
-            halo['darkmatter_mass'] = data_line[63]
+            halo['Min'] = data_line[18]
+            halo['Rmax'] = data_line[19]
+            halo['R'] = data_line[20]
+            halo['R_1d'] = data_line[21]
+            halo['R_1dx'] = data_line[22]
+            halo['R_1dy'] = data_line[23]
+            halo['R_1dz'] = data_line[24]
+            halo['sigma_v'] = data_line[25]
+            halo['sigma_v_1d'] = data_line[26]
+            halo['sigma_v_1dx'] = data_line[27]
+            halo['sigma_v_1dy'] = data_line[28]
+            halo['sigma_v_1dz'] = data_line[29]
+            halo['L'] = data_line[30]
+            halo['Lx'] = data_line[31]
+            halo['Ly'] = data_line[32]
+            halo['Lz'] = data_line[33]
+            halo['vx'] = data_line[34]
+            halo['vy'] = data_line[35]
+            halo['vz'] = data_line[36]
+            halo['father1'] = int(data_line[37])
+            halo['father2'] = int(data_line[38])
+            halo['nmerg'] = int(data_line[39])
+            halo['mergType'] = int(data_line[40])
+            halo['age_m'] = data_line[41]
+            halo['age'] = data_line[42]
+            halo['Z_m'] = data_line[43]
+            halo['Z'] = data_line[44]
+            halo['Vsigma'] = data_line[45]
+            halo['lambda'] = data_line[46]
+            halo['kin_morph'] = data_line[47]
+            halo['v_TF'] = data_line[48]
+            halo['a'] = data_line[49]
+            halo['b'] = data_line[50]
+            halo['c'] = data_line[51]
+            halo['sersic'] = data_line[52]
+            halo['lum_u'] = data_line[53]
+            halo['lum_g'] = data_line[54]
+            halo['lum_r'] = data_line[55]
+            halo['lum_i'] = data_line[56]
+            halo['sb_u'] = data_line[57]
+            halo['sb_g'] = data_line[58]
+            halo['sb_r'] = data_line[59]
+            halo['sb_i'] = data_line[60]
+            halo['ur_color'] = data_line[61]
+            halo['gr_color'] = data_line[62]
+            halo['bh_mass'] = data_line[63]
+            halo['asohf_ID'] = int(data_line[64])
+            halo['asohf_mass'] = data_line[65]
+            halo['asohf_Rvir'] = data_line[66]
+            halo['darkmatter_mass'] = data_line[67]
             haloes.append(halo)
 
     ####################################
     ####################################
-            
+    output = []
+    
     if min_mass is not None:
         haloes=[halo for halo in haloes if halo['M']>min_mass]
 
+    if box is not None:
+        x_min, x_max, y_min, y_max, z_min, z_max = box
+        haloes = [halo for halo in haloes if (x_min <= halo['xcm']*1e-3 <= x_max and
+                                              y_min <= halo['ycm']*1e-3 <= y_max and
+                                              z_min <= halo['zcm']*1e-3 <= z_max)]
+
     if output_format=='dictionaries':
-        if output_redshift:
-            return haloes, zeta
-        else:
-            return haloes
-        
+        output.append(haloes)
     elif output_format=='arrays':
-        if output_redshift:
-            if len(haloes)==0:
-                return {}, zeta
-            else:
-                return {k: np.array([h[k] for h in haloes]) for k in haloes[0].keys()}, zeta
-        else:
-            if len(haloes)==0:
-                return {}
-            else:
-                return {k: np.array([h[k] for h in haloes]) for k in haloes[0].keys()}
+        output.append({k: np.array([h[k] for h in haloes]) for k in haloes[0].keys()})
 
+    if output_redshift:
+        output.append(zeta)
 
-def read_particles_npy(it, path = ''):
+    if ret_it_data:
+        output.append(it_data)
+
+    output = tuple(output)
+
+    if len(output)==1:
+        output = output[0]
+
+    return output
+
+def read_particles_npy(it, path = '', min_mass = None):
     """
     Reads the halma/masclet_pyfof npy binary catalogue containing which particles are in haloes
 
     Args:
         it: MASCLET ITERATION
         path: path of HALMA catalogue 
+        min_mass: minimum mass of the haloes to be output (float)
 
     Returns: list (lenght number of haloes) of 1d numpy arrays (of lenght number of particles of each halo) 
             containing particle indices for fast read_masclet numpy arrays indexing
@@ -186,4 +205,11 @@ def read_particles_npy(it, path = ''):
     #split the all_particles_in_haloes array into nhal arrays, one for each halo
     groups = np.split(array_groups, npart_sum)
 
+    #Clean empty arrays
+    groups = [group for group in groups if len(group)>0]
+
+    #Filter by mass
+    if min_mass is not None:
+        groups = [group for group, halo in zip(groups, haloes_dict) if halo['M']>min_mass]
+        
     return groups

@@ -82,7 +82,9 @@ def particle2grid(field, x, y, z, Lx, Ly, Lz, nx, ny, nz, k = 32, ncores = 1):
         
     Author: Óscar Monllor
     '''
-    
+    #Ensure Field is float64
+    field = field.astype(np.float64)
+
     # First, build KDTree
     data = np.array((x, y, z)).T
     tree = KDTree(data)
@@ -121,7 +123,7 @@ def particle2grid(field, x, y, z, Lx, Ly, Lz, nx, ny, nz, k = 32, ncores = 1):
     def SPH_kernel(r, h):
         q = r/h
         if q < 1:
-            W = 1 - 1.5 * q**2 + 0.75 * q**3
+            W = 1 - 1.5 * q**2* (1 - 0.5 * q)
         elif q < 2:
             W = 0.25 * (2 - q)**3
         else:
@@ -147,9 +149,9 @@ def particle2grid(field, x, y, z, Lx, Ly, Lz, nx, ny, nz, k = 32, ncores = 1):
 
             # extent of the particle kernel
             h = hpart[ipart]
-            x_extent = int(h/dx)
-            y_extent = int(h/dy)
-            z_extent = int(h/dz)
+            x_extent = int(2*h/dx+ 0.5)
+            y_extent = int(2*h/dy+ 0.5)
+            z_extent = int(2*h/dz+ 0.5)
 
             # for each particle, find the norm
             norm = 0.
@@ -160,11 +162,12 @@ def particle2grid(field, x, y, z, Lx, Ly, Lz, nx, ny, nz, k = 32, ncores = 1):
                             for kz in range(k - z_extent, k + z_extent + 1):
                                 if kz >= 0 and kz < nz:
                                     # distance to the particle
-                                    r = np.sqrt((ix*dx - x[ipart])**2 + (jy*dy - y[ipart])**2 + (kz*dz - z[ipart])**2)
+                                    r = np.sqrt(((ix+0.5)*dx - x[ipart])**2 + ((jy+0.5)*dy - y[ipart])**2 + ((kz+0.5)*dz - z[ipart])**2)
                                     # kernel value
                                     W = SPH_kernel(r, h)
                                     #
                                     norm += W
+
 
             # Particle only contributes to its own cell
             if norm == 0.:
@@ -179,7 +182,7 @@ def particle2grid(field, x, y, z, Lx, Ly, Lz, nx, ny, nz, k = 32, ncores = 1):
                             for kz in range(k - z_extent, k + z_extent + 1):
                                 if kz >= 0 and kz < nz:
                                     # distance to the particle
-                                    r = np.sqrt((ix*dx - x[ipart])**2 + (jy*dy - y[ipart])**2 + (kz*dz - z[ipart])**2)
+                                    r = np.sqrt(((ix+0.5)*dx - x[ipart])**2 + ((jy+0.5)*dy - y[ipart])**2 + ((kz+0.5)*dz - z[ipart])**2)
                                     # kernel value
                                     W = SPH_kernel(r, h)
                                     #
