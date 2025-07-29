@@ -854,12 +854,12 @@ def slice_map(field, normal_vector, north_vector,
         kept_patches = np.ones(npatch.sum()+1, dtype=bool)
 
     levels = tools.create_vector_levels(npatch)
-
+    #print(type(levels), levels.shape)
     #print('NCORES=', get_num_threads())
 
     # Compute the grid
     # Notation: x, y, z are the coordinates in the simulation box, while N, E are the coordinates in the slice
-    @njit(parallel=True, fastmath=True)
+    #@njit(parallel=True, fastmath=True)
     def parallelize(nN, nE, xc, yc, zc, resN, resE, north_vector, east_vector, size, nmax, levels, kept_patches, field):
         xgrid = np.zeros((nN, nE))
         ygrid = np.zeros((nN, nE))
@@ -885,7 +885,7 @@ def slice_map(field, normal_vector, north_vector,
             lmax = nl
         if lmax<0:
             lmax = 0
-        cellsizes = size/nmax/2**levels
+        cellsizes = size/nmax/2**levels#.astype('f4')
         
 
         #for i in tqdm(range(nN), disable=not use_tqdm):
@@ -926,7 +926,7 @@ def slice_map(field, normal_vector, north_vector,
                 else:
                     if not kept_patches[ip]:
                         raise ValueError("Patch not read!!!")
-
+                    #assert isinstance(ip, int)
                     dxip = cellsizes[ip]
                     dxx=(xij-(patchrx[ip]+(ix-0.5)*dxip))/dxip
                     dyy=(yij-(patchry[ip]+(jy-0.5)*dxip))/dxip
