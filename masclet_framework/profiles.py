@@ -495,7 +495,8 @@ def dir_profile_particles(particles_field, cx,cy,cz,size, tree=None,
 def radial_profile_particles(particles_field, cx,cy,cz,size, tree=None,
                 binsr=None, rmin=None, rmax=None, dex_rbins=None, delta_rbins=None,
                 num_neigh=64, force_resol=None, normalize='volume', weight=None,
-                use_tqdm=False, average="mean", Ncostheta=20, Nphi=20):
+                use_tqdm=False, average="mean", Ncostheta=20, Nphi=20,
+                preop=None, postop=None):
     """
     Computes the radially-average profile of a field defined by a set of particles around a given center (cx,cy,cz). 
     The bins can be specified in three ways:
@@ -526,6 +527,11 @@ def radial_profile_particles(particles_field, cx,cy,cz,size, tree=None,
         - average: type of average to use to combine the directional profiles. Must be "mean", "median" or "geometric".
         - Ncostheta: number of bins in the cos(theta) direction.
         - Nphi: number of bins in the phi direction.
+        - preop: function to apply to the directional profiles before the directional averaging. Should work with numpy arrays.
+            This can be applied, e.g., to compute a mean profile of rho^2, instead of rho.
+            Default: None (no operation is performed).
+        - postop: function to apply to the directional profiles after the directional averaging (inverse of preop, if any). Should work with numpy arrays.
+            Default: None (no operation is performed).
     Returns:
         - profile: radially-averaged profile
         - rrr: radial bins
@@ -535,6 +541,9 @@ def radial_profile_particles(particles_field, cx,cy,cz,size, tree=None,
                 binsr=binsr, rmin=rmin, rmax=rmax, dex_rbins=dex_rbins, delta_rbins=delta_rbins,
                 num_neigh=num_neigh, force_resol=force_resol, normalize=normalize, weight=weight,
                 use_tqdm=use_tqdm, binsphi=Nphi, binscostheta=Ncostheta)
+    
+    if preop is not None:
+        dir_profiles = preop(dir_profiles)
 
     # Combine directional profiles
     if average=="mean":
@@ -548,6 +557,9 @@ def radial_profile_particles(particles_field, cx,cy,cz,size, tree=None,
         profile={'perc'+str(p): np.percentile(dir_profiles, p, axis=(0,1)) for p in average}
     else:
         raise ValueError('Wrong specification of average')
+    
+    if postop is not None:
+        profile = postop(profile)
 
     return profile, rrr
 
