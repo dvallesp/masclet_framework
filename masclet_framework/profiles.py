@@ -536,27 +536,67 @@ def radial_profile_particles(particles_field, cx,cy,cz,size, tree=None,
         - profile: radially-averaged profile
         - rrr: radial bins
     """
+    if normalize == 'weight' and weight is None:
+        raise ValueError('If normalize="weight", weight must be specified')
+    if normalize != 'weight' and weight is not None:
+        raise ValueError('If weight is specified, normalize must be "weight"')
 
-    dir_profiles, rrr, vec_costheta, vec_phi = dir_profile_particles(particles_field, cx, cy, cz, size, tree=tree,
-                binsr=binsr, rmin=rmin, rmax=rmax, dex_rbins=dex_rbins, delta_rbins=delta_rbins,
-                num_neigh=num_neigh, force_resol=force_resol, normalize=normalize, weight=weight,
-                use_tqdm=use_tqdm, binsphi=Nphi, binscostheta=Ncostheta)
+    if normalize != 'weight':
+        dir_profiles, rrr, vec_costheta, vec_phi = dir_profile_particles(particles_field, cx, cy, cz, size, tree=tree,
+                    binsr=binsr, rmin=rmin, rmax=rmax, dex_rbins=dex_rbins, delta_rbins=delta_rbins,
+                    num_neigh=num_neigh, force_resol=force_resol, normalize=normalize, weight=weight,
+                    use_tqdm=use_tqdm, binsphi=Nphi, binscostheta=Ncostheta)
+    else:
+        dir_profiles, rrr, vec_costheta, vec_phi = dir_profile_particles(particles_field, cx, cy, cz, size, tree=tree,
+                    binsr=binsr, rmin=rmin, rmax=rmax, dex_rbins=dex_rbins, delta_rbins=delta_rbins,
+                    num_neigh=num_neigh, force_resol=force_resol, normalize=normalize, weight=weight,
+                    use_tqdm=use_tqdm, binsphi=Nphi, binscostheta=Ncostheta)
+        dir_profiles_weight, rrr, vec_costheta, vec_phi = dir_profile_particles(weight, cx, cy, cz, size, tree=tree,
+                    binsr=binsr, rmin=rmin, rmax=rmax, dex_rbins=dex_rbins, delta_rbins=delta_rbins,
+                    num_neigh=num_neigh, force_resol=force_resol, normalize='number', weight=None,
+                    use_tqdm=use_tqdm, binsphi=Nphi, binscostheta=Ncostheta)
     
     if preop is not None:
         dir_profiles = preop(dir_profiles)
 
     # Combine directional profiles
-    if average=="mean":
-        profile=np.mean(dir_profiles,axis=(0,1))
-    elif average=="median":
-        profile=np.median(dir_profiles,axis=(0,1))
-    elif average=="geometric":
-        profile=np.exp(np.mean(np.log(dir_profiles),axis=(0,1)))
-    elif type(average) is list or type(average) is np.ndarray: # list of percentiles
-        assert all([0<=p<=100 for p in average]), "Percentiles must be between 0 and 100"
-        profile={'perc'+str(p): np.percentile(dir_profiles, p, axis=(0,1)) for p in average}
-    else:
-        raise ValueError('Wrong specification of average')
+    #if average=="mean":
+    #    profile=np.mean(dir_profiles,axis=(0,1))
+    #elif average=="median":
+    #    profile=np.median(dir_profiles,axis=(0,1))
+    #elif average=="geometric":
+    #    profile=np.exp(np.mean(np.log(dir_profiles),axis=(0,1)))
+    #elif type(average) is list or type(average) is np.ndarray: # list of percentiles
+    #    assert all([0<=p<=100 for p in average]), "Percentiles must be between 0 and 100"
+    #    profile={'perc'+str(p): np.percentile(dir_profiles, p, axis=(0,1)) for p in average}
+    #else:
+    #    raise ValueError('Wrong specification of average')
+
+    # Combine directional profiles
+    if normalize != 'weight':
+        if average=="mean":
+            profile=np.mean(dir_profiles,axis=(0,1))
+        elif average=="median":
+            profile=np.median(dir_profiles,axis=(0,1))
+        elif average=="geometric":
+            profile=np.exp(np.mean(np.log(dir_profiles),axis=(0,1)))
+        elif type(average) is list or type(average) is np.ndarray: # list of percentiles
+            assert all([0<=p<=100 for p in average]), "Percentiles must be between 0 and 100"
+            profile={'perc'+str(p): np.percentile(dir_profiles, p, axis=(0,1)) for p in average}
+        else:
+            raise ValueError('Wrong specification of average')
+    else: # weight_field is not None --> weighted average
+        if average=="mean":
+            profile = np.mean(dir_profiles * dir_profiles_weight, axis=(0,1)) / np.mean(dir_profiles_weight, axis=(0,1))
+        elif average=="median":
+            profile = stats.weighted_median(dir_profiles, dir_profiles_weight, axes=(0,1))
+        elif average=="geometric":
+            profile = np.exp(np.mean(np.log(dir_profiles * dir_profiles_weight), axis=(0,1)) / np.mean(np.log(dir_profiles_weight), axis=(0,1)))
+        elif type(average) is list or type(average) is np.ndarray: # list of percentiles
+            assert all([0<=p<=100 for p in average]), "Percentiles must be between 0 and 100"
+            profile={'perc'+str(p): stats.weighted_percentile(dir_profiles, dir_profiles_weight, p, axes=(0,1)) for p in average}
+        else:
+            raise ValueError('Wrong specification of average')
     
     if postop is not None:
         profile = postop(profile)
