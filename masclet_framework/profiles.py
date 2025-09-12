@@ -437,7 +437,7 @@ def dir_profile_particles(particles_field, cx,cy,cz,size, tree=None,
     # Check normalization is properly specified
     if normalize not in ['volume','number','weight']:
         raise ValueError('Wrong specification of normalize')
-    elif normalize is 'weight' and (type(weight) is not np.ndarray or weight.size != particles_field.size):
+    elif normalize == 'weight' and (type(weight) is not np.ndarray or weight.size != particles_field.size):
         raise ValueError('Wrong specification of weight')
 
     # Check tree is properly specified
@@ -495,7 +495,7 @@ def dir_profile_particles(particles_field, cx,cy,cz,size, tree=None,
 def radial_profile_particles(particles_field, cx,cy,cz,size, tree=None,
                 binsr=None, rmin=None, rmax=None, dex_rbins=None, delta_rbins=None,
                 num_neigh=64, force_resol=None, normalize='volume', weight=None,
-                use_tqdm=False, average="mean", Ncostheta=20, Nphi=20,
+                is_weight_additive=True, use_tqdm=False, average="mean", Ncostheta=20, Nphi=20,
                 preop=None, postop=None):
     """
     Computes the radially-average profile of a field defined by a set of particles around a given center (cx,cy,cz). 
@@ -523,6 +523,8 @@ def radial_profile_particles(particles_field, cx,cy,cz,size, tree=None,
             by a weighting field ("weight"). If "weight" is specified, the argument "weight" must be specified as well.
         - weight: weighting field to use to normalize the profile. Must be a one-dimensional numpy array, the same size as particles_field.
             Only used if normalize="weight".
+        - is_weight_additive: if True, the weight field is assumed to be additive (e.g., mass). If False, it is assumed to be non-additive (e.g., density).
+            Only used if normalize="weight".
         - use_tqdm: whether to use tqdm to show a progress bar or not. Default: False.
         - average: type of average to use to combine the directional profiles. Must be "mean", "median" or "geometric".
         - Ncostheta: number of bins in the cos(theta) direction.
@@ -536,41 +538,20 @@ def radial_profile_particles(particles_field, cx,cy,cz,size, tree=None,
         - profile: radially-averaged profile
         - rrr: radial bins
     """
-    if normalize == 'weight' and weight is None:
-        raise ValueError('If normalize="weight", weight must be specified')
-    if normalize != 'weight' and weight is not None:
-        raise ValueError('If weight is specified, normalize must be "weight"')
 
-    if normalize != 'weight':
-        dir_profiles, rrr, vec_costheta, vec_phi = dir_profile_particles(particles_field, cx, cy, cz, size, tree=tree,
-                    binsr=binsr, rmin=rmin, rmax=rmax, dex_rbins=dex_rbins, delta_rbins=delta_rbins,
-                    num_neigh=num_neigh, force_resol=force_resol, normalize=normalize, weight=weight,
-                    use_tqdm=use_tqdm, binsphi=Nphi, binscostheta=Ncostheta)
-    else:
-        dir_profiles, rrr, vec_costheta, vec_phi = dir_profile_particles(particles_field, cx, cy, cz, size, tree=tree,
-                    binsr=binsr, rmin=rmin, rmax=rmax, dex_rbins=dex_rbins, delta_rbins=delta_rbins,
-                    num_neigh=num_neigh, force_resol=force_resol, normalize=normalize, weight=weight,
-                    use_tqdm=use_tqdm, binsphi=Nphi, binscostheta=Ncostheta)
+    dir_profiles, rrr, vec_costheta, vec_phi = dir_profile_particles(particles_field, cx, cy, cz, size, tree=tree,
+                binsr=binsr, rmin=rmin, rmax=rmax, dex_rbins=dex_rbins, delta_rbins=delta_rbins,
+                num_neigh=num_neigh, force_resol=force_resol, normalize=normalize, weight=weight,
+                use_tqdm=use_tqdm, binsphi=Nphi, binscostheta=Ncostheta)
+
+    if normalize == 'weight':
         dir_profiles_weight, rrr, vec_costheta, vec_phi = dir_profile_particles(weight, cx, cy, cz, size, tree=tree,
-                    binsr=binsr, rmin=rmin, rmax=rmax, dex_rbins=dex_rbins, delta_rbins=delta_rbins,
-                    num_neigh=num_neigh, force_resol=force_resol, normalize='number', weight=None,
-                    use_tqdm=use_tqdm, binsphi=Nphi, binscostheta=Ncostheta)
-    
+                binsr=binsr, rmin=rmin, rmax=rmax, dex_rbins=dex_rbins, delta_rbins=delta_rbins,
+                num_neigh=num_neigh, force_resol=force_resol, normalize='volume' if is_weight_additive else 'number',
+                use_tqdm=use_tqdm, binsphi=Nphi, binscostheta=Ncostheta)
+
     if preop is not None:
         dir_profiles = preop(dir_profiles)
-
-    # Combine directional profiles
-    #if average=="mean":
-    #    profile=np.mean(dir_profiles,axis=(0,1))
-    #elif average=="median":
-    #    profile=np.median(dir_profiles,axis=(0,1))
-    #elif average=="geometric":
-    #    profile=np.exp(np.mean(np.log(dir_profiles),axis=(0,1)))
-    #elif type(average) is list or type(average) is np.ndarray: # list of percentiles
-    #    assert all([0<=p<=100 for p in average]), "Percentiles must be between 0 and 100"
-    #    profile={'perc'+str(p): np.percentile(dir_profiles, p, axis=(0,1)) for p in average}
-    #else:
-    #    raise ValueError('Wrong specification of average')
 
     # Combine directional profiles
     if normalize != 'weight':
@@ -585,7 +566,7 @@ def radial_profile_particles(particles_field, cx,cy,cz,size, tree=None,
             profile={'perc'+str(p): np.percentile(dir_profiles, p, axis=(0,1)) for p in average}
         else:
             raise ValueError('Wrong specification of average')
-    else: # weight_field is not None --> weighted average
+    else: # normalize == 'weight' --> weighted average
         if average=="mean":
             profile = np.mean(dir_profiles * dir_profiles_weight, axis=(0,1)) / np.mean(dir_profiles_weight, axis=(0,1))
         elif average=="median":
