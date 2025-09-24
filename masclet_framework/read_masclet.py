@@ -1548,6 +1548,7 @@ def lowlevel_read_clst(it, path='', parameters_path='', digits=5, max_refined_le
                         delta_star.append(np.reshape(read_record(f, dtype='f4'), (patchnx[ipatch], patchny[ipatch], patchnz[ipatch]), 'F'))
                     else:
                         skip_record(f)
+                        delta_star.append(0)
             else:
                 length_field=0
                 for ipatch in range(npatch[0:l].sum() + 1, npatch[0:l + 1].sum() + 1):
