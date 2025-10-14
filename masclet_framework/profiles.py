@@ -737,10 +737,11 @@ def stack_profiles(list_r, list_profiles, stacking_method='median', rmin=None, r
         output_is_dict = True
 
     if logstack:
-        stacked_profile = 10**stacked_profile
-        if output_is_dict:
-            stacked_profile = {k: 10**v for k,v in stacked_profile.items()}
-        
+        #stacked_profile = 10**stacked_profile
+        if not output_is_dict:
+            stacked_profile = 10**stacked_profile 
+        else:
+            stacked_profile = {k: 10**v for k,v in stacked_profile.items()} 
     return r, stacked_profile
 
 
