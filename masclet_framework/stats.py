@@ -20,6 +20,7 @@ import emcee
 from masclet_framework import graphics
 from multiprocessing import Pool
 from scipy.stats import gaussian_kde
+from scipy.optimize import brentq
 import statsmodels.api as sm
 from sklearn.preprocessing import PolynomialFeatures
 from scipy import odr
@@ -414,6 +415,97 @@ def MCMC_get_autocorrelationtime(sampler):
     """
     return sampler.get_autocorr_time()
 
+def _find_map_from_emcee(samples, log_probs):
+    # samples: shape (n_samples, ndim)
+    # log_probs: shape (n_samples,)
+    idx = np.argmax(log_probs)
+    return samples[idx], log_probs[idx]
+
+def _conditional_1sigma_intervals(logpost, theta_map, logp_map=None, i_bounds=None,
+                                 init_step=1e-2, max_expand=50, delta_logp=0.5):
+    """
+    logpost: callable(theta) -> log posterior
+    theta_map: array(ndim)
+    logp_map: optional precomputed logpost(theta_map)
+    i_bounds: list of (low, high) per dim or None
+    Returns: list of (lo_i, hi_i) for each parameter i using Δlogp = 0.5 with others fixed
+    """
+    theta_map = np.asarray(theta_map, dtype=float)
+    if logp_map is None:
+        logp_map = logpost(theta_map)
+    target = logp_map - delta_logp
+    ndim = theta_map.size
+    intervals = []
+
+    for i in range(ndim):
+        # función 1D con demás parámetros fijos
+        def g(x):
+            th = theta_map.copy()
+            th[i] = x
+            return logpost(th) - target
+
+        # elegir un paso inicial relativo a la escala del parámetro
+        step = init_step * (abs(theta_map[i]) + 1.0)
+
+        # buscar raíz a la derecha
+        x0 = theta_map[i]
+        xr_lo, xr_hi = x0, x0 + step
+        k = 0
+        # expandir hasta que haya cambio de signo o se alcance un tope razonable
+        while k < max_expand:
+            gr_lo, gr_hi = g(xr_lo), g(xr_hi)
+            if np.isnan(gr_lo) or np.isnan(gr_hi):
+                break
+            if gr_lo * gr_hi <= 0:
+                try:
+                    xr = brentq(g, xr_lo, xr_hi)
+                except ValueError:
+                    xr = np.nan
+                break
+            # expandir
+            xr_lo, xr_hi = xr_hi, xr_hi + step
+            step *= 1.7
+            # respetar límites si hay
+            if i_bounds is not None and i_bounds[i] is not None:
+                low, high = i_bounds[i]
+                xr_lo = max(xr_lo, low)
+                xr_hi = min(xr_hi, high)
+                if xr_hi <= xr_lo:
+                    break
+            k += 1
+        else:
+            xr = np.nan  # no encontrado
+
+        # buscar raíz a la izquierda
+        step = init_step * (abs(theta_map[i]) + 1.0)
+        xl_hi, xl_lo = x0, x0 - step
+        k = 0
+        while k < max_expand:
+            gl_lo, gl_hi = g(xl_lo), g(xl_hi)
+            if np.isnan(gl_lo) or np.isnan(gl_hi):
+                break
+            if gl_lo * gl_hi <= 0:
+                try:
+                    xl = brentq(g, xl_lo, xl_hi)
+                except ValueError:
+                    xl = np.nan
+                break
+            # expandir
+            xl_hi, xl_lo = xl_lo, xl_lo - step
+            step *= 1.7
+            if i_bounds is not None and i_bounds[i] is not None:
+                low, high = i_bounds[i]
+                xl_lo = max(xl_lo, low)
+                xl_hi = min(xl_hi, high)
+                if xl_hi <= xl_lo:
+                    break
+            k += 1
+        else:
+            xl = np.nan
+
+        intervals.append((xl, xr))
+    return intervals
+
 
 def MCMC_parameter_estimation(sampler, parameter_type='mean', uncertainty_type='std', marginalize_over_variables=None):
     """
@@ -421,9 +513,21 @@ def MCMC_parameter_estimation(sampler, parameter_type='mean', uncertainty_type='
 
     Args:
         sampler: the emcee sampler object, containing the MCMC chain
-        parameter_type: the way to compute the parameter. Options are 'mean' or 'mode'.
+        parameter_type: the way to compute the parameter. Options are:
+            - 'mean': the mean over the samples, i.e. the expected value of each parameter
+            - 'mode': the mode of the samples, i.e. the value in the whole parametric space that maximizes 
+                    the posterior probability. For flat priors, this is the maximum likelihood estimate.
+            - 'mode_parameterwise': the mode of each parameter independently. NOTE: this is generally not a good fit.
         uncertainty_type: the type of uncertainty to compute. 
-            'std' for standard deviation, [q1, q2] for quantiles q1 and q2 (per 1.)
+            - 'std' for standard deviation
+            - [q1, q2] for quantiles q1 and q2 (per 1.)
+            - ('hpd', cred_mass) for highest posterior density interval, i.e., for the smallest interval 
+                containing the fraction cred_mass of the samples. (0 < cred_mass < 1)
+            - ('conditional_from_mode', 0.5): the conditional 1-sigma interval around the mode, i.e., the interval
+                where the log-posterior decreases by 0.5 from the maximum, with all other parameters fixed. This is 
+                a good approximation to the overall goodness of the fit, i.e., the uncertainties in the parameters are 
+                not affected by degeneracies with other parameters. The number 0.5 can be changed to other values to 
+                obtain different levels of confidence.
         marginalize_over_variables: list of variables (indices) to marginalize over. 
             If None, no marginalization is performed.
             NOTE: this is not working properly yet.
@@ -448,6 +552,25 @@ def MCMC_parameter_estimation(sampler, parameter_type='mean', uncertainty_type='
         #idx = np.argmax(kde(samples.T))
 
         theta = samples[idx]
+    elif parameter_type == 'mode_parameterwise':
+        theta = np.zeros(samples.shape[1])
+        for i in range(samples.shape[1]):
+            #kde = gaussian_kde(samples[:,i])
+            xmin = min(samples[:,i])
+            xmax = max(samples[:,i])
+
+            for iter in range(3):
+                x = np.linspace(xmin, xmax, 11)
+                kde, binbounds = np.histogram(samples[:,i], bins=x, density=True)
+                idx = np.argmax(kde)
+                theta[i] = x[idx]
+                xmin = binbounds[idx]
+                xmax = binbounds[idx+1]
+
+            #x = np.linspace(min(samples[:,i]), max(samples[:,i]), 1000)
+            #kde = np.histogram(samples[:,i], bins=x, density=True)[0]
+            #idx = np.argmax(kde)
+            #theta[i] = x[idx]
     else:
         raise ValueError('Unknown parameter type')
     
@@ -457,6 +580,27 @@ def MCMC_parameter_estimation(sampler, parameter_type='mean', uncertainty_type='
     elif isinstance(uncertainty_type, list):
         q1, q2 = uncertainty_type
         low, high = np.quantile(samples, [q1, q2], axis=0)
+    elif isinstance(uncertainty_type, tuple) and uncertainty_type[0] == 'hpd':
+        cred_mass = uncertainty_type[1]
+        if cred_mass <= 0 or cred_mass >= 1:
+            raise ValueError('cred_mass must be between 0 and 1')
+        low = np.zeros(samples.shape[1])
+        high = np.zeros(samples.shape[1])
+        for i in range(samples.shape[1]):
+            sorted_samples = np.sort(samples[:,i])
+            n_samples = len(sorted_samples)
+            interval_idx_inc = int(np.floor(cred_mass * n_samples))
+            n_intervals = n_samples - interval_idx_inc
+            interval_width = sorted_samples[interval_idx_inc:] - sorted_samples[:n_intervals]
+            min_idx = np.argmin(interval_width)
+            low[i] = sorted_samples[min_idx]
+            high[i] = sorted_samples[min_idx + interval_idx_inc]
+    elif isinstance(uncertainty_type, tuple) and uncertainty_type[0] == 'conditional_from_mode':
+        delta_logp = uncertainty_type[1]
+        logpost_fn = sampler.log_prob_fn
+        ints = _conditional_1sigma_intervals(logpost_fn, theta, delta_logp=delta_logp)
+        low = np.array([it[0] for it in ints])
+        high = np.array([it[1] for it in ints])
     else:
         raise ValueError('Unknown uncertainty type')
 
