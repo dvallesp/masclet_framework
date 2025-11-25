@@ -653,15 +653,15 @@ def average_from_profile(rprof, prof, prof_weight=None, rmin=None, rmax=None, cu
     return num / den
 
 
-def stack_profiles(list_r, list_profiles, stacking_method='median', rmin=None, rmax=None, nbins=None, logbins=True, logloginterp=True, logstack=False,
+def stack_profiles(list_r_input, list_profiles_input, stacking_method='median', rmin=None, rmax=None, nbins=None, logbins=True, logloginterp=True, logstack=False,
                    return_list_profiles=False):
     """ 
     Stack profiles using a specified method (mean, median, biweight, mode), taking 
     care of resampling the profiles to a common grid.
 
     Args:
-        - list_r: list of radial grids
-        - list_profiles: list of profiles to stack
+        - list_r_input: list of radial grids
+        - list_profiles_input: list of profiles to stack
         - stacking_method: method to stack the profiles. Can be 'mean', 'median', 'biweight' or 'mode'.
             Also, a list of percentiles can be specified.
         - rmin: minimum radius (default: maximum of the minimums of the input radial grids)
@@ -679,6 +679,9 @@ def stack_profiles(list_r, list_profiles, stacking_method='median', rmin=None, r
             If return_list_profiles is True, instead of the stacked profile, the list of resampled profiles is returned.
             If stacking_method is a list of percentiles, a dictionary with the percentiles is returned.
     """ 
+
+    list_r = [r.copy() for r in list_r_input]
+    list_profiles = [p.copy() for p in list_profiles_input]
 
     # interpolate profiles to a common grid
     if rmin is None:
