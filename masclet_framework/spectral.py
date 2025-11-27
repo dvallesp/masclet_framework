@@ -12,12 +12,62 @@ Created by David Vallés
 
 import numpy as np
 from scipy import fft, stats
+from numba import njit
+
+
+@njit(fastmath=True)
+def binned_mean_kernel(data, fx, fy, fz, fft_amplitudes, kbins, dx):
+    '''
+    Kernel called by power_spectrum_scalar_field to compute the binned mean
+    of the Fourier amplitudes.
+    ''' 
+    #fft grid
+    nx = len(fx)
+    ny = len(fy)
+    nz = len(fz)
+
+    #float to avoid integer overflow!!!!
+    #nx*ny*nz might be > 2**31 e.g. for nx = 2048
+    Ntot = float(data.size)
+    norm = float(data.shape[0]*dx)**3 / Ntot**2
+
+    Pk = np.zeros(len(kbins)-1)
+    counts = np.zeros(len(kbins)-1)
+
+    k0 = kbins[0]
+    dk = kbins[1]-kbins[0]
+    for i in range(nx):
+        fx2 = fx[i]**2
+        for j in range(ny):
+            fy2 = fy[j]**2
+            for k in range(nz):
+                fz2 = fz[k]**2
+                knrm = np.sqrt(fx2 + fy2 + fz2)
+                amp = fft_amplitudes[i,j,k]
+                amp = amp.real**2 + amp.imag**2
+                # Find the correct bin
+                b = int((knrm - k0) / dk)
+                if kbins[0] <= knrm < kbins[-1]:
+                    Pk[b] += amp
+                    counts[b] += 1
+
+    Pk *= norm
+
+    for b in range(len(kbins)-1):
+        if counts[b] > 0:
+            Pk[b] /= counts[b]
+        else:
+            Pk[b] = np.nan
+
+    return Pk
 
 
 def power_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False,
                                 zero_pad_factor=1.):
     '''
     This function computes the power spectrum, P(k), of a 3D cubic scalar field.
+    Careful treatment is implemented to avoid further memory allocation once
+    the fft data is computed.
 
     Args:
         - data: the 3D array containing the input field
@@ -35,9 +85,6 @@ def power_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False,
 
     '''
 
-    # Step 1. Compute the FFT, its amplitude square, and normalise it
-    #fft_data = np.fft.fftn(data, s=data.shape)#.shape
-    
     ### SPECIAL TREATMENT OF ZERO-PADDING
     if not do_zero_pad:
         shape = data.shape
@@ -45,19 +92,16 @@ def power_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False,
         zero_pad_factor = int(zero_pad_factor)
         shape = [zero_pad_factor*s for s in data.shape]
     ### END SPECIAL TREATMENT OF ZERO-PADDING
-        
-    fft_data = fft.fftn(data, s=shape, workers=ncores)
-    fourier_amplitudes = (np.abs(fft_data)**2).flatten() / data.size**2 * (data.shape[0]*dx)**3
-    nx,ny,nz = data.shape
 
+    # Step 1. FFT and amplitudes
+    fft_data = fft.fftn(data, s=shape, workers=ncores)
+    
     # Step 2. Obtain the frequencies
     frequencies_x = np.fft.fftfreq(shape[0], d=dx)
     frequencies_y = np.fft.fftfreq(shape[1], d=dx)
     frequencies_z = np.fft.fftfreq(shape[2], d=dx)
-    a,b,c=np.meshgrid(frequencies_x, frequencies_y, frequencies_z, indexing='ij')
-    knrm=np.sqrt(a**2+b**2+c**2).flatten()
 
-    # Step 3. Assuming isotropy, obtain the P(k) (1-dimensional power spectrum)
+    # Step 3. Assuming isotropy, obtain the P(k) (1-dimensional power spectrum)
     
     ### SPECIAL TREATMENT OF ZERO-PADDING
     if not do_zero_pad:
@@ -68,9 +112,10 @@ def power_spectrum_scalar_field(data, dx=1., ncores=1, do_zero_pad=False,
     
     kbins = np.arange(frequencies_x[1]/2, np.abs(frequencies_x).max(), delta_f)
     kvals = 0.5 * (kbins[1:] + kbins[:-1])
-    Pk, _, _ = stats.binned_statistic(knrm, fourier_amplitudes,
-                                         statistic = "mean",
-                                         bins = kbins)
+
+    Pk = binned_mean_kernel(data, 
+                            frequencies_x, frequencies_y, frequencies_z, 
+                            fft_data, kbins, dx)
 
     return kvals, Pk
 
